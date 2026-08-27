@@ -1,0 +1,14 @@
+# Normalize line endings: LF in the repo, on every platform.
+* text=auto eol=lf
+
+# Explicitly binary (never diff or normalize).
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.db binary
+*.sqlite binary
+*.sqlite3 binary

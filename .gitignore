@@ -1,0 +1,45 @@
+# --- Dependencies ---
+node_modules/
+.pnp
+.pnp.js
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# --- Build output ---
+dist/
+build/
+.output/
+.vercel/
+.netlify/
+.astro/
+
+# --- Environment / secrets ---
+# Secrets (admin password, model API keys) live only on the server. Never commit them.
+.env
+.env.*
+!.env.example
+
+# --- SQLite metadata database (generated; not source of truth) ---
+tech_briefs/meta/*.db
+tech_briefs/meta/*.db-wal
+tech_briefs/meta/*.db-shm
+tech_briefs/meta/*.sqlite
+tech_briefs/meta/*.sqlite3
+
+# --- Runtime data ---
+logs/
+*.log
+tmp/
+.cache/
+
+# --- OS / editor noise ---
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.shared.json

@@ -47,3 +47,15 @@ limiting, is enough and keeps the surface minimal. Secrets stay server-side.
 
 The system runs in UTC behind the scenes. The content window
 (`00:00–23:59 of the previous day`) and every user-facing time are Israel time.
+
+## Normalized metadata lists in SQLite
+
+Companies, topics, and development digests use child tables rather than JSON columns.
+Each row retains its list position. This makes statistics and filtering directly
+queryable and indexable while preserving the order produced by the pipeline.
+
+## better-sqlite3 for database access
+
+The database package uses `better-sqlite3`: its synchronous transaction model fits
+the small, local metadata workload and avoids basing a critical persistence layer on
+Node's still-experimental `node:sqlite` API.

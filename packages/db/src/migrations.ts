@@ -1,0 +1,125 @@
+import type Database from "better-sqlite3";
+
+interface Migration {
+  readonly version: number;
+  readonly name: string;
+  readonly sql: string;
+}
+
+const migrations: readonly Migration[] = [
+  {
+    version: 1,
+    name: "create_daily_brief_metadata",
+    sql: `
+      CREATE TABLE daily_briefs (
+        date TEXT PRIMARY KEY NOT NULL,
+        summary TEXT NOT NULL CHECK (length(trim(summary)) > 0),
+        significant_items INTEGER NOT NULL CHECK (significant_items >= 0),
+        worth_watching_items INTEGER NOT NULL CHECK (worth_watching_items >= 0),
+        day_intensity TEXT NOT NULL CHECK (
+          day_intensity IN ('minimal', 'low', 'medium', 'high', 'extreme')
+        ),
+        status TEXT NOT NULL CHECK (
+          status IN ('draft', 'ready', 'published', 'failed')
+        ),
+        source_count INTEGER NOT NULL CHECK (source_count >= 0),
+        created_at TEXT NOT NULL,
+        published_at TEXT,
+        updated_at TEXT
+      ) STRICT;
+
+      CREATE TABLE daily_brief_companies (
+        day_date TEXT NOT NULL REFERENCES daily_briefs(date) ON DELETE CASCADE,
+        position INTEGER NOT NULL CHECK (position >= 0),
+        company TEXT NOT NULL CHECK (length(trim(company)) > 0),
+        PRIMARY KEY (day_date, company),
+        UNIQUE (day_date, position)
+      ) STRICT;
+
+      CREATE TABLE daily_brief_topics (
+        day_date TEXT NOT NULL REFERENCES daily_briefs(date) ON DELETE CASCADE,
+        position INTEGER NOT NULL CHECK (position >= 0),
+        topic TEXT NOT NULL CHECK (length(trim(topic)) > 0),
+        PRIMARY KEY (day_date, topic),
+        UNIQUE (day_date, position)
+      ) STRICT;
+
+      CREATE TABLE daily_brief_developments (
+        day_date TEXT NOT NULL REFERENCES daily_briefs(date) ON DELETE CASCADE,
+        position INTEGER NOT NULL CHECK (position >= 0),
+        digest TEXT NOT NULL CHECK (length(trim(digest)) > 0),
+        PRIMARY KEY (day_date, position)
+      ) STRICT;
+
+      CREATE INDEX daily_briefs_status_date_idx
+        ON daily_briefs (status, date DESC);
+      CREATE INDEX daily_brief_companies_company_idx
+        ON daily_brief_companies (company, day_date DESC);
+      CREATE INDEX daily_brief_topics_topic_idx
+        ON daily_brief_topics (topic, day_date DESC);
+    `,
+  },
+];
+
+export const LATEST_SCHEMA_VERSION = migrations.at(-1)?.version ?? 0;
+
+export function runMigrations(database: Database.Database): void {
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS schema_migrations (
+      version INTEGER PRIMARY KEY NOT NULL,
+      name TEXT NOT NULL UNIQUE,
+      applied_at TEXT NOT NULL
+    ) STRICT;
+  `);
+
+  const appliedRows = database
+    .prepare("SELECT version, name FROM schema_migrations ORDER BY version")
+    .all() as Array<{ version: number; name: string }>;
+  const knownMigrations = new Map(
+    migrations.map((migration) => [migration.version, migration.name]),
+  );
+  for (const row of appliedRows) {
+    const expectedName = knownMigrations.get(row.version);
+    if (expectedName === undefined) {
+      throw new Error(
+        `Database schema version ${row.version} is newer than this application supports.`,
+      );
+    }
+    if (row.name !== expectedName) {
+      throw new Error(
+        `Migration ${row.version} was applied as ${row.name}, expected ${expectedName}.`,
+      );
+    }
+  }
+  const applied = new Map(
+    appliedRows.map((row) => [Number(row.version), String(row.name)]),
+  );
+
+  for (const migration of migrations) {
+    const appliedName = applied.get(migration.version);
+    if (appliedName !== undefined) {
+      continue;
+    }
+
+    database.exec("BEGIN IMMEDIATE");
+    try {
+      database.exec(migration.sql);
+      database
+        .prepare(
+          "INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)",
+        )
+        .run(migration.version, migration.name, new Date().toISOString());
+      database.exec("COMMIT");
+    } catch (error) {
+      database.exec("ROLLBACK");
+      throw error;
+    }
+  }
+}
+
+export function getSchemaVersion(database: Database.Database): number {
+  const row = database
+    .prepare("SELECT COALESCE(MAX(version), 0) AS version FROM schema_migrations")
+    .get() as { version: number } | undefined;
+  return Number(row?.version ?? 0);
+}

@@ -1,0 +1,28 @@
+{
+  "name": "@daily-tech/db",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "SQLite schema and typed persistence for Daily Tech.",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "prebuild": "npm run build --workspace @daily-tech/core",
+    "build": "tsc -p tsconfig.build.json",
+    "pretest": "npm run build --workspace @daily-tech/core",
+    "test": "vitest run",
+    "pretypecheck": "npm run build --workspace @daily-tech/core",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@daily-tech/core": "0.1.0",
+    "better-sqlite3": "^13.0.3"
+  }
+}

@@ -63,9 +63,9 @@ the corresponding event occurs.
 
 ### Array fields
 
-`companies`, `topics`, and `developments` are logically lists. Whether they are stored
-as JSON columns or normalized into child tables is left to `packages/db`; either way
-the allowed-value enforcement and fast statistics queries above must hold.
+`companies`, `topics`, and `developments` are stored in normalized child tables with
+an explicit position. This keeps their source order stable while allowing indexed
+statistics and filtering without parsing JSON.
 
 ## Other stored data
 

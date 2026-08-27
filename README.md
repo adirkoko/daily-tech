@@ -40,10 +40,10 @@ npm run build
 
 ## Status
 
-Early implementation stage. `packages/core` now provides the metadata contract,
-allowed-value guards, date and Markdown inspection helpers, and deterministic
-validation for a complete brief artifact. It has unit-test coverage and builds as an
-independent workspace package. The next unit of work is `packages/db`.
+Early implementation stage. `packages/core` provides the metadata contract and full
+artifact validation. `packages/db` now provides transactional migrations and typed
+SQLite persistence for daily metadata, including normalized company, topic, and
+development tables. Both packages have automated tests and independent builds.
 
 ## Documentation
 

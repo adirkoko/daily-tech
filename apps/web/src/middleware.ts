@@ -1,6 +1,9 @@
 import { defineMiddleware } from "astro:middleware";
 
 import { ADMIN_COOKIE_NAME, authenticateCookie } from "./server/auth.js";
+import { ensureSchedulerStarted } from "./server/scheduler.js";
+
+ensureSchedulerStarted();
 
 export const onRequest = defineMiddleware(async (context, next) => {
   const path = context.url.pathname;

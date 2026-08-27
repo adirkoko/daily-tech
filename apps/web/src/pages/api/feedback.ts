@@ -2,7 +2,7 @@ import type { APIRoute } from "astro";
 import { callerHash, fixedWindowStart } from "../../server/auth.js";
 import { getServerConfig } from "../../server/config.js";
 import { openServerDatabase } from "../../server/database.js";
-import { field, redirectWith, sameOrigin } from "../../server/http.js";
+import { callerAddress, field, redirectWith, sameOrigin } from "../../server/http.js";
 
 export const prerender = false;
 
@@ -26,7 +26,7 @@ export const POST: APIRoute = async (context) => {
     try {
       const rate = db.operations.consumeRateLimit({
         scope: "feedback",
-        keyHash: callerHash(context.clientAddress),
+        keyHash: callerHash(callerAddress(context)),
         windowStartedAt: fixedWindowStart(now, config.feedbackWindowMs),
         occurredAt,
         limit: 3,

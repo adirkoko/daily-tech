@@ -123,6 +123,16 @@ describe("standalone site service", () => {
     });
     try {
       const origin = `http://127.0.0.1:${port}`;
+      const health = await fetchWhenReady(`${origin}/health`);
+      expect(health.status).toBe(200);
+      await expect(health.json()).resolves.toEqual({ status: "ok" });
+      const ready = await fetch(`${origin}/ready`);
+      expect(ready.status).toBe(200);
+      await expect(ready.json()).resolves.toMatchObject({
+        status: "ready",
+        database: "ready",
+        scheduler: "disabled",
+      });
       const dailyHtml = await (await fetchWhenReady(`${origin}/daily/${day.date}`)).text();
       const monthHtml = await (await fetch(`${origin}/calendar/2026-08`)).text();
       expect(dailyHtml).toContain("מהדורת אינטגרציה בטוחה");

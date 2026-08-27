@@ -11,10 +11,13 @@
 | Single standalone Node service | Implemented and integration-tested |
 | Secure admin authentication and editing UI | Implemented and integration-tested |
 | Public feedback, admin inbox, and in-admin alerts | Implemented and integration-tested |
-| Production TLS, persistent storage, backups, and scheduler | Infrastructure configuration pending |
+| Embedded Israel-time scheduler and durable job leases | Implemented and tested |
+| Health/readiness endpoints and one-service container | Implemented and tested |
+| Production TLS and persistent storage configuration | Infrastructure configuration pending |
 
 “Automatic” in the first-version list below includes both implemented application
-commands and the still-pending production scheduler/hosting configuration.
+commands and the implemented embedded scheduler; hosting configuration is still
+deployment-specific.
 
 ## Required for the first version
 

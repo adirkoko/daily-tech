@@ -38,14 +38,19 @@ depend on it.
 ## Runtime boundary
 
 `npm start` launches a single long-running Node process. That process owns every HTTP
-route: public pages, `/feedback`, `/admin`, and their APIs. SQLite and Markdown share
-one persistent content root. Generation and publication remain commands run by cron
-or another scheduler, but they use the same repository, database, filesystem, and
-validation contracts; they are not separate network services.
+route—public pages, `/feedback`, `/admin`, health endpoints, and their APIs—and an
+in-process Israel-time scheduler for generation and publication. SQLite and Markdown
+share one persistent content root. The existing generation/publication commands stay
+available for manual recovery, but no separate scheduler or network service is
+required.
 
 Because public content is rendered on demand, an admin save or local publication
 transition becomes visible immediately. The AI pipeline remains completely outside
 the reader request path.
+
+The scheduler claims one durable SQLite job per action and target date. Active leases
+prevent overlap, while terminal success/failure states prevent repeated AI cost after
+a restart. Failures flow into the same operational log and Admin alert center.
 
 ## Key decisions
 

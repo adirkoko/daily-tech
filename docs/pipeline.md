@@ -90,9 +90,10 @@ was a problem" note with no technical detail.
 ## Schedule
 
 The intended production schedule is `01:00` Israel time for generation and `07:00`
-for publication. Generation saves a valid file with `ready` status. The separate
-publisher revalidates it, changes it to `published`, and requests a site rebuild.
-Separating the two lets every check finish before anything goes live.
+for publication. Generation saves a valid file with `ready` status. The publisher
+revalidates it and changes it to `published`; the running site sees that state
+immediately. Separating the two phases lets every check finish before anything goes
+live.
 
 Both commands are implemented and target the previous Israel calendar day by default:
 
@@ -101,5 +102,5 @@ npm run generate
 npm run publish:brief
 ```
 
-The scheduler that invokes them is deployment-specific and is not configured in this
-repository yet.
+The standalone service invokes both commands through its embedded Israel-time
+scheduler. `SCHEDULER_ENABLED=true` enables it; the times remain configurable.

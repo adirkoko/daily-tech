@@ -54,6 +54,9 @@ Each daily run records at least:
 Outside the daily run, the log also records admin actions, login attempts, feedback
 submissions, system tickets, and every publication attempt. Publication logs distinguish
 start, status transition, accepted deployment trigger, overlap/no-op, and failure.
+The embedded scheduler additionally records claimed, completed, and failed generation
+and publication jobs. Its durable terminal state prevents repeated execution after a
+restart.
 
 The AI cost figure depends on the provider returning usage / token counts through the
 OpenAI-compatible layer, which surfaces them to the caller. Logs are stored in the

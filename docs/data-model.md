@@ -85,3 +85,8 @@ and, when configured, the optional deployment webhook accepted the request.
 `admin_sessions` stores only SHA-256 token and CSRF-token digests plus creation,
 expiry, and last-seen timestamps. Browser session material is never stored in clear
 text. Expired rows are purged during session creation.
+
+`scheduled_jobs` is the durable ledger for the embedded scheduler. Its composite key
+is the job name (`generate` or `publish`) plus target date. State, attempt count, lease
+owner/expiry, timestamps, and the last error make daily execution restart-safe and
+prevent overlapping service instances from duplicating work.

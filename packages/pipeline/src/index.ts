@@ -85,3 +85,4 @@ export type {
   StageResult,
 } from "./types.js";
 export { previousIsraelDayWindow } from "./window.js";
+export { runPipelineCli } from "./cli.js";

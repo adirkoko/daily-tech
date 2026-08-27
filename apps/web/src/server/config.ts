@@ -10,6 +10,7 @@ export interface ServerConfig {
   readonly secureCookies: boolean;
   readonly loginWindowMs: number;
   readonly feedbackWindowMs: number;
+  readonly trustedProxyHops: number;
 }
 
 export function getServerConfig(environment: NodeJS.ProcessEnv = process.env): ServerConfig {
@@ -30,6 +31,7 @@ export function getServerConfig(environment: NodeJS.ProcessEnv = process.env): S
       : environment.ADMIN_SECURE_COOKIES === "true",
     loginWindowMs: hours(environment.LOGIN_RATE_LIMIT_WINDOW_HOURS ?? "12", "LOGIN_RATE_LIMIT_WINDOW_HOURS", 1, 168),
     feedbackWindowMs: hours(environment.FEEDBACK_RATE_LIMIT_WINDOW_HOURS ?? "12", "FEEDBACK_RATE_LIMIT_WINDOW_HOURS", 1, 168),
+    trustedProxyHops: integer(environment.TRUSTED_PROXY_HOPS ?? "0", "TRUSTED_PROXY_HOPS", 0, 10),
   };
   return config;
 }
@@ -46,9 +48,13 @@ function minimumLength(value: string, length: number, name: string): string {
 }
 
 function hours(value: string, name: string, minimum: number, maximum: number): number {
+  return integer(value, name, minimum, maximum) * 60 * 60 * 1_000;
+}
+
+function integer(value: string, name: string, minimum: number, maximum: number): number {
   const parsed = Number(value);
   if (!Number.isInteger(parsed) || parsed < minimum || parsed > maximum) {
     throw new RangeError(`${name} must be an integer between ${minimum} and ${maximum}.`);
   }
-  return parsed * 60 * 60 * 1_000;
+  return parsed;
 }

@@ -55,6 +55,13 @@ deployments and keeps authentication, content, and operations on one persistent
 SQLite/filesystem boundary. Scheduled generation and publication are operational CLI
 jobs against that same store, not independent network services.
 
+## Embedded scheduler with durable daily claims
+
+Generation and publication run inside the standalone service when scheduling is
+enabled. A generic SQLite job ledger claims each action/date once, recovers expired
+leases, and preserves terminal failures without automatic repeated AI spend. Manual
+CLI commands remain available for deliberate recovery.
+
 ## Password-only admin auth
 
 The admin area is for a single operator. A password with no username, plus per-IP rate

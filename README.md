@@ -7,8 +7,9 @@ Once a day a pipeline of AI agents researches the previous day, filters noise an
 duplicates, writes a short brief in Hebrew, reviews it, and runs deterministic
 validation. Only after every check passes is the brief saved as a Markdown file (the
 source of truth) with its metadata in SQLite, and published at a fixed hour. One
-standalone Node service serves the public site, secure admin, feedback endpoint, and
-in-admin system alerts. The website never calls an AI model at request time.
+standalone Node service serves the public site, secure admin, feedback endpoint,
+in-admin system alerts, and the daily generation/publication scheduler. The website
+never calls an AI model at request time.
 
 ```
 AI creates content  ->  code validates it  ->  SQLite + files store it  ->  the website displays it
@@ -52,6 +53,12 @@ npm run build
 npm start
 ```
 
+To build and run the same application as one containerized service:
+
+```sh
+docker compose up --build
+```
+
 For local development, keep the default `TECH_BRIEFS_ROOT` or point it at another
 content store. Set `ADMIN_SECURE_COOKIES=false` only while using local HTTP, then run:
 
@@ -78,7 +85,8 @@ publication attempts through SQLite leases, and transitions metadata atomically;
 external deployment hooks are optional. `apps/web` provides the Hebrew RTL site,
 password-protected admin editor, server-side sessions, CSRF protection, public
 feedback form, feedback inbox, and system-alert view. The remaining release work is
-production hosting, TLS, persistent-volume backup, and scheduler configuration.
+production hosting and TLS configuration; the in-process scheduler, health checks,
+trusted-proxy handling, and one-service container are implemented.
 
 ## Documentation
 

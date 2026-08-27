@@ -151,6 +151,32 @@ const migrations: readonly Migration[] = [
         ON admin_sessions (expires_at);
     `,
   },
+  {
+    version: 5,
+    name: "create_scheduled_jobs",
+    sql: `
+      CREATE TABLE scheduled_jobs (
+        job_name TEXT NOT NULL CHECK (job_name IN ('generate', 'publish')),
+        target_date TEXT NOT NULL,
+        state TEXT NOT NULL CHECK (state IN ('running', 'succeeded', 'failed')),
+        attempt_count INTEGER NOT NULL CHECK (attempt_count >= 1),
+        lease_owner TEXT,
+        lease_expires_at TEXT,
+        started_at TEXT NOT NULL,
+        completed_at TEXT,
+        last_error TEXT,
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY (job_name, target_date),
+        CHECK (
+          (state = 'running' AND lease_owner IS NOT NULL AND lease_expires_at IS NOT NULL)
+          OR (state != 'running' AND lease_owner IS NULL AND lease_expires_at IS NULL)
+        )
+      ) STRICT;
+
+      CREATE INDEX scheduled_jobs_state_idx
+        ON scheduled_jobs (state, updated_at DESC);
+    `,
+  },
 ];
 
 export const LATEST_SCHEMA_VERSION = migrations.at(-1)?.version ?? 0;

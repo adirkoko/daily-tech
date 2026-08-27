@@ -199,6 +199,41 @@ describe("OperationsStore", () => {
     expect(database.operations.deleteAdminSession(tokenHash)).toBe(false);
   });
 
+  it("leases each scheduled job once and records its terminal state", () => {
+    const acquired = database.operations.beginScheduledJob({
+      jobName: "generate",
+      targetDate: "2026-08-27",
+      leaseOwner: "service-1",
+      occurredAt: "2026-08-28T01:00:00.000Z",
+      leaseExpiresAt: "2026-08-28T07:00:00.000Z",
+    });
+    expect(acquired).toMatchObject({
+      outcome: "acquired",
+      job: { state: "running", attemptCount: 1, leaseOwner: "service-1" },
+    });
+    expect(database.operations.beginScheduledJob({
+      jobName: "generate",
+      targetDate: "2026-08-27",
+      leaseOwner: "service-2",
+      occurredAt: "2026-08-28T01:01:00.000Z",
+      leaseExpiresAt: "2026-08-28T07:01:00.000Z",
+    })).toMatchObject({ outcome: "busy" });
+
+    expect(database.operations.completeScheduledJob(
+      "generate",
+      "2026-08-27",
+      "service-1",
+      "2026-08-28T01:10:00.000Z",
+    )).toMatchObject({ state: "succeeded", leaseOwner: null });
+    expect(database.operations.beginScheduledJob({
+      jobName: "generate",
+      targetDate: "2026-08-27",
+      leaseOwner: "service-3",
+      occurredAt: "2026-08-28T08:00:00.000Z",
+      leaseExpiresAt: "2026-08-28T14:00:00.000Z",
+    })).toMatchObject({ outcome: "already_finished", job: { attemptCount: 1 } });
+  });
+
   it("validates operational inputs before writing", () => {
     expect(() =>
       database.operations.appendLog({

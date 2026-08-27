@@ -39,6 +39,7 @@ describe("database migrations", () => {
       "operational_logs",
       "publication_jobs",
       "rate_limit_counters",
+      "scheduled_jobs",
       "schema_migrations",
     ]);
   });

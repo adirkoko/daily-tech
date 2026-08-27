@@ -1,0 +1,33 @@
+services:
+  daily-tech:
+    build:
+      context: .
+    init: true
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 4321
+      TECH_BRIEFS_ROOT: /data
+      SCHEDULER_ENABLED: ${DAILY_TECH_SCHEDULER_ENABLED:-true}
+    ports:
+      - "${DAILY_TECH_PORT:-4321}:4321"
+    volumes:
+      - daily-tech-data:/data
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:4321/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    stop_grace_period: 30s
+
+volumes:
+  daily-tech-data:

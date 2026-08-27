@@ -19,6 +19,12 @@ export type FeedbackStatus = (typeof FEEDBACK_STATUSES)[number];
 export const RATE_LIMIT_SCOPES = ["admin_login", "feedback"] as const;
 export type RateLimitScope = (typeof RATE_LIMIT_SCOPES)[number];
 
+export const SCHEDULED_JOB_NAMES = ["generate", "publish"] as const;
+export type ScheduledJobName = (typeof SCHEDULED_JOB_NAMES)[number];
+
+export const SCHEDULED_JOB_STATES = ["running", "succeeded", "failed"] as const;
+export type ScheduledJobState = (typeof SCHEDULED_JOB_STATES)[number];
+
 export type JsonValue =
   | null
   | boolean
@@ -139,6 +145,32 @@ export interface CreateAdminSessionInput {
   readonly expiresAt: string;
 }
 
+export interface ScheduledJob {
+  readonly jobName: ScheduledJobName;
+  readonly targetDate: string;
+  readonly state: ScheduledJobState;
+  readonly attemptCount: number;
+  readonly leaseOwner: string | null;
+  readonly leaseExpiresAt: string | null;
+  readonly startedAt: string;
+  readonly completedAt: string | null;
+  readonly lastError: string | null;
+  readonly updatedAt: string;
+}
+
+export interface BeginScheduledJobInput {
+  readonly jobName: ScheduledJobName;
+  readonly targetDate: string;
+  readonly leaseOwner: string;
+  readonly leaseExpiresAt: string;
+  readonly occurredAt: string;
+}
+
+export type BeginScheduledJobResult =
+  | { readonly outcome: "acquired"; readonly job: ScheduledJob }
+  | { readonly outcome: "already_finished"; readonly job: ScheduledJob }
+  | { readonly outcome: "busy"; readonly job: ScheduledJob };
+
 interface OperationalLogRow {
   readonly id: number;
   readonly run_id: string | null;
@@ -179,6 +211,19 @@ interface AdminSessionRow {
   readonly created_at: string;
   readonly expires_at: string;
   readonly last_seen_at: string;
+}
+
+interface ScheduledJobRow {
+  readonly job_name: string;
+  readonly target_date: string;
+  readonly state: string;
+  readonly attempt_count: number;
+  readonly lease_owner: string | null;
+  readonly lease_expires_at: string | null;
+  readonly started_at: string;
+  readonly completed_at: string | null;
+  readonly last_error: string | null;
+  readonly updated_at: string;
 }
 
 export class OperationsStore {
@@ -499,6 +544,82 @@ export class OperationsStore {
       .run(occurredAt).changes;
   }
 
+  beginScheduledJob(input: BeginScheduledJobInput): BeginScheduledJobResult {
+    validateScheduledJobIdentity(input.jobName, input.targetDate);
+    assertNonEmpty(input.leaseOwner, "leaseOwner");
+    assertTimestamp(input.leaseExpiresAt, "leaseExpiresAt");
+    assertTimestamp(input.occurredAt, "occurredAt");
+    if (input.leaseExpiresAt <= input.occurredAt) {
+      throw new RangeError("leaseExpiresAt must be later than occurredAt.");
+    }
+
+    this.#database.exec("BEGIN IMMEDIATE");
+    try {
+      const existing = this.getScheduledJob(input.jobName, input.targetDate);
+      if (existing?.state === "succeeded" || existing?.state === "failed") {
+        this.#database.exec("COMMIT");
+        return { outcome: "already_finished", job: existing };
+      }
+      if (
+        existing?.state === "running" &&
+        existing.leaseExpiresAt !== null &&
+        existing.leaseExpiresAt > input.occurredAt
+      ) {
+        this.#database.exec("COMMIT");
+        return { outcome: "busy", job: existing };
+      }
+
+      this.#database.prepare(`
+        INSERT INTO scheduled_jobs (
+          job_name, target_date, state, attempt_count, lease_owner,
+          lease_expires_at, started_at, completed_at, last_error, updated_at
+        ) VALUES (?, ?, 'running', 1, ?, ?, ?, NULL, NULL, ?)
+        ON CONFLICT (job_name, target_date) DO UPDATE SET
+          state = 'running',
+          attempt_count = scheduled_jobs.attempt_count + 1,
+          lease_owner = excluded.lease_owner,
+          lease_expires_at = excluded.lease_expires_at,
+          started_at = excluded.started_at,
+          completed_at = NULL,
+          last_error = NULL,
+          updated_at = excluded.updated_at
+      `).run(
+        input.jobName,
+        input.targetDate,
+        input.leaseOwner,
+        input.leaseExpiresAt,
+        input.occurredAt,
+        input.occurredAt,
+      );
+      const job = this.requireScheduledJob(input.jobName, input.targetDate);
+      this.#database.exec("COMMIT");
+      return { outcome: "acquired", job };
+    } catch (error) {
+      this.#database.exec("ROLLBACK");
+      throw error;
+    }
+  }
+
+  completeScheduledJob(
+    jobName: ScheduledJobName,
+    targetDate: string,
+    leaseOwner: string,
+    completedAt: string,
+  ): ScheduledJob {
+    return this.finishScheduledJob(jobName, targetDate, leaseOwner, completedAt, "succeeded", null);
+  }
+
+  failScheduledJob(
+    jobName: ScheduledJobName,
+    targetDate: string,
+    leaseOwner: string,
+    failedAt: string,
+    errorMessage: string,
+  ): ScheduledJob {
+    assertNonEmpty(errorMessage, "errorMessage");
+    return this.finishScheduledJob(jobName, targetDate, leaseOwner, failedAt, "failed", errorMessage);
+  }
+
   private getLog(id: number): OperationalLog {
     const row = this.#database
       .prepare("SELECT * FROM operational_logs WHERE id = ?")
@@ -542,6 +663,43 @@ export class OperationsStore {
       throw new Error("Admin session disappeared after insertion.");
     }
     return mapAdminSession(row);
+  }
+
+  private getScheduledJob(jobName: ScheduledJobName, targetDate: string): ScheduledJob | null {
+    const row = this.#database
+      .prepare("SELECT * FROM scheduled_jobs WHERE job_name = ? AND target_date = ?")
+      .get(jobName, targetDate) as ScheduledJobRow | undefined;
+    return row === undefined ? null : mapScheduledJob(row);
+  }
+
+  private requireScheduledJob(jobName: ScheduledJobName, targetDate: string): ScheduledJob {
+    const job = this.getScheduledJob(jobName, targetDate);
+    if (job === null) throw new Error(`Scheduled job ${jobName}/${targetDate} does not exist.`);
+    return job;
+  }
+
+  private finishScheduledJob(
+    jobName: ScheduledJobName,
+    targetDate: string,
+    leaseOwner: string,
+    occurredAt: string,
+    state: "succeeded" | "failed",
+    errorMessage: string | null,
+  ): ScheduledJob {
+    validateScheduledJobIdentity(jobName, targetDate);
+    assertNonEmpty(leaseOwner, "leaseOwner");
+    assertTimestamp(occurredAt, "occurredAt");
+    const result = this.#database.prepare(`
+      UPDATE scheduled_jobs
+      SET state = ?, lease_owner = NULL, lease_expires_at = NULL,
+          completed_at = ?, last_error = ?, updated_at = ?
+      WHERE job_name = ? AND target_date = ?
+        AND state = 'running' AND lease_owner = ?
+    `).run(state, occurredAt, errorMessage, occurredAt, jobName, targetDate, leaseOwner);
+    if (result.changes !== 1) {
+      throw new Error(`Scheduled job lease for ${jobName}/${targetDate} is not owned by ${leaseOwner}.`);
+    }
+    return this.requireScheduledJob(jobName, targetDate);
   }
 
   private finishPublication(
@@ -640,6 +798,24 @@ function mapAdminSession(row: AdminSessionRow): AdminSession {
   };
 }
 
+function mapScheduledJob(row: ScheduledJobRow): ScheduledJob {
+  if (!includes(SCHEDULED_JOB_NAMES, row.job_name) || !includes(SCHEDULED_JOB_STATES, row.state)) {
+    throw new Error(`Scheduled job ${row.job_name}/${row.target_date} has invalid state.`);
+  }
+  return {
+    jobName: row.job_name,
+    targetDate: row.target_date,
+    state: row.state,
+    attemptCount: row.attempt_count,
+    leaseOwner: row.lease_owner,
+    leaseExpiresAt: row.lease_expires_at,
+    startedAt: row.started_at,
+    completedAt: row.completed_at,
+    lastError: row.last_error,
+    updatedAt: row.updated_at,
+  };
+}
+
 function mapFeedbackTicket(row: FeedbackTicketRow): FeedbackTicket {
   return {
     id: row.id,
@@ -697,6 +873,11 @@ function assertPositiveInteger(value: number, path: string): void {
   if (!Number.isInteger(value) || value < 1) {
     throw new RangeError(`${path} must be a positive integer.`);
   }
+}
+
+function validateScheduledJobIdentity(jobName: string, targetDate: string): asserts jobName is ScheduledJobName {
+  if (!includes(SCHEDULED_JOB_NAMES, jobName)) throw new TypeError("jobName is invalid.");
+  assertCalendarDate(targetDate, "targetDate");
 }
 
 function validatePagination(limit = 100, offset = 0): void {

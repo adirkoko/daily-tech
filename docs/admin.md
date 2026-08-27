@@ -20,7 +20,7 @@ An editor can change the Markdown and all editable metadata. Every brief page of
 3. **Save** — validate and persist Markdown plus metadata and update `updated_at`.
 
 Save runs the same deterministic artifact validation used by the pipeline. Filesystem
-changes use a temporary file and rollback backup so a database failure does not leave
+changes use a temporary file and short-lived rollback copy so a database failure does not leave
 half-written content. Administrative save, delete, login, and feedback-resolution
 actions are recorded in the operational log.
 
@@ -37,6 +37,8 @@ actions are recorded in the operational log.
   MIME-sniffing, referrer, and browser-permission headers.
 - Login is limited to three attempts per caller in the configured fixed window.
   Raw caller IPs are not stored; rate-limit keys are HMAC digests.
+- Forwarded caller addresses are trusted only when `TRUSTED_PROXY_HOPS` explicitly
+  matches the reverse-proxy chain; the default ignores forwarding headers.
 - Form fields and request bodies are bounded. The Node adapter rejects bodies above
   300 KiB.
 - The password hash, session secret, and other secrets remain server-side and are

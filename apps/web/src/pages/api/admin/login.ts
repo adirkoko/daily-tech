@@ -3,7 +3,7 @@ import type { APIRoute } from "astro";
 import { ADMIN_COOKIE_NAME, callerHash, cookieOptions, createAdminSession, fixedWindowStart, verifyAdminPassword } from "../../../server/auth.js";
 import { getServerConfig } from "../../../server/config.js";
 import { openServerDatabase } from "../../../server/database.js";
-import { field, redirectWith, sameOrigin } from "../../../server/http.js";
+import { callerAddress, field, redirectWith, sameOrigin } from "../../../server/http.js";
 
 export const prerender = false;
 
@@ -13,7 +13,7 @@ export const POST: APIRoute = async (context) => {
   const password = field(form, "password", 1_024);
   const now = new Date();
   const config = getServerConfig();
-  const address = context.clientAddress;
+  const address = callerAddress(context);
   const db = await openServerDatabase();
   let rate;
   try {

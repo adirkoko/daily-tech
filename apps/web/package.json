@@ -1,0 +1,30 @@
+{
+  "name": "@daily-tech/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "cross-env ASTRO_TELEMETRY_DISABLED=1 astro dev",
+    "prebuild": "npm run build --workspace @daily-tech/db",
+    "build": "cross-env ASTRO_TELEMETRY_DISABLED=1 astro build",
+    "preview": "cross-env ASTRO_TELEMETRY_DISABLED=1 astro preview",
+    "pretest": "npm run build --workspace @daily-tech/db",
+    "test": "vitest run",
+    "typecheck": "cross-env ASTRO_TELEMETRY_DISABLED=1 astro check"
+  },
+  "dependencies": {
+    "@astrojs/check": "^0.9.10",
+    "@daily-tech/core": "0.1.0",
+    "@daily-tech/db": "0.1.0",
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/sanitize-html": "^2.16.1",
+    "astro": "^7.2.9",
+    "marked": "^18.0.11",
+    "sanitize-html": "^2.17.7",
+    "tailwindcss": "^4.3.3"
+  },
+  "devDependencies": {
+    "cross-env": "^10.1.0",
+    "typescript": "~5.9.3"
+  }
+}

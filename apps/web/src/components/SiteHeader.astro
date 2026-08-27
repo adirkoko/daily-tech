@@ -1,0 +1,26 @@
+---
+interface Props { activePath: string; }
+const { activePath } = Astro.props;
+const links = [
+  { href: "/", label: "היום", active: activePath === "/" },
+  { href: "/calendar", label: "לוח שנה", active: activePath.startsWith("/calendar") },
+  { href: "/statistics", label: "סטטיסטיקות", active: activePath === "/statistics" },
+];
+---
+
+<header class="site-header">
+  <div class="shell header-inner">
+    <a class="brand" href="/" aria-label="Daily Tech — דף הבית">
+      <span class="brand-mark" aria-hidden="true">DT</span>
+      <span class="brand-name">Daily Tech</span>
+    </a>
+    <nav class="main-nav" aria-label="ניווט ראשי">
+      {links.map((link) => (
+        <a class="nav-link" href={link.href} aria-current={link.active ? "page" : undefined}>{link.label}</a>
+      ))}
+    </nav>
+    <button class="theme-toggle" type="button" data-theme-toggle aria-label="החלפת ערכת צבעים" title="ערכת צבעים">
+      <span aria-hidden="true">◐</span>
+    </button>
+  </div>
+</header>

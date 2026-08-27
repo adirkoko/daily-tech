@@ -1,0 +1,72 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import DayCard from "../components/DayCard.astro";
+import IntensityBadge from "../components/IntensityBadge.astro";
+import { getSiteSnapshot } from "../lib/content.js";
+import { formatHebrewDate } from "../lib/dates.js";
+
+const snapshot = await getSiteSnapshot();
+const latest = snapshot.latestPublished;
+const recent = snapshot.published.slice(1, 7);
+const pending = snapshot.targetDay === null || snapshot.targetDay.status === "draft" || snapshot.targetDay.status === "ready";
+const failed = snapshot.targetDay?.status === "failed";
+---
+
+<BaseLayout>
+  {latest ? (
+    <>
+      <section class="hero">
+        <div class="shell">
+          {pending && (
+            <div class="status-note" role="status">
+              <span class="status-dot" aria-hidden="true"></span>
+              <div><strong>המהדורה הבאה בהכנה.</strong> העדכון עבור {formatHebrewDate(snapshot.targetDate)} טרם פורסם.</div>
+            </div>
+          )}
+          {failed && (
+            <div class="status-note failed" role="status">
+              <span class="status-dot" aria-hidden="true"></span>
+              <div><strong>העדכון האחרון נתקל בתקלה.</strong> המהדורה הקודמת נשארת זמינה בזמן שהמערכת מתאוששת.</div>
+            </div>
+          )}
+          <div class="hero-grid">
+            <div>
+              <p class="eyebrow">{formatHebrewDate(snapshot.currentDate, { weekday: "long", day: "numeric", month: "long" })} · מהדורה אחרונה מ־{formatHebrewDate(latest.metadata.date, { day: "numeric", month: "long" })}</p>
+              <h1 class="display-title">מה באמת קרה בטכנולוגיה</h1>
+              <p class="lede">{latest.metadata.summary}</p>
+              <div class="hero-actions">
+                <a class="button" href={`/daily/${latest.metadata.date}`}>לקריאת המהדורה <span aria-hidden="true">←</span></a>
+                <a class="button secondary" href="/calendar">לכל הארכיון</a>
+              </div>
+            </div>
+            <div class="metrics" aria-label="נתוני המהדורה">
+              <div class="metric"><span class="metric-value">{latest.metadata.significant_items}</span><span class="metric-label">אירועים משמעותיים</span></div>
+              <div class="metric"><span class="metric-value">{latest.metadata.source_count}</span><span class="metric-label">מקורות שנבדקו</span></div>
+              <div class="metric"><span class="metric-value"><IntensityBadge level={latest.metadata.day_intensity} /></span><span class="metric-label">עצימות היום</span></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {recent.length > 0 && (
+        <section class="page-section">
+          <div class="shell">
+            <div class="section-head">
+              <div><p class="eyebrow">מהדורות קודמות</p><h2 class="section-title">להשלים את התמונה</h2></div>
+              <a class="text-link" href="/calendar">כל הימים</a>
+            </div>
+            <div class="card-grid">{recent.map((brief) => <DayCard day={brief.metadata} />)}</div>
+          </div>
+        </section>
+      )}
+    </>
+  ) : (
+    <section class="shell empty-state">
+      <div class="empty-glyph" aria-hidden="true">⌁</div>
+      <p class="eyebrow">הארכיון מתעורר</p>
+      <h1>המהדורה הראשונה עדיין בהכנה</h1>
+      <p>ברגע שהתדריך הראשון יעבור אימות ויפורסם, הוא יופיע כאן אוטומטית. אין צורך לעדכן את האתר ידנית.</p>
+      {failed && <div class="status-note failed"><span class="status-dot"></span><span>ניסיון ההפקה האחרון נכשל ונרשם לטיפול.</span></div>}
+    </section>
+  )}
+</BaseLayout>

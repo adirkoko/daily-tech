@@ -1,0 +1,53 @@
+---
+import type { GetStaticPaths } from "astro";
+import type { PublishedBrief } from "../../lib/content.js";
+
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import { formatHebrewDate } from "../../lib/dates.js";
+import { getSiteSnapshot, renderBrief } from "../../lib/content.js";
+
+interface Props {
+  brief: PublishedBrief;
+  older: PublishedBrief | null;
+  newer: PublishedBrief | null;
+}
+
+export const getStaticPaths: GetStaticPaths = async () => {
+  const snapshot = await getSiteSnapshot();
+  return snapshot.published.map((brief, index) => ({
+    params: { date: brief.metadata.date },
+    props: {
+      brief,
+      newer: snapshot.published[index - 1] ?? null,
+      older: snapshot.published[index + 1] ?? null,
+    },
+  }));
+};
+
+const { brief, older, newer } = Astro.props;
+const day = brief.metadata;
+const html = await renderBrief(brief);
+const title = `${formatHebrewDate(day.date)} — Daily Tech`;
+---
+
+<BaseLayout title={title} description={day.summary}>
+  <article class="shell">
+    <header class="article-header">
+      <p class="eyebrow">תדריך יומי</p>
+      <h1 class="display-title">{formatHebrewDate(day.date, { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</h1>
+      <p class="article-summary">{day.summary}</p>
+    </header>
+    <div class="article-layout">
+      <div>
+        {day.day_intensity === "minimal" && <div class="status-note"><span class="status-dot"></span><span>זה היה יום שקט יחסית בטכנולוגיה — התדריך קצר בהתאם.</span></div>}
+        <div class="article-body" set:html={html}></div>
+      </div>
+    </div>
+  </article>
+  {(older || newer) && (
+    <nav class="shell article-nav" aria-label="מעבר בין מהדורות">
+      {older ? <a href={`/daily/${older.metadata.date}`}><small>מהדורה קודמת</small><br /><strong>{formatHebrewDate(older.metadata.date)}</strong></a> : <span></span>}
+      {newer && <a href={`/daily/${newer.metadata.date}`}><small>מהדורה חדשה יותר</small><br /><strong>{formatHebrewDate(newer.metadata.date)}</strong></a>}
+    </nav>
+  )}
+</BaseLayout>

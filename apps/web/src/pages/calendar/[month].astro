@@ -1,0 +1,38 @@
+---
+import type { GetStaticPaths } from "astro";
+
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import CalendarMonth from "../../components/CalendarMonth.astro";
+import { getSiteSnapshot } from "../../lib/content.js";
+import { formatHebrewMonth } from "../../lib/dates.js";
+
+interface Props {
+  month: string;
+  previousMonth?: string | undefined;
+  nextMonth?: string | undefined;
+}
+
+export const getStaticPaths: GetStaticPaths = async () => {
+  const snapshot = await getSiteSnapshot();
+  const months = [...new Set(snapshot.published.map((brief) => brief.metadata.date.slice(0, 7)))].sort();
+  return months.map((month, index) => ({
+    params: { month },
+    props: {
+      month,
+      previousMonth: months[index - 1],
+      nextMonth: months[index + 1],
+    },
+  }));
+};
+
+const snapshot = await getSiteSnapshot();
+const { month, previousMonth, nextMonth } = Astro.props;
+---
+
+<BaseLayout title={`${formatHebrewMonth(month)} — Daily Tech`}>
+  <section class="shell calendar-shell">
+    <p class="eyebrow"><a href="/calendar">ארכיון</a> / חודש</p>
+    <h1 class="display-title">{formatHebrewMonth(month)}</h1>
+    <CalendarMonth month={month} briefs={snapshot.published} previousMonth={previousMonth} nextMonth={nextMonth} />
+  </section>
+</BaseLayout>

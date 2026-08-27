@@ -1,0 +1,17 @@
+---
+import type { DayMetadata } from "@daily-tech/core";
+import { formatHebrewDate } from "../lib/dates.js";
+import IntensityBadge from "./IntensityBadge.astro";
+
+interface Props { day: DayMetadata; }
+const { day } = Astro.props;
+---
+<a class="day-card" href={`/daily/${day.date}`}>
+  <IntensityBadge level={day.day_intensity} />
+  <h3>{formatHebrewDate(day.date, { weekday: "long", day: "numeric", month: "long" })}</h3>
+  <p>{day.summary}</p>
+  <span class="day-card-footer">
+    <span>{day.significant_items + day.worth_watching_items} התפתחויות</span>
+    <span aria-hidden="true">←</span>
+  </span>
+</a>

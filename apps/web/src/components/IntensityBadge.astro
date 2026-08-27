@@ -1,0 +1,13 @@
+---
+import type { DayIntensity } from "@daily-tech/core";
+interface Props { level: DayIntensity; }
+const { level } = Astro.props;
+const labels: Record<DayIntensity, string> = {
+  minimal: "יום שקט",
+  low: "עצימות נמוכה",
+  medium: "עצימות בינונית",
+  high: "עצימות גבוהה",
+  extreme: "יום חריג",
+};
+---
+<span class="intensity" data-level={level}>{labels[level]}</span>

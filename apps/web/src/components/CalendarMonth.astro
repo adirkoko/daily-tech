@@ -1,0 +1,49 @@
+---
+import type { PublishedBrief } from "../lib/content.js";
+import { buildCalendar, formatHebrewMonth } from "../lib/dates.js";
+
+interface Props {
+  month: string;
+  briefs: readonly PublishedBrief[];
+  previousMonth?: string | undefined;
+  nextMonth?: string | undefined;
+}
+
+const { month, briefs, previousMonth, nextMonth } = Astro.props;
+const cells = buildCalendar(month);
+const byDate = new Map(briefs.map((brief) => [brief.metadata.date, brief]));
+const weekdays = ["א׳", "ב׳", "ג׳", "ד׳", "ה׳", "ו׳", "ש׳"];
+---
+
+<div class="calendar-top">
+  <h2 class="section-title">{formatHebrewMonth(month)}</h2>
+  <nav class="calendar-nav" aria-label="מעבר בין חודשים">
+    <a class="icon-link" href={previousMonth ? `/calendar/${previousMonth}` : "#"} aria-disabled={!previousMonth} aria-label="החודש הקודם">→</a>
+    <a class="icon-link" href={nextMonth ? `/calendar/${nextMonth}` : "#"} aria-disabled={!nextMonth} aria-label="החודש הבא">←</a>
+  </nav>
+</div>
+<div class="calendar-weekdays" aria-hidden="true">
+  {weekdays.map((weekday) => <span>{weekday}</span>)}
+</div>
+<div class="calendar-grid" role="grid" aria-label={`לוח ${formatHebrewMonth(month)}`}>
+  {cells.map((cell) => {
+    const brief = byDate.get(cell.date);
+    const className = ["calendar-day", !cell.inMonth && "outside", brief && "has-brief"].filter(Boolean).join(" ");
+    return brief ? (
+      <a
+        class={className}
+        data-level={brief.metadata.day_intensity}
+        href={`/daily/${cell.date}`}
+        role="gridcell"
+        title={`${brief.metadata.summary} · ${brief.metadata.significant_items + brief.metadata.worth_watching_items} התפתחויות · ${brief.metadata.companies.join(", ")}`}
+      >
+        <span class="calendar-day-number">{cell.day}</span>
+        <span class="calendar-day-title">{brief.metadata.summary}</span>
+      </a>
+    ) : (
+      <span class={className} role="gridcell" aria-label={cell.date}>
+        <span class="calendar-day-number">{cell.day}</span>
+      </span>
+    );
+  })}
+</div>

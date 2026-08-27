@@ -1,0 +1,54 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import { getSiteSnapshot } from "../lib/content.js";
+import { calculateStatistics } from "../lib/statistics.js";
+
+const snapshot = await getSiteSnapshot();
+const stats = calculateStatistics(snapshot.published.map((brief) => brief.metadata));
+const intensityLabels = { minimal: "שקט", low: "נמוך", medium: "בינוני", high: "גבוה", extreme: "חריג" } as const;
+const maxIntensity = Math.max(...Object.values(stats.intensityCounts), 1);
+---
+
+<BaseLayout title="סטטיסטיקות הארכיון — Daily Tech" description="מבט מצטבר על הימים, המקורות, החברות והנושאים בארכיון Daily Tech.">
+  <section class="shell page-section">
+    <p class="eyebrow">במבט רחב</p>
+    <h1 class="display-title">הסיפור שמאחורי הימים</h1>
+    <p class="lede">המספרים מחושבים רק ממהדורות שפורסמו, ולכן הם תמיד תואמים לארכיון הציבורי.</p>
+
+    <div class="stats-grid">
+      <div class="stat-card"><span class="stat-number">{stats.briefCount}</span><span class="stat-label">מהדורות</span></div>
+      <div class="stat-card"><span class="stat-number">{stats.developmentCount}</span><span class="stat-label">התפתחויות</span></div>
+      <div class="stat-card"><span class="stat-number">{stats.averageSources}</span><span class="stat-label">מקורות בממוצע</span></div>
+      <div class="stat-card"><span class="stat-number">{stats.activeDayCount}</span><span class="stat-label">ימים בעצימות גבוהה</span></div>
+    </div>
+
+    {stats.briefCount > 0 ? (
+      <>
+        <div class="rankings">
+          <section>
+            <h2 class="section-title">חברות בולטות</h2>
+            <ol class="ranking-list">{stats.topCompanies.map((item, index) => <li><span class="rank">{index + 1}</span><strong>{item.name}</strong><span class="count">{item.count} ימים</span></li>)}</ol>
+          </section>
+          <section>
+            <h2 class="section-title">נושאים מובילים</h2>
+            <ol class="ranking-list">{stats.topTopics.map((item, index) => <li><span class="rank">{index + 1}</span><strong>{item.name}</strong><span class="count">{item.count} ימים</span></li>)}</ol>
+          </section>
+        </div>
+        <section class="page-section" style="margin-top:4rem">
+          <h2 class="section-title">קצב החדשות</h2>
+          <div class="intensity-bars">
+            {Object.entries(stats.intensityCounts).map(([level, count]) => (
+              <div class="bar-row">
+                <span>{intensityLabels[level as keyof typeof intensityLabels]}</span>
+                <div class="bar-track"><div class="bar-fill" style={`width:${(count / maxIntensity) * 100}%`}></div></div>
+                <strong>{count}</strong>
+              </div>
+            ))}
+          </div>
+        </section>
+      </>
+    ) : (
+      <div class="status-note"><span class="status-dot"></span><span>הסטטיסטיקות יופיעו אחרי פרסום המהדורה הראשונה.</span></div>
+    )}
+  </section>
+</BaseLayout>

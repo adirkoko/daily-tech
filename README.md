@@ -39,6 +39,18 @@ npm run build
 npm run generate
 ```
 
+For local website development, keep the default `TECH_BRIEFS_ROOT` or point it at a
+different content store, then run:
+
+```sh
+npm run dev --workspace @daily-tech/web
+```
+
+The site reads SQLite and Markdown only at build time. A missing database produces a
+valid first-run state; a `published` database record without its Markdown file fails
+the build instead of deploying a broken page. Set `SITE_URL` to the production origin
+when building canonical URLs.
+
 ## Status
 
 Early implementation stage. `packages/core` provides the metadata contract and full
@@ -48,7 +60,9 @@ development tables. `packages/pipeline` provides the tested orchestration founda
 Israel-time windows, bounded editorial revision loop, failure boundaries, and an
 OpenAI-compatible client. Production prompts, Brave Search, compensating Markdown +
 SQLite persistence, operational logging, and System-ticket failure reporting are now
-wired. The next major unit is the Astro website and publish workflow.
+wired. `apps/web` provides the static Hebrew RTL site with first-run and failure
+states, daily pages, a calendar heatmap, archive navigation, and aggregate statistics.
+The next major units are the publish workflow and the secured admin surface.
 
 ## Documentation
 

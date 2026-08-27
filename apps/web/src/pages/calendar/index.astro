@@ -1,0 +1,34 @@
+---
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import CalendarMonth from "../../components/CalendarMonth.astro";
+import { getSiteSnapshot } from "../../lib/content.js";
+import { formatHebrewDate } from "../../lib/dates.js";
+
+const snapshot = await getSiteSnapshot();
+const month = snapshot.latestPublished?.metadata.date.slice(0, 7) ?? snapshot.currentDate.slice(0, 7);
+const months = [...new Set(snapshot.published.map((brief) => brief.metadata.date.slice(0, 7)))].sort().reverse();
+const currentMonthIndex = months.indexOf(month);
+const previousMonth = currentMonthIndex >= 0 ? months[currentMonthIndex + 1] : undefined;
+const nextMonth = currentMonthIndex > 0 ? months[currentMonthIndex - 1] : undefined;
+---
+
+<BaseLayout title="לוח המהדורות — Daily Tech" description="כל מהדורות Daily Tech לפי יום וחודש.">
+  <section class="shell calendar-shell">
+    <p class="eyebrow">ארכיון</p>
+    <h1 class="display-title">כל יום, בתוך ההקשר שלו</h1>
+    <p class="lede">בחירה ביום מודגש פותחת את התדריך המלא. ימים ללא מהדורה נשארים שקטים.</p>
+    <CalendarMonth month={month} briefs={snapshot.published} previousMonth={previousMonth} nextMonth={nextMonth} />
+    {snapshot.published.length > 0 ? (
+      <div class="archive-list">
+        {snapshot.published.map((brief) => (
+          <a class="archive-row" href={`/daily/${brief.metadata.date}`}>
+            <strong>{formatHebrewDate(brief.metadata.date)}</strong>
+            <span>{brief.metadata.significant_items + brief.metadata.worth_watching_items} פריטים</span>
+          </a>
+        ))}
+      </div>
+    ) : (
+      <div class="status-note" style="margin-top:2rem"><span class="status-dot"></span><span>עדיין אין מהדורות שפורסמו בארכיון.</span></div>
+    )}
+  </section>
+</BaseLayout>

@@ -179,6 +179,26 @@ describe("OperationsStore", () => {
     ).toMatchObject({ outcome: "acquired", job: { attemptCount: 3, leaseOwner: "publisher-3" } });
   });
 
+  it("creates, validates, touches, and revokes opaque admin sessions", () => {
+    const tokenHash = "a".repeat(64);
+    const session = database.operations.createAdminSession({
+      tokenHash,
+      csrfTokenHash: "b".repeat(64),
+      createdAt: "2026-08-28T04:00:00.000Z",
+      expiresAt: "2026-08-28T16:00:00.000Z",
+    });
+    expect(session).toMatchObject({ tokenHash, lastSeenAt: "2026-08-28T04:00:00.000Z" });
+    expect(
+      database.operations.getValidAdminSession(tokenHash, "2026-08-28T05:00:00.000Z"),
+    ).not.toBeNull();
+    expect(database.operations.touchAdminSession(tokenHash, "2026-08-28T06:00:00.000Z")).toBe(true);
+    expect(
+      database.operations.getValidAdminSession(tokenHash, "2026-08-28T16:00:00.000Z"),
+    ).toBeNull();
+    expect(database.operations.purgeExpiredAdminSessions("2026-08-28T16:00:00.000Z")).toBe(1);
+    expect(database.operations.deleteAdminSession(tokenHash)).toBe(false);
+  });
+
   it("validates operational inputs before writing", () => {
     expect(() =>
       database.operations.appendLog({

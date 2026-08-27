@@ -1,32 +1,17 @@
 ---
-import type { GetStaticPaths } from "astro";
-
 import BaseLayout from "../../layouts/BaseLayout.astro";
 import CalendarMonth from "../../components/CalendarMonth.astro";
-import { getSiteSnapshot } from "../../lib/content.js";
+import { loadSiteSnapshot } from "../../lib/content.js";
 import { formatHebrewMonth } from "../../lib/dates.js";
 
-interface Props {
-  month: string;
-  previousMonth?: string | undefined;
-  nextMonth?: string | undefined;
-}
-
-export const getStaticPaths: GetStaticPaths = async () => {
-  const snapshot = await getSiteSnapshot();
-  const months = [...new Set(snapshot.published.map((brief) => brief.metadata.date.slice(0, 7)))].sort();
-  return months.map((month, index) => ({
-    params: { month },
-    props: {
-      month,
-      previousMonth: months[index - 1],
-      nextMonth: months[index + 1],
-    },
-  }));
-};
-
-const snapshot = await getSiteSnapshot();
-const { month, previousMonth, nextMonth } = Astro.props;
+export const prerender = false;
+const snapshot = await loadSiteSnapshot();
+const month = Astro.params.month ?? "";
+if (!/^\d{4}-\d{2}$/u.test(month)) return Astro.redirect("/404", 302);
+const months = [...new Set(snapshot.published.map((brief) => brief.metadata.date.slice(0, 7)))].sort();
+const index = months.indexOf(month);
+const previousMonth = index > 0 ? months[index - 1] : undefined;
+const nextMonth = index >= 0 ? months[index + 1] : undefined;
 ---
 
 <BaseLayout title={`${formatHebrewMonth(month)} — Daily Tech`}>

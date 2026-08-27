@@ -9,6 +9,7 @@ export {
   type PublisherEnvironmentConfig,
 } from "./config.js";
 export { previousIsraelCalendarDate } from "./date.js";
+export { LocalDeploymentTrigger } from "./local.js";
 export { BriefPublisher, type BriefPublisherOptions } from "./publisher.js";
 export {
   WebhookDeploymentTrigger,

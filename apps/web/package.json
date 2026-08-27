@@ -8,12 +8,15 @@
     "prebuild": "npm run build --workspace @daily-tech/db",
     "build": "cross-env ASTRO_TELEMETRY_DISABLED=1 astro build",
     "preview": "cross-env ASTRO_TELEMETRY_DISABLED=1 astro preview",
+    "start": "cross-env ASTRO_TELEMETRY_DISABLED=1 node --env-file=../../.env dist/server/entry.mjs",
     "pretest": "npm run build --workspace @daily-tech/db",
     "test": "vitest run",
+    "pretypecheck": "npm run build --workspace @daily-tech/db",
     "typecheck": "cross-env ASTRO_TELEMETRY_DISABLED=1 astro check"
   },
   "dependencies": {
     "@astrojs/check": "^0.9.10",
+    "@astrojs/node": "^11.1.4",
     "@daily-tech/core": "0.1.0",
     "@daily-tech/db": "0.1.0",
     "@tailwindcss/vite": "^4.3.3",

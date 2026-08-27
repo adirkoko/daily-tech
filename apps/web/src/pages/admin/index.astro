@@ -1,0 +1,11 @@
+---
+export const prerender = false;
+import AdminLayout from "../../layouts/AdminLayout.astro";
+import { openServerDatabase } from "../../server/database.js";
+const db = await openServerDatabase();
+const days = db.listDays({ limit: 100 });
+const openFeedback = db.operations.listTickets({ status: "open", limit: 100 });
+const alerts = openFeedback.filter((ticket) => ticket.category === "system");
+db.close();
+---
+<AdminLayout title="לוח בקרה"><div class="admin-title"><div><p class="eyebrow">לוח בקרה</p><h1>תדריכים</h1></div><div class="admin-kpis"><span><strong>{days.length}</strong> ימים</span><span><strong>{openFeedback.length}</strong> פתוחים</span><span><strong>{alerts.length}</strong> התראות</span></div></div><div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>תאריך</th><th>סטטוס</th><th>עצימות</th><th>פריטים</th><th></th></tr></thead><tbody>{days.map((day) => <tr><td>{day.date}</td><td><span class={`status-pill ${day.status}`}>{day.status}</span></td><td>{day.day_intensity}</td><td>{day.significant_items + day.worth_watching_items}</td><td><a href={`/admin/briefs/${day.date}`}>עריכה</a></td></tr>)}</tbody></table></div></AdminLayout>

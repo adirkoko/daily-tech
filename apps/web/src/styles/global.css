@@ -214,6 +214,45 @@ main { min-height: calc(100vh - 170px); }
 .site-footer { border-block-start: 1px solid var(--line); color: var(--muted); }
 .footer-inner { min-height: 96px; display: flex; align-items: center; justify-content: space-between; gap: 1rem; font-size: .85rem; }
 
+input, textarea, select { width: 100%; padding: .72rem .8rem; border: 1px solid var(--line); border-radius: .55rem; background: var(--paper-raised); color: var(--ink); font: inherit; }
+textarea { resize: vertical; }
+label { display: grid; gap: .4rem; font-weight: 700; }
+.form-error, .form-success { padding: .85rem 1rem; border-radius: .65rem; }
+.form-error { background: color-mix(in srgb, #dc2626 13%, var(--paper-raised)); color: #b91c1c; }
+.form-success { background: var(--accent-soft); color: var(--accent-strong); }
+.feedback-form { max-width: 680px; display: grid; gap: 1.1rem; margin-block-start: 2rem; }
+.feedback-form .button { justify-self: start; }
+.admin-body { background: #f3f5f4; }
+.admin-header { min-height: 68px; display: flex; align-items: center; gap: 2rem; padding-inline: max(1rem, calc((100% - 1200px)/2)); border-block-end: 1px solid var(--line); background: var(--paper-raised); }
+.admin-header nav { margin-inline-start: auto; display: flex; align-items: center; gap: 1rem; }
+.admin-header nav a, .admin-header nav button { color: var(--muted); background: none; border: 0; text-decoration: none; cursor: pointer; }
+.admin-header nav form { margin: 0; }
+.admin-main { width: min(calc(100% - 2rem), 1200px); margin-inline: auto; padding-block: 3rem 6rem; }
+.admin-login { width: min(100%, 430px); margin: 8vh auto; padding: 2rem; border: 1px solid var(--line); border-radius: 1rem; background: var(--paper-raised); box-shadow: var(--shadow); }
+.admin-login h1 { margin-block: 0 1.5rem; font-size: 2rem; }
+.admin-form { display: grid; gap: 1.2rem; }
+.admin-title { display: flex; align-items: end; justify-content: space-between; gap: 2rem; margin-block-end: 2rem; }
+.admin-title h1 { margin: 0; font-size: clamp(2rem,5vw,4rem); letter-spacing: -.05em; }
+.admin-kpis { display: flex; gap: .6rem; }
+.admin-kpis span { padding: .65rem .9rem; border: 1px solid var(--line); border-radius: .7rem; background: var(--paper-raised); }
+.admin-table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: .8rem; background: var(--paper-raised); }
+.admin-table { width: 100%; border-collapse: collapse; text-align: start; }
+.admin-table th, .admin-table td { padding: .85rem 1rem; border-block-end: 1px solid var(--line); text-align: start; white-space: nowrap; }
+.status-pill { display: inline-flex; padding: .2rem .55rem; border-radius: 999px; background: var(--accent-soft); color: var(--accent-strong); font-size: .78rem; }
+.status-pill.failed, .status-pill.draft { background: #fee2e2; color: #991b1b; }
+.brief-editor { display: grid; grid-template-columns: repeat(4,1fr); gap: 1rem; }
+.brief-editor .wide { grid-column: 1/-1; }
+.brief-editor textarea[name="markdown"] { direction: rtl; font-family: ui-monospace, monospace; line-height: 1.65; }
+.admin-actions { display: flex; justify-content: space-between; align-items: center; }
+.danger-button { padding: .65rem 1rem; border: 1px solid #dc2626; border-radius: 999px; background: transparent; color: #b91c1c; cursor: pointer; }
+.ticket-list { display: grid; gap: 1rem; }
+.ticket { padding: 1.2rem; border: 1px solid var(--line); border-radius: .8rem; background: var(--paper-raised); }
+.ticket.resolved { opacity: .62; }
+.ticket.system { border-inline-start: 4px solid #dc2626; }
+.ticket header { display: flex; justify-content: space-between; gap: 1rem; color: var(--muted); font-size: .8rem; }
+.ticket h2 { margin-block: .8rem .3rem; }
+.ticket pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+
 @media (max-width: 820px) {
   .header-inner { gap: .75rem; }
   .brand-name { display: none; }
@@ -243,6 +282,12 @@ main { min-height: calc(100vh - 170px); }
   .article-nav { grid-template-columns: 1fr; }
   .article-nav a:last-child { text-align: start; }
   .footer-inner { align-items: start; flex-direction: column; justify-content: center; }
+  .admin-header { align-items: flex-start; flex-direction: column; gap: .7rem; padding-block: .8rem; }
+  .admin-header nav { width: 100%; margin: 0; overflow-x: auto; }
+  .admin-main { width: calc(100% - 1rem); padding-block-start: 2rem; }
+  .admin-title { align-items: start; flex-direction: column; }
+  .admin-kpis { flex-wrap: wrap; }
+  .brief-editor { grid-template-columns: 1fr; }
 }
 
 @media (prefers-reduced-motion: reduce) {

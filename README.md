@@ -6,8 +6,9 @@ developments that actually mattered in technology.
 Once a day a pipeline of AI agents researches the previous day, filters noise and
 duplicates, writes a short brief in Hebrew, reviews it, and runs deterministic
 validation. Only after every check passes is the brief saved as a Markdown file (the
-source of truth) with its metadata in SQLite, and published to a static website at a
-fixed hour. The website never calls an AI model at request time.
+source of truth) with its metadata in SQLite, and published at a fixed hour. One
+standalone Node service serves the public site, secure admin, feedback endpoint, and
+in-admin system alerts. The website never calls an AI model at request time.
 
 ```
 AI creates content  ->  code validates it  ->  SQLite + files store it  ->  the website displays it
@@ -17,11 +18,11 @@ AI creates content  ->  code validates it  ->  SQLite + files store it  ->  the 
 
 | Path                | Purpose |
 | ------------------- | ------- |
-| `apps/web/`         | Astro static website (home, daily brief, archive, calendar, statistics). |
+| `apps/web/`         | Standalone Astro service: public site, secure admin, feedback, and alerts. |
 | `packages/core/`    | Shared TypeScript: metadata schema, enums, deterministic validators. |
 | `packages/db/`      | SQLite access layer and schema for the metadata database. |
 | `packages/pipeline/`| The daily generation engine (research → filter → write → review → validate). |
-| `packages/publisher/` | Safe publication transition and deployment webhook orchestration. |
+| `packages/publisher/` | Safe local publication transition with an optional deployment webhook. |
 | `scripts/`          | Operational scripts (e.g. reset login-attempt counters). |
 | `tech_briefs/`      | Default content store: `daily/` Markdown briefs + `meta/` SQLite DB. |
 | `docs/`             | Project documentation. |
@@ -39,19 +40,29 @@ npm test
 npm run build
 npm run generate
 npm run publish:brief
+npm start
 ```
 
-For local website development, keep the default `TECH_BRIEFS_ROOT` or point it at a
-different content store, then run:
+Generate an admin password hash, copy `.env.example` to `.env`, fill the secrets, and
+run the single production service:
+
+```sh
+npm run admin:hash-password
+npm run build
+npm start
+```
+
+For local development, keep the default `TECH_BRIEFS_ROOT` or point it at another
+content store. Set `ADMIN_SECURE_COOKIES=false` only while using local HTTP, then run:
 
 ```sh
 npm run dev --workspace @daily-tech/web
 ```
 
-The site reads SQLite and Markdown only at build time. A missing database produces a
-valid first-run state; a `published` database record without its Markdown file fails
-the build instead of deploying a broken page. Set `SITE_URL` to the production origin
-when building canonical URLs.
+Public pages read SQLite and Markdown on demand, so a saved or published admin change
+is visible immediately without another deployment. A missing database produces a
+valid first-run state; an inconsistent published artifact fails closed instead of
+rendering partial content. Set `SITE_URL` to the production origin for canonical URLs.
 
 ## Status
 
@@ -63,11 +74,11 @@ Israel-time windows, bounded editorial revision loop, failure boundaries, and an
 OpenAI-compatible client. Production prompts, Brave Search, compensating Markdown +
 SQLite persistence, operational logging, and System-ticket failure reporting are now
 wired. `packages/publisher` revalidates ready artifacts, coordinates concurrent
-publication attempts through SQLite leases, transitions metadata atomically, and
-triggers a configurable deployment webhook. `apps/web` provides the static Hebrew RTL site with first-run and failure
-states, daily pages, a calendar heatmap, archive navigation, and aggregate statistics.
-The remaining release work is scheduler/hosting configuration and the secured admin
-surface.
+publication attempts through SQLite leases, and transitions metadata atomically;
+external deployment hooks are optional. `apps/web` provides the Hebrew RTL site,
+password-protected admin editor, server-side sessions, CSRF protection, public
+feedback form, feedback inbox, and system-alert view. The remaining release work is
+production hosting, TLS, persistent-volume backup, and scheduler configuration.
 
 ## Documentation
 

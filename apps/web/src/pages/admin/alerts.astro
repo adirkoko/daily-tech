@@ -1,0 +1,7 @@
+---
+export const prerender = false;
+import AdminLayout from "../../layouts/AdminLayout.astro";
+import { openServerDatabase } from "../../server/database.js";
+const db = await openServerDatabase(); const alerts = db.operations.listTickets({ category:"system", limit:500 }); const logs=db.operations.listLogs({level:"error",limit:50}); db.close(); const csrf=Astro.locals.adminSession!.csrfToken;
+---
+<AdminLayout title="התראות"><div class="admin-title"><div><p class="eyebrow">System</p><h1>התראות מערכת</h1></div><span>{alerts.filter((a)=>a.status==="open").length} פתוחות</span></div><div class="ticket-list">{alerts.map((alert)=><article class={`ticket system ${alert.status}`}><header><span class="status-pill failed">{alert.status}</span><time>{alert.createdAt}</time></header><h2>{alert.title}</h2><pre>{alert.body}</pre>{alert.status==="open"&&<form action={`/api/admin/feedback/${alert.id}`} method="post"><input type="hidden" name="csrf_token" value={csrf}/><button class="button secondary">סימון כטופל</button></form>}</article>)}</div><section class="page-section"><h2>לוג שגיאות אחרון</h2><div class="admin-table-wrap"><table class="admin-table"><tbody>{logs.map((log)=><tr><td>{log.occurredAt}</td><td>{log.eventType}</td><td>{log.message}</td></tr>)}</tbody></table></div></section></AdminLayout>

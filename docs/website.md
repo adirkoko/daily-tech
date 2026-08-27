@@ -1,14 +1,14 @@
 # Website
 
-Served by `apps/web` (Astro, static build). The guiding line is minimalism: a quiet,
+Served by `apps/web` (Astro standalone Node output). The guiding line is minimalism: a quiet,
 modern content product, not a busy news portal and not an enterprise dashboard. Every
 meaningful touchpoint makes clear that this is a short daily brief.
 
 ## Navigation
 
-Implemented items: Today, Calendar, Statistics. Search is added later (see below).
-The admin link is added together with the authenticated admin surface; it is not shown
-before that route exists.
+Implemented items: Today, Calendar, Statistics, and Feedback. Search is added later.
+The admin route exists at `/admin` but is deliberately not promoted in public
+navigation.
 
 ## Home page
 
@@ -107,6 +107,7 @@ without hover, responsive charts, and simple, uncrowded navigation.
 
 ## Performance
 
-The site is mostly static, which gives fast loads, low operating cost, good SEO, less
-server load, and higher resilience when third-party services are down. No AI runs on a
-page reader's request path.
+Pages are rendered on demand from local SQLite and Markdown with minimal browser
+JavaScript. This keeps admin changes immediately visible while retaining fast loads,
+SEO-friendly HTML, and resilience when AI/search providers are down. No AI or external
+API runs on a reader's request path.

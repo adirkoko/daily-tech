@@ -20,8 +20,8 @@ describe("publisher environment", () => {
     expect(config.databaseFile).toMatch(/custom-briefs[\\/]meta[\\/]tech_briefs\.db$/u);
   });
 
-  it("requires a valid HTTP deployment webhook", () => {
-    expect(() => loadPublisherEnvironment({})).toThrow(/PUBLISH_WEBHOOK_URL/u);
+  it("uses local publication by default and validates an optional webhook", () => {
+    expect(loadPublisherEnvironment({}).webhookUrl).toBeNull();
     expect(() =>
       loadPublisherEnvironment({ PUBLISH_WEBHOOK_URL: "file:///deploy" }),
     ).toThrow(/http or https/u);
@@ -30,7 +30,6 @@ describe("publisher environment", () => {
   it("bounds timeouts and lease durations", () => {
     expect(() =>
       loadPublisherEnvironment({
-        PUBLISH_WEBHOOK_URL: "https://deploy.example/hook",
         PUBLISH_WEBHOOK_TIMEOUT_MS: "100",
       }),
     ).toThrow(RangeError);

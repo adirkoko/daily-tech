@@ -76,8 +76,12 @@ The same database also holds user feedback tickets (including automated
 counters for admin login attempts and feedback submissions. These tables are created
 through the same ordered migration system as the daily metadata tables.
 
-`publication_jobs` stores one durable publication record per day: trigger state,
+`publication_jobs` stores one durable publication record per day: publication state,
 attempt count, lease owner and expiry, last error, and start/completion timestamps.
 The lease makes concurrent scheduler runs mutually exclusive. States are
-`triggering`, `triggered`, and `failed`; `triggered` means the deployment webhook
-accepted the request.
+`triggering`, `triggered`, and `failed`; `triggered` means local publication completed
+and, when configured, the optional deployment webhook accepted the request.
+
+`admin_sessions` stores only SHA-256 token and CSRF-token digests plus creation,
+expiry, and last-seen timestamps. Browser session material is never stored in clear
+text. Expired rows are purged during session creation.

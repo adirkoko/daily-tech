@@ -38,14 +38,22 @@ prompts.
 and its consumers in one place with one dependency graph and one set of root quality
 commands.
 
-## Durable publication lease and deployment webhook
+## Durable publication lease with local-first visibility
 
 Publication is separate from AI generation. A SQLite lease prevents overlapping
-scheduler runs from triggering the same date concurrently and permits recovery after
+scheduler runs from publishing the same date concurrently and permits recovery after
 a crashed or failed attempt. Once the artifact is revalidated, its status changes
-atomically from `ready` to `published`; an HTTP webhook then asks the selected host or
-deployment orchestrator to rebuild. A successful HTTP response means the trigger was
-accepted, not necessarily that an asynchronous build has finished.
+atomically from `ready` to `published`. The standalone server sees that transition
+immediately, so no deployment service is required. An optional HTTP webhook remains
+available for deployments that need an external cache or build trigger.
+
+## One HTTP service
+
+The public site, admin, feedback endpoint, inbox, and system-alert center run under
+one Astro standalone Node process. This avoids separate frontend/backend/admin
+deployments and keeps authentication, content, and operations on one persistent
+SQLite/filesystem boundary. Scheduled generation and publication are operational CLI
+jobs against that same store, not independent network services.
 
 ## Password-only admin auth
 

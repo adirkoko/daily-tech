@@ -135,6 +135,22 @@ const migrations: readonly Migration[] = [
         ON publication_jobs (state, updated_at DESC);
     `,
   },
+  {
+    version: 4,
+    name: "create_admin_sessions",
+    sql: `
+      CREATE TABLE admin_sessions (
+        token_hash TEXT PRIMARY KEY NOT NULL CHECK (length(token_hash) = 64),
+        csrf_token_hash TEXT NOT NULL CHECK (length(csrf_token_hash) = 64),
+        created_at TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        last_seen_at TEXT NOT NULL
+      ) STRICT;
+
+      CREATE INDEX admin_sessions_expiry_idx
+        ON admin_sessions (expires_at);
+    `,
+  },
 ];
 
 export const LATEST_SCHEMA_VERSION = migrations.at(-1)?.version ?? 0;

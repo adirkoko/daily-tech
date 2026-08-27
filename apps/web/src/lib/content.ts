@@ -1,6 +1,5 @@
 import { access, readFile } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
-import { join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 
 import { expectedBriefRelativePath, type DayMetadata } from "@daily-tech/core";
 import { DailyTechDatabase } from "@daily-tech/db";
@@ -29,10 +28,13 @@ export interface LoadSiteSnapshotOptions {
   readonly now?: Date;
 }
 
-const repositoryRoot = fileURLToPath(new URL("../../../../", import.meta.url));
 let cachedSnapshot: Promise<SiteSnapshot> | undefined;
 
 function defaultContentRoot(): string {
+  const cwd = process.cwd();
+  const repositoryRoot = basename(cwd) === "web" && basename(dirname(cwd)) === "apps"
+    ? resolve(cwd, "../..")
+    : cwd;
   const configured = process.env.TECH_BRIEFS_ROOT?.trim();
   return configured ? resolve(repositoryRoot, configured) : join(repositoryRoot, "tech_briefs");
 }

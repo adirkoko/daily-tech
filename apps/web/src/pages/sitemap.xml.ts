@@ -3,7 +3,7 @@ import type { APIRoute } from "astro";
 import { getSiteSnapshot } from "../lib/content.js";
 import { escapeXml } from "../lib/xml.js";
 
-export const prerender = true;
+export const prerender = false;
 
 export const GET: APIRoute = async ({ site }) => {
   const origin = site ?? new URL("http://localhost:4321");

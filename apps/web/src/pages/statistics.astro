@@ -1,9 +1,10 @@
 ---
 import BaseLayout from "../layouts/BaseLayout.astro";
-import { getSiteSnapshot } from "../lib/content.js";
+import { loadSiteSnapshot } from "../lib/content.js";
 import { calculateStatistics } from "../lib/statistics.js";
 
-const snapshot = await getSiteSnapshot();
+export const prerender = false;
+const snapshot = await loadSiteSnapshot();
 const stats = calculateStatistics(snapshot.published.map((brief) => brief.metadata));
 const intensityLabels = { minimal: "שקט", low: "נמוך", medium: "בינוני", high: "גבוה", extreme: "חריג" } as const;
 const maxIntensity = Math.max(...Object.values(stats.intensityCounts), 1);

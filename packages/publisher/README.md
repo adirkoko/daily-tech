@@ -1,19 +1,20 @@
 # @daily-tech/publisher
 
-Publishes one validated Daily Tech brief and requests a site rebuild without calling
-an AI provider.
+Publishes one validated Daily Tech brief without calling an AI provider. The
+standalone site reads content on demand, so local publication needs no rebuild.
 
 The publisher:
 
 1. Loads a `ready` brief for the requested date.
-2. Acquires a durable SQLite lease so overlapping scheduler runs cannot trigger the
+2. Acquires a durable SQLite lease so overlapping scheduler runs cannot publish the
    same publication concurrently.
 3. Revalidates the Markdown bytes, path, metadata, links, and item counts.
 4. Atomically changes the brief to `published` and sets `published_at`.
-5. Sends a bounded HTTP POST to the configured deployment webhook.
-6. Records the accepted trigger, structured logs, and any failure as a System ticket.
+5. Completes locally by default, or sends a bounded HTTP POST when an optional
+   deployment webhook is configured.
+6. Records completion, structured logs, and any failure as a System ticket.
 
-A failed webhook can be retried safely. If the metadata transition already happened,
+A failed optional webhook can be retried safely. If the metadata transition already happened,
 the retry keeps the original `published_at` and only triggers deployment again. A
 successfully triggered date is a no-op on later runs.
 
@@ -33,7 +34,7 @@ npm run publish:brief -- --date=2026-08-27
 npm run publish:brief -- --run-at=2026-08-28T04:00:00.000Z
 ```
 
-The webhook receives:
+When `PUBLISH_WEBHOOK_URL` is configured, the webhook receives:
 
 ```json
 {

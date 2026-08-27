@@ -29,16 +29,13 @@ describe("publisher CLI", () => {
     database.close();
     await writeBrief(join(temporaryRoot, "daily"));
 
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
-      new Response(null, { status: 202, headers: { "x-request-id": "cli-deploy-1" } }),
-    );
+    const fetchMock = vi.fn<typeof fetch>();
     vi.stubGlobal("fetch", fetchMock);
     vi.spyOn(process.stdout, "write").mockImplementation(() => true);
 
     await runPublisherCli(
       {
         TECH_BRIEFS_ROOT: temporaryRoot,
-        PUBLISH_WEBHOOK_URL: "https://deploy.example/hook",
       },
       ["--run-at=2026-08-28T04:00:00.000Z"],
     );
@@ -49,6 +46,6 @@ describe("publisher CLI", () => {
       published_at: expect.any(String),
     });
     verificationDatabase.close();
-    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

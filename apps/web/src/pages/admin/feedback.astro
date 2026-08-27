@@ -1,0 +1,7 @@
+---
+export const prerender = false;
+import AdminLayout from "../../layouts/AdminLayout.astro";
+import { openServerDatabase } from "../../server/database.js";
+const db = await openServerDatabase(); const tickets = db.operations.listTickets({ limit: 500 }); db.close(); const csrf = Astro.locals.adminSession!.csrfToken;
+---
+<AdminLayout title="פידבק"><div class="admin-title"><div><p class="eyebrow">Inbox</p><h1>פידבק</h1></div></div><div class="ticket-list">{tickets.filter((t)=>t.category!=="system").map((ticket)=><article class={`ticket ${ticket.status}`}><header><span class="status-pill">{ticket.category}</span><time>{ticket.createdAt}</time></header><h2>{ticket.title}</h2>{ticket.submitterName && <p>מאת {ticket.submitterName}</p>}<p>{ticket.body}</p>{ticket.status==="open" && <form action={`/api/admin/feedback/${ticket.id}`} method="post"><input type="hidden" name="csrf_token" value={csrf}/><button class="button secondary" type="submit">סימון כטופל</button></form>}</article>)}</div></AdminLayout>

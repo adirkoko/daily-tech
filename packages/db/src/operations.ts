@@ -124,6 +124,21 @@ export type BeginPublicationResult =
   | { readonly outcome: "already_triggered"; readonly job: PublicationJob }
   | { readonly outcome: "busy"; readonly job: PublicationJob };
 
+export interface AdminSession {
+  readonly tokenHash: string;
+  readonly csrfTokenHash: string;
+  readonly createdAt: string;
+  readonly expiresAt: string;
+  readonly lastSeenAt: string;
+}
+
+export interface CreateAdminSessionInput {
+  readonly tokenHash: string;
+  readonly csrfTokenHash: string;
+  readonly createdAt: string;
+  readonly expiresAt: string;
+}
+
 interface OperationalLogRow {
   readonly id: number;
   readonly run_id: string | null;
@@ -156,6 +171,14 @@ interface PublicationJobRow {
   readonly started_at: string;
   readonly completed_at: string | null;
   readonly updated_at: string;
+}
+
+interface AdminSessionRow {
+  readonly token_hash: string;
+  readonly csrf_token_hash: string;
+  readonly created_at: string;
+  readonly expires_at: string;
+  readonly last_seen_at: string;
 }
 
 export class OperationsStore {
@@ -415,6 +438,67 @@ export class OperationsStore {
     return this.finishPublication(dayDate, leaseOwner, failedAt, "failed", errorMessage);
   }
 
+  createAdminSession(input: CreateAdminSessionInput): AdminSession {
+    assertSha256(input.tokenHash, "tokenHash");
+    assertSha256(input.csrfTokenHash, "csrfTokenHash");
+    assertTimestamp(input.createdAt, "createdAt");
+    assertTimestamp(input.expiresAt, "expiresAt");
+    if (input.expiresAt <= input.createdAt) {
+      throw new RangeError("expiresAt must be later than createdAt.");
+    }
+    this.#database
+      .prepare(
+        `
+          INSERT INTO admin_sessions (
+            token_hash, csrf_token_hash, created_at, expires_at, last_seen_at
+          ) VALUES (?, ?, ?, ?, ?)
+        `,
+      )
+      .run(
+        input.tokenHash,
+        input.csrfTokenHash,
+        input.createdAt,
+        input.expiresAt,
+        input.createdAt,
+      );
+    return this.requireAdminSession(input.tokenHash);
+  }
+
+  getValidAdminSession(tokenHash: string, occurredAt: string): AdminSession | null {
+    assertSha256(tokenHash, "tokenHash");
+    assertTimestamp(occurredAt, "occurredAt");
+    const row = this.#database
+      .prepare(
+        "SELECT * FROM admin_sessions WHERE token_hash = ? AND expires_at > ?",
+      )
+      .get(tokenHash, occurredAt) as AdminSessionRow | undefined;
+    return row === undefined ? null : mapAdminSession(row);
+  }
+
+  touchAdminSession(tokenHash: string, occurredAt: string): boolean {
+    assertSha256(tokenHash, "tokenHash");
+    assertTimestamp(occurredAt, "occurredAt");
+    return this.#database
+      .prepare(
+        "UPDATE admin_sessions SET last_seen_at = ? WHERE token_hash = ? AND expires_at > ?",
+      )
+      .run(occurredAt, tokenHash, occurredAt).changes === 1;
+  }
+
+  deleteAdminSession(tokenHash: string): boolean {
+    assertSha256(tokenHash, "tokenHash");
+    return this.#database
+      .prepare("DELETE FROM admin_sessions WHERE token_hash = ?")
+      .run(tokenHash).changes === 1;
+  }
+
+  purgeExpiredAdminSessions(occurredAt: string): number {
+    assertTimestamp(occurredAt, "occurredAt");
+    return this.#database
+      .prepare("DELETE FROM admin_sessions WHERE expires_at <= ?")
+      .run(occurredAt).changes;
+  }
+
   private getLog(id: number): OperationalLog {
     const row = this.#database
       .prepare("SELECT * FROM operational_logs WHERE id = ?")
@@ -448,6 +532,16 @@ export class OperationsStore {
       throw new Error(`Publication job ${dayDate} does not exist.`);
     }
     return job;
+  }
+
+  private requireAdminSession(tokenHash: string): AdminSession {
+    const row = this.#database
+      .prepare("SELECT * FROM admin_sessions WHERE token_hash = ?")
+      .get(tokenHash) as AdminSessionRow | undefined;
+    if (row === undefined) {
+      throw new Error("Admin session disappeared after insertion.");
+    }
+    return mapAdminSession(row);
   }
 
   private finishPublication(
@@ -536,6 +630,16 @@ function mapPublicationJob(row: PublicationJobRow): PublicationJob {
   };
 }
 
+function mapAdminSession(row: AdminSessionRow): AdminSession {
+  return {
+    tokenHash: row.token_hash,
+    csrfTokenHash: row.csrf_token_hash,
+    createdAt: row.created_at,
+    expiresAt: row.expires_at,
+    lastSeenAt: row.last_seen_at,
+  };
+}
+
 function mapFeedbackTicket(row: FeedbackTicketRow): FeedbackTicket {
   return {
     id: row.id,
@@ -580,6 +684,12 @@ function assertTimestamp(value: string, path: string): void {
 function assertCalendarDate(value: string, path: string): void {
   if (!isCalendarDate(value)) {
     throw new TypeError(`${path} must use YYYY-MM-DD format.`);
+  }
+}
+
+function assertSha256(value: string, path: string): void {
+  if (!/^[a-f0-9]{64}$/u.test(value)) {
+    throw new TypeError(`${path} must be a lowercase SHA-256 hex digest.`);
   }
 }
 

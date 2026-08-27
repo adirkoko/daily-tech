@@ -30,6 +30,7 @@ describe("database migrations", () => {
       .all() as Array<{ name: string }>)
       .map((row) => row.name);
     expect(tables).toEqual([
+      "admin_sessions",
       "daily_brief_companies",
       "daily_brief_developments",
       "daily_brief_topics",

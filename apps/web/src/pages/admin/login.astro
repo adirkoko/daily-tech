@@ -1,0 +1,7 @@
+---
+export const prerender = false;
+import AdminLayout from "../../layouts/AdminLayout.astro";
+if (Astro.locals.adminSession) return Astro.redirect("/admin", 303);
+const error = Astro.url.searchParams.get("error");
+---
+<AdminLayout title="כניסה"><section class="admin-login"><p class="eyebrow">Daily Tech Admin</p><h1>כניסה למערכת</h1>{error && <p class="form-error" role="alert">{error}</p>}<form class="admin-form" action="/api/admin/login" method="post"><label>סיסמה<input name="password" type="password" required maxlength="1024" autocomplete="current-password" autofocus /></label><button class="button" type="submit">כניסה</button></form></section></AdminLayout>

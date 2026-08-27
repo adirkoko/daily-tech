@@ -1,0 +1,6 @@
+---
+export const prerender = false;
+import BaseLayout from "../layouts/BaseLayout.astro";
+const success=Astro.url.searchParams.get("success"); const error=Astro.url.searchParams.get("error");
+---
+<BaseLayout title="יצירת קשר — Daily Tech"><section class="shell page-section"><p class="eyebrow">יצירת קשר</p><h1 class="display-title">משהו שכדאי שנדע?</h1><p class="lede">תיקון, הצעה או פידבק כללי מגיעים ישירות לתיבת הניהול.</p>{success&&<p class="form-success">{success}</p>}{error&&<p class="form-error">{error}</p>}<form class="feedback-form" action="/api/feedback" method="post"><label>כותרת<input name="title" required maxlength="120" /></label><label>שם <small>(אופציונלי)</small><input name="name" maxlength="80" /></label><label>קטגוריה<select name="category"><option value="general">כללי</option><option value="correction">תיקון</option><option value="suggestion">הצעה</option></select></label><label>הודעה<textarea name="body" required maxlength="4000" rows="8"></textarea></label><button class="button" type="submit">שליחה</button></form></section></BaseLayout>

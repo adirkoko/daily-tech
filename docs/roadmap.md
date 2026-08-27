@@ -6,11 +6,12 @@
 | ---- | ------ |
 | Core validation, SQLite schema, and lifecycle | Implemented and tested |
 | AI research, writing, review, missing-news check, and persistence | Implemented; production credentials still required |
-| Static Hebrew website, archive, heatmap, and basic statistics | Implemented and tested |
-| Safe publication command and deployment webhook | Implemented and tested |
-| Production scheduler, hosting, and content-store synchronization | Deployment decision pending |
-| Admin authentication and editing UI | Not started |
-| Public feedback form and admin inbox UI | Not started; storage primitives exist |
+| Hebrew website, archive, heatmap, and basic statistics | Implemented and tested |
+| Safe local publication; optional deployment webhook | Implemented and tested |
+| Single standalone Node service | Implemented and integration-tested |
+| Secure admin authentication and editing UI | Implemented and integration-tested |
+| Public feedback, admin inbox, and in-admin alerts | Implemented and integration-tested |
+| Production TLS, persistent storage, backups, and scheduler | Infrastructure configuration pending |
 
 “Automatic” in the first-version list below includes both implemented application
 commands and the still-pending production scheduler/hosting configuration.

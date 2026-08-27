@@ -4,7 +4,7 @@ export interface PublisherEnvironmentConfig {
   readonly contentRoot: string;
   readonly dailyStorageRoot: string;
   readonly databaseFile: string;
-  readonly webhookUrl: string;
+  readonly webhookUrl: string | null;
   readonly webhookToken: string | null;
   readonly webhookTimeoutMs: number;
   readonly leaseDurationMs: number;
@@ -14,8 +14,8 @@ export function loadPublisherEnvironment(
   environment: NodeJS.ProcessEnv,
 ): PublisherEnvironmentConfig {
   const contentRoot = resolve(environment.TECH_BRIEFS_ROOT ?? "tech_briefs");
-  const webhookUrl = requiredVariable(environment, "PUBLISH_WEBHOOK_URL");
-  assertHttpUrl(webhookUrl);
+  const webhookUrl = optionalVariable(environment, "PUBLISH_WEBHOOK_URL");
+  if (webhookUrl !== null) assertHttpUrl(webhookUrl);
   return {
     contentRoot,
     dailyStorageRoot: resolve(contentRoot, "daily"),
@@ -37,14 +37,6 @@ export function loadPublisherEnvironment(
       3_600_000,
     ),
   };
-}
-
-function requiredVariable(environment: NodeJS.ProcessEnv, name: string): string {
-  const value = optionalVariable(environment, name);
-  if (value === null) {
-    throw new Error(`Missing required environment variable: ${name}.`);
-  }
-  return value;
 }
 
 function optionalVariable(environment: NodeJS.ProcessEnv, name: string): string | null {

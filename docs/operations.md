@@ -2,9 +2,8 @@
 
 Covers user feedback, system notifications, and logging.
 
-> **Implementation status:** structured logs, System tickets, ticket lifecycle, and
-> rate-limit storage are implemented. The public feedback form and admin inbox UI are
-> still planned.
+> **Implementation status:** implemented end to end. Structured logs, public feedback,
+> the admin inbox, System alerts, ticket resolution, and rate limiting share SQLite.
 
 ## Feedback form
 
@@ -20,8 +19,9 @@ a fixed time window, not a per-user timer.
 
 ## Admin feedback inbox
 
-After login, the admin can open a view of all submissions, with sorting, filtering,
-and a clear distinction between categories.
+After login, `/admin/feedback` lists reader submissions and lets the operator mark an
+open ticket resolved. `/admin/alerts` separately highlights System tickets and recent
+error-level operational logs.
 
 ## System tickets
 
@@ -32,6 +32,9 @@ category, which carries a dedicated color or marking so it stands out. Examples:
 - Publishing failure.
 - Search-service failure.
 - Any other failure needing the admin's attention.
+
+The Admin alert center is the only notification channel in this architecture. There
+is no email, Telegram, Slack, or other outbound incident-notification dependency.
 
 ## Logging
 

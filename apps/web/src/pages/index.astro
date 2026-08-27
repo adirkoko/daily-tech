@@ -2,10 +2,11 @@
 import BaseLayout from "../layouts/BaseLayout.astro";
 import DayCard from "../components/DayCard.astro";
 import IntensityBadge from "../components/IntensityBadge.astro";
-import { getSiteSnapshot } from "../lib/content.js";
+import { loadSiteSnapshot } from "../lib/content.js";
 import { formatHebrewDate } from "../lib/dates.js";
 
-const snapshot = await getSiteSnapshot();
+export const prerender = false;
+const snapshot = await loadSiteSnapshot();
 const latest = snapshot.latestPublished;
 const recent = snapshot.published.slice(1, 7);
 const pending = snapshot.targetDay === null || snapshot.targetDay.status === "draft" || snapshot.targetDay.status === "ready";

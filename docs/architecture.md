@@ -17,8 +17,8 @@ serve pages when AI services are unavailable.
 | `packages/pipeline` | The daily generation engine: research, filtering, ranking, deduplication, writing, editorial review, missing-news check. Reaches the model through a thin OpenAI-compatible abstraction so the model or provider can be swapped. |
 | `packages/core` | Framework-free TypeScript shared by everything: the metadata schema, its allowed values (`status`, `day_intensity`), and the deterministic validators run before a brief is accepted. |
 | `packages/db` | SQLite access: schema and typed read/write functions for day metadata, feedback tickets, logs, and rate-limit counters. |
-| `packages/publisher` | Revalidates a ready artifact, coordinates publication with a durable SQLite lease, atomically marks it published, and requests a deployment through an HTTP webhook. |
-| `apps/web` | Astro static site. Pages are prerendered at build time from Markdown and SQLite. It ships no UI framework; a small inline script persists the theme preference while the calendar and statistics remain static HTML/CSS. |
+| `packages/publisher` | Revalidates a ready artifact, coordinates publication with a durable SQLite lease, and atomically marks it published. Publication is local by default; an HTTP webhook is optional. |
+| `apps/web` | One standalone Astro/Node service for public server-rendered pages, password-protected admin, feedback API/inbox, and system alerts. It reads Markdown and SQLite on demand and ships almost no client JavaScript. |
 | `scripts` | Operational scripts, e.g. resetting all login-attempt counters. |
 | `tech_briefs/` | The content store. `daily/` holds the Markdown briefs (source of truth); `meta/` holds the SQLite database. The path is configurable; this is the default. |
 
@@ -34,6 +34,18 @@ packages/core      -> (nothing internal)
 
 `core` stays framework-free so the site, the DB layer, and the pipeline can all
 depend on it.
+
+## Runtime boundary
+
+`npm start` launches a single long-running Node process. That process owns every HTTP
+route: public pages, `/feedback`, `/admin`, and their APIs. SQLite and Markdown share
+one persistent content root. Generation and publication remain commands run by cron
+or another scheduler, but they use the same repository, database, filesystem, and
+validation contracts; they are not separate network services.
+
+Because public content is rendered on demand, an admin save or local publication
+transition becomes visible immediately. The AI pipeline remains completely outside
+the reader request path.
 
 ## Key decisions
 

@@ -1,42 +1,49 @@
 # Admin & Security
 
-> **Implementation status:** planned. The SQLite feedback/rate-limit primitives and
-> reset script exist; the authenticated server UI and session mechanism do not.
+> **Implementation status:** implemented. The admin UI, authentication, server-side
+> sessions, editing actions, feedback inbox, and system alerts run in `apps/web`.
 
 ## Login
 
-A small login page is reachable from the site. Login is by **password only**, with no
-username.
+The login page is `/admin/login`. Authentication is by **password only**, with no
+username. Run `npm run admin:hash-password` and place the result in
+`ADMIN_PASSWORD_HASH`; the plaintext password is never stored in configuration.
 
-## Editing content and metadata
+## Content management
 
-After login, the admin area allows:
+The dashboard lists the latest briefs and their status, intensity, and item count.
+An editor can change the Markdown and all editable metadata. Every brief page offers:
 
-- Opening the day's Markdown file as text and editing the whole content.
-- Editing that day's metadata in SQLite.
+1. **Delete** — remove the Markdown and metadata record together. The day becomes an
+   unavailable calendar day.
+2. **Copy** — copy the complete Markdown source.
+3. **Save** — validate and persist Markdown plus metadata and update `updated_at`.
 
-## Actions
+Save runs the same deterministic artifact validation used by the pipeline. Filesystem
+changes use a temporary file and rollback backup so a database failure does not leave
+half-written content. Administrative save, delete, login, and feedback-resolution
+actions are recorded in the operational log.
 
-Every edit page has three actions:
+## Security controls
 
-1. **Delete** — remove the day's file and its metadata record. The day then shows as a
-   "day without a page" on the calendar.
-2. **Copy** — copy the file content.
-3. **Save** — persist the changes, and set `updated_at` to the time of the save.
+- Password verification uses scrypt with `N=131072`, `r=8`, `p=1`, a random salt,
+  and constant-time comparison.
+- Sessions use random opaque tokens stored only as SHA-256 digests in SQLite. The
+  browser cookie is `HttpOnly`, `SameSite=Strict`, path-scoped to `/`, and `Secure`
+  in production. Sessions expire after the configured TTL; logout revokes them.
+- Every state-changing admin form requires an exact same-origin request and a random,
+  session-bound CSRF token.
+- Admin responses use `Cache-Control: no-store`. Middleware also applies anti-framing,
+  MIME-sniffing, referrer, and browser-permission headers.
+- Login is limited to three attempts per caller in the configured fixed window.
+  Raw caller IPs are not stored; rate-limit keys are HMAC digests.
+- Form fields and request bodies are bounded. The Node adapter rejects bodies above
+  300 KiB.
+- The password hash, session secret, and other secrets remain server-side and are
+  never rendered to the browser.
 
-Every administrative action is written to a short log.
-
-## Security
-
-- The admin password and all other secrets exist only in the server environment and
-  are never sent to the browser.
-- Rate limit: up to **3 login attempts per IP** within a fixed window configured at
-  deployment time (`12` hours in `.env.example`).
-- Counters reset automatically on a fixed time window, not a per-user timer.
-- A simple server command / script (`scripts/`) resets all login-attempt counters.
-- The mostly-static site keeps the attack surface and server load small.
-
-## Open point
-
-The session mechanism after a successful login (signed cookie, server session) is not
-decided. Whatever is chosen keeps secrets server-side.
+Production must terminate HTTPS before the service, keep
+`ADMIN_SECURE_COOKIES=true`, use a unique high-entropy
+`ADMIN_SESSION_SECRET` of at least 32 characters, and keep the content/SQLite path on
+a private persistent volume. `npm run rate-limits:reset -- --scope=admin_login` clears login counters when
+the operator deliberately needs to recover access.

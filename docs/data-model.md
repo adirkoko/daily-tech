@@ -53,6 +53,9 @@ published_at: ...
 updated_at: ...            # last manual edit
 ```
 
+Timestamps are ISO 8601 UTC values. `published_at` and `updated_at` are `null` until
+the corresponding event occurs.
+
 ### Allowed values
 
 - `day_intensity` ∈ `minimal | low | medium | high | extreme`

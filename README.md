@@ -29,13 +29,21 @@ AI creates content  ->  code validates it  ->  SQLite + files store it  ->  the 
 
 - Node: version pinned in `.nvmrc`.
 - Language: TypeScript across the site, the DB layer, and the pipeline.
-- One repository, intended to become npm workspaces once the packages carry a
-  `package.json`.
+- Package management: npm workspaces.
+
+```sh
+npm install
+npm run typecheck
+npm test
+npm run build
+```
 
 ## Status
 
-Early stage: architecture and stack are settled, no application code yet. First unit
-of work is `packages/core` — the metadata types and the deterministic validators.
+Early implementation stage. `packages/core` now provides the metadata contract,
+allowed-value guards, date and Markdown inspection helpers, and deterministic
+validation for a complete brief artifact. It has unit-test coverage and builds as an
+independent workspace package. The next unit of work is `packages/db`.
 
 ## Documentation
 

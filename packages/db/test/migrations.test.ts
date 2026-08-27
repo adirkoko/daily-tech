@@ -36,6 +36,7 @@ describe("database migrations", () => {
       "daily_briefs",
       "feedback_tickets",
       "operational_logs",
+      "publication_jobs",
       "rate_limit_counters",
       "schema_migrations",
     ]);

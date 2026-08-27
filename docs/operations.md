@@ -2,6 +2,10 @@
 
 Covers user feedback, system notifications, and logging.
 
+> **Implementation status:** structured logs, System tickets, ticket lifecycle, and
+> rate-limit storage are implemented. The public feedback form and admin inbox UI are
+> still planned.
+
 ## Feedback form
 
 A simple contact form on the site. Fields:
@@ -45,7 +49,8 @@ Each daily run records at least:
 - AI model usage cost for the run.
 
 Outside the daily run, the log also records admin actions, login attempts, feedback
-submissions, and system tickets.
+submissions, system tickets, and every publication attempt. Publication logs distinguish
+start, status transition, accepted deployment trigger, overlap/no-op, and failure.
 
 The AI cost figure depends on the provider returning usage / token counts through the
 OpenAI-compatible layer, which surfaces them to the caller. Logs are stored in the

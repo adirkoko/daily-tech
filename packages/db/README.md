@@ -13,6 +13,7 @@ Typed SQLite persistence for Daily Tech, built on `better-sqlite3`.
 - Store structured operational events and filter them by run, date, and severity.
 - Store feedback/System tickets and their open/resolved lifecycle.
 - Atomically count admin-login and feedback attempts inside fixed rate-limit windows.
+- Lease publication attempts and persist trigger success/failure for safe retries.
 
 ## Usage
 

@@ -21,6 +21,7 @@ AI creates content  ->  code validates it  ->  SQLite + files store it  ->  the 
 | `packages/core/`    | Shared TypeScript: metadata schema, enums, deterministic validators. |
 | `packages/db/`      | SQLite access layer and schema for the metadata database. |
 | `packages/pipeline/`| The daily generation engine (research → filter → write → review → validate). |
+| `packages/publisher/` | Safe publication transition and deployment webhook orchestration. |
 | `scripts/`          | Operational scripts (e.g. reset login-attempt counters). |
 | `tech_briefs/`      | Default content store: `daily/` Markdown briefs + `meta/` SQLite DB. |
 | `docs/`             | Project documentation. |
@@ -37,6 +38,7 @@ npm run typecheck
 npm test
 npm run build
 npm run generate
+npm run publish:brief
 ```
 
 For local website development, keep the default `TECH_BRIEFS_ROOT` or point it at a
@@ -60,9 +62,12 @@ development tables. `packages/pipeline` provides the tested orchestration founda
 Israel-time windows, bounded editorial revision loop, failure boundaries, and an
 OpenAI-compatible client. Production prompts, Brave Search, compensating Markdown +
 SQLite persistence, operational logging, and System-ticket failure reporting are now
-wired. `apps/web` provides the static Hebrew RTL site with first-run and failure
+wired. `packages/publisher` revalidates ready artifacts, coordinates concurrent
+publication attempts through SQLite leases, transitions metadata atomically, and
+triggers a configurable deployment webhook. `apps/web` provides the static Hebrew RTL site with first-run and failure
 states, daily pages, a calendar heatmap, archive navigation, and aggregate statistics.
-The next major units are the publish workflow and the secured admin surface.
+The remaining release work is scheduler/hosting configuration and the secured admin
+surface.
 
 ## Documentation
 

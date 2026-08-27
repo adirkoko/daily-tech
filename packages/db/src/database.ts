@@ -3,6 +3,7 @@ import Database from "better-sqlite3";
 import {
   isBriefStatus,
   isCalendarDate,
+  isUtcTimestamp,
   validateDayMetadata,
   type BriefStatus,
   type DayMetadata,
@@ -27,6 +28,12 @@ export interface ListDaysOptions {
   readonly limit?: number;
   readonly offset?: number;
 }
+
+export type PublishReadyDayResult =
+  | { readonly outcome: "published"; readonly metadata: DayMetadata }
+  | { readonly outcome: "already_published"; readonly metadata: DayMetadata }
+  | { readonly outcome: "not_ready"; readonly metadata: DayMetadata }
+  | { readonly outcome: "not_found"; readonly metadata: null };
 
 type DatabaseRow = Record<string, null | number | bigint | string | Uint8Array>;
 
@@ -145,6 +152,33 @@ export class DailyTechDatabase {
     }
 
     return this.hydrateRows([row])[0] ?? null;
+  }
+
+  publishReadyDay(date: string, publishedAt: string): PublishReadyDayResult {
+    assertDate(date, "date");
+    if (!isUtcTimestamp(publishedAt)) {
+      throw new TypeError("publishedAt must be an ISO 8601 UTC timestamp.");
+    }
+
+    const result = this.#database
+      .prepare(
+        `
+          UPDATE daily_briefs
+          SET status = 'published', published_at = ?
+          WHERE date = ? AND status = 'ready'
+        `,
+      )
+      .run(publishedAt, date);
+    const metadata = this.getDay(date);
+    if (metadata === null) {
+      return { outcome: "not_found", metadata: null };
+    }
+    if (result.changes === 1) {
+      return { outcome: "published", metadata };
+    }
+    return metadata.status === "published"
+      ? { outcome: "already_published", metadata }
+      : { outcome: "not_ready", metadata };
   }
 
   listDays(options: ListDaysOptions = {}): readonly DayMetadata[] {

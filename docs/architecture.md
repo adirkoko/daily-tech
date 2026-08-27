@@ -17,7 +17,8 @@ serve pages when AI services are unavailable.
 | `packages/pipeline` | The daily generation engine: research, filtering, ranking, deduplication, writing, editorial review, missing-news check. Reaches the model through a thin OpenAI-compatible abstraction so the model or provider can be swapped. |
 | `packages/core` | Framework-free TypeScript shared by everything: the metadata schema, its allowed values (`status`, `day_intensity`), and the deterministic validators run before a brief is accepted. |
 | `packages/db` | SQLite access: schema and typed read/write functions for day metadata, feedback tickets, logs, and rate-limit counters. |
-| `apps/web` | Astro static site. Pages are prerendered at build time from the Markdown briefs and the SQLite metadata. A few small islands cover interactivity: theme toggle, mobile calendar interaction, statistics charts. |
+| `packages/publisher` | Revalidates a ready artifact, coordinates publication with a durable SQLite lease, atomically marks it published, and requests a deployment through an HTTP webhook. |
+| `apps/web` | Astro static site. Pages are prerendered at build time from Markdown and SQLite. It ships no UI framework; a small inline script persists the theme preference while the calendar and statistics remain static HTML/CSS. |
 | `scripts` | Operational scripts, e.g. resetting all login-attempt counters. |
 | `tech_briefs/` | The content store. `daily/` holds the Markdown briefs (source of truth); `meta/` holds the SQLite database. The path is configurable; this is the default. |
 
@@ -26,6 +27,7 @@ Dependency direction:
 ```
 apps/web           -> core, db
 packages/pipeline  -> core, db
+packages/publisher -> core, db
 packages/db        -> core
 packages/core      -> (nothing internal)
 ```

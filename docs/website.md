@@ -6,8 +6,9 @@ meaningful touchpoint makes clear that this is a short daily brief.
 
 ## Navigation
 
-Fixed items: Today, Calendar, Statistics. Search is added later (see below). A small,
-non-dominant control links to the admin area.
+Implemented items: Today, Calendar, Statistics. Search is added later (see below).
+The admin link is added together with the authenticated admin surface; it is not shown
+before that route exists.
 
 ## Home page
 
@@ -51,23 +52,33 @@ Each day with a page gets a visual intensity from `day_intensity`
 (`minimal`, `low`, `medium`, `high`, `extreme`), so the calendar also works as a
 historical heatmap of industry activity.
 
-Hovering a day can surface the number of developments, the day intensity, the main
-companies, and the summary sentence. On mobile an equivalent interaction is provided
-that does not depend on hover.
+The current calendar uses color and a top marker for intensity. Desktop hover exposes
+the summary, development count, and main companies through the native tooltip. On
+mobile, tapping a published day opens its accessible daily page directly, so no
+content depends on hover.
 
 ## Statistics page
 
-Built directly from the SQLite metadata, with no AI at page-load time. Metrics:
+Built directly from the SQLite metadata, with no AI at page-load time.
+
+Implemented in the basic statistics page:
+
+- Total briefs and developments.
+- Average source count.
+- Count of high/extreme days.
+- Top companies and topics.
+- Distribution by day intensity.
+
+Planned extensions after the basic page:
 
 - Activity per company — number of developments each company appeared in.
 - Activity over time — developments per day, or day intensity.
-- Hot topics — counts by `topics`.
 - Most active company — by week, month, year, or all time.
 - Most significant days — days marked `high` or `extreme`.
 - This week vs. last week — comparison of development counts.
-- Sources — total or average `source_count` as a measure of process depth.
 
-Time ranges for the relevant charts: 7 days, 30 days, 90 days, 1 year, all time.
+Planned time ranges for those extended charts: 7 days, 30 days, 90 days, 1 year, all
+time.
 AI-generated weekly or monthly summaries are not part of the MVP.
 
 ## Search

@@ -89,6 +89,17 @@ was a problem" note with no technical detail.
 
 ## Schedule
 
-`01:00` Israel time — generation starts; on success the file is saved and status
-becomes `ready`. `07:00` — automatic publish; status becomes `published` and the site
-rebuilds. Separating the two lets the checks finish before anything goes live.
+The intended production schedule is `01:00` Israel time for generation and `07:00`
+for publication. Generation saves a valid file with `ready` status. The separate
+publisher revalidates it, changes it to `published`, and requests a site rebuild.
+Separating the two lets every check finish before anything goes live.
+
+Both commands are implemented and target the previous Israel calendar day by default:
+
+```sh
+npm run generate
+npm run publish:brief
+```
+
+The scheduler that invokes them is deployment-specific and is not configured in this
+repository yet.

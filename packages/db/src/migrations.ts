@@ -110,6 +110,31 @@ const migrations: readonly Migration[] = [
         ON rate_limit_counters (scope, window_started_at);
     `,
   },
+  {
+    version: 3,
+    name: "create_publication_jobs",
+    sql: `
+      CREATE TABLE publication_jobs (
+        day_date TEXT PRIMARY KEY NOT NULL
+          REFERENCES daily_briefs(date) ON DELETE CASCADE,
+        state TEXT NOT NULL CHECK (state IN ('triggering', 'triggered', 'failed')),
+        attempt_count INTEGER NOT NULL CHECK (attempt_count >= 1),
+        lease_owner TEXT,
+        lease_expires_at TEXT,
+        last_error TEXT,
+        started_at TEXT NOT NULL,
+        completed_at TEXT,
+        updated_at TEXT NOT NULL,
+        CHECK (
+          (state = 'triggering' AND lease_owner IS NOT NULL AND lease_expires_at IS NOT NULL)
+          OR (state != 'triggering' AND lease_owner IS NULL AND lease_expires_at IS NULL)
+        )
+      ) STRICT;
+
+      CREATE INDEX publication_jobs_state_idx
+        ON publication_jobs (state, updated_at DESC);
+    `,
+  },
 ];
 
 export const LATEST_SCHEMA_VERSION = migrations.at(-1)?.version ?? 0;

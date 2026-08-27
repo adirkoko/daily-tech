@@ -50,6 +50,33 @@ describe("DailyTechDatabase", () => {
     expect(database.getDay("2026-08-27")).toBeNull();
   });
 
+  it("publishes only ready days with a compare-and-set transition", () => {
+    database.saveDay(createMetadata());
+
+    const first = database.publishReadyDay(
+      "2026-08-27",
+      "2026-08-28T04:00:00.000Z",
+    );
+    expect(first).toMatchObject({
+      outcome: "published",
+      metadata: { status: "published", published_at: "2026-08-28T04:00:00.000Z" },
+    });
+    expect(
+      database.publishReadyDay("2026-08-27", "2026-08-28T04:01:00.000Z"),
+    ).toMatchObject({ outcome: "already_published" });
+    expect(database.getDay("2026-08-27")?.published_at).toBe(
+      "2026-08-28T04:00:00.000Z",
+    );
+
+    database.saveDay(createMetadata({ date: "2026-08-26", status: "draft" }));
+    expect(
+      database.publishReadyDay("2026-08-26", "2026-08-28T04:00:00.000Z"),
+    ).toMatchObject({ outcome: "not_ready" });
+    expect(
+      database.publishReadyDay("2026-08-25", "2026-08-28T04:00:00.000Z"),
+    ).toEqual({ outcome: "not_found", metadata: null });
+  });
+
   it("lists days with stable date ordering, filters, and pagination", () => {
     database.saveDay(
       createMetadata({ date: "2026-08-25", status: "published", published_at: "2026-08-26T04:00:00.000Z" }),

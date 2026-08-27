@@ -34,9 +34,18 @@ prompts.
 
 ## Single repository, workspace-shaped
 
-`apps/*` and `packages/*` in one repo, intended to become npm workspaces once the
-packages carry a `package.json`. Keeps shared code (`core`) and its consumers in one
-place with one dependency graph.
+`apps/*` and `packages/*` live in one npm workspace. This keeps shared code (`core`)
+and its consumers in one place with one dependency graph and one set of root quality
+commands.
+
+## Durable publication lease and deployment webhook
+
+Publication is separate from AI generation. A SQLite lease prevents overlapping
+scheduler runs from triggering the same date concurrently and permits recovery after
+a crashed or failed attempt. Once the artifact is revalidated, its status changes
+atomically from `ready` to `published`; an HTTP webhook then asks the selected host or
+deployment orchestrator to rebuild. A successful HTTP response means the trigger was
+accepted, not necessarily that an asynchronous build has finished.
 
 ## Password-only admin auth
 

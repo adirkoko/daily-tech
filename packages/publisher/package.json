@@ -1,0 +1,29 @@
+{
+  "name": "@daily-tech/publisher",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Reliable publication and deployment orchestration for Daily Tech briefs.",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "bin": {
+    "daily-tech-publish": "./dist/cli.js"
+  },
+  "scripts": {
+    "prebuild": "npm run build --workspace @daily-tech/db",
+    "build": "tsc -p tsconfig.build.json",
+    "pretest": "npm run build --workspace @daily-tech/db",
+    "test": "vitest run",
+    "pretypecheck": "npm run build --workspace @daily-tech/db",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@daily-tech/core": "0.1.0",
+    "@daily-tech/db": "0.1.0"
+  }
+}

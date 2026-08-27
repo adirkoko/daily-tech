@@ -1,5 +1,20 @@
 # Roadmap
 
+## Current implementation status
+
+| Area | Status |
+| ---- | ------ |
+| Core validation, SQLite schema, and lifecycle | Implemented and tested |
+| AI research, writing, review, missing-news check, and persistence | Implemented; production credentials still required |
+| Static Hebrew website, archive, heatmap, and basic statistics | Implemented and tested |
+| Safe publication command and deployment webhook | Implemented and tested |
+| Production scheduler, hosting, and content-store synchronization | Deployment decision pending |
+| Admin authentication and editing UI | Not started |
+| Public feedback form and admin inbox UI | Not started; storage primitives exist |
+
+“Automatic” in the first-version list below includes both implemented application
+commands and the still-pending production scheduler/hosting configuration.
+
 ## Required for the first version
 
 - Automatic brief generation once a day.

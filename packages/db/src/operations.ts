@@ -97,6 +97,33 @@ export interface RateLimitResult {
   readonly remaining: number;
 }
 
+export const PUBLICATION_STATES = ["triggering", "triggered", "failed"] as const;
+export type PublicationState = (typeof PUBLICATION_STATES)[number];
+
+export interface PublicationJob {
+  readonly dayDate: string;
+  readonly state: PublicationState;
+  readonly attemptCount: number;
+  readonly leaseOwner: string | null;
+  readonly leaseExpiresAt: string | null;
+  readonly lastError: string | null;
+  readonly startedAt: string;
+  readonly completedAt: string | null;
+  readonly updatedAt: string;
+}
+
+export interface BeginPublicationInput {
+  readonly dayDate: string;
+  readonly leaseOwner: string;
+  readonly leaseExpiresAt: string;
+  readonly occurredAt: string;
+}
+
+export type BeginPublicationResult =
+  | { readonly outcome: "acquired"; readonly job: PublicationJob }
+  | { readonly outcome: "already_triggered"; readonly job: PublicationJob }
+  | { readonly outcome: "busy"; readonly job: PublicationJob };
+
 interface OperationalLogRow {
   readonly id: number;
   readonly run_id: string | null;
@@ -117,6 +144,18 @@ interface FeedbackTicketRow {
   readonly status: string;
   readonly created_at: string;
   readonly resolved_at: string | null;
+}
+
+interface PublicationJobRow {
+  readonly day_date: string;
+  readonly state: string;
+  readonly attempt_count: number;
+  readonly lease_owner: string | null;
+  readonly lease_expires_at: string | null;
+  readonly last_error: string | null;
+  readonly started_at: string;
+  readonly completed_at: string | null;
+  readonly updated_at: string;
 }
 
 export class OperationsStore {
@@ -303,6 +342,79 @@ export class OperationsStore {
     return result.changes;
   }
 
+  beginPublication(input: BeginPublicationInput): BeginPublicationResult {
+    assertCalendarDate(input.dayDate, "dayDate");
+    assertNonEmpty(input.leaseOwner, "leaseOwner");
+    assertTimestamp(input.leaseExpiresAt, "leaseExpiresAt");
+    assertTimestamp(input.occurredAt, "occurredAt");
+    if (input.leaseExpiresAt <= input.occurredAt) {
+      throw new RangeError("leaseExpiresAt must be later than occurredAt.");
+    }
+
+    this.#database.exec("BEGIN IMMEDIATE");
+    try {
+      const existing = this.getPublicationJob(input.dayDate);
+      if (existing?.state === "triggered") {
+        this.#database.exec("COMMIT");
+        return { outcome: "already_triggered", job: existing };
+      }
+      if (
+        existing?.state === "triggering" &&
+        existing.leaseExpiresAt !== null &&
+        existing.leaseExpiresAt > input.occurredAt
+      ) {
+        this.#database.exec("COMMIT");
+        return { outcome: "busy", job: existing };
+      }
+
+      this.#database
+        .prepare(
+          `
+            INSERT INTO publication_jobs (
+              day_date, state, attempt_count, lease_owner, lease_expires_at,
+              last_error, started_at, completed_at, updated_at
+            ) VALUES (?, 'triggering', 1, ?, ?, NULL, ?, NULL, ?)
+            ON CONFLICT (day_date) DO UPDATE SET
+              state = 'triggering',
+              attempt_count = publication_jobs.attempt_count + 1,
+              lease_owner = excluded.lease_owner,
+              lease_expires_at = excluded.lease_expires_at,
+              last_error = NULL,
+              started_at = excluded.started_at,
+              completed_at = NULL,
+              updated_at = excluded.updated_at
+          `,
+        )
+        .run(
+          input.dayDate,
+          input.leaseOwner,
+          input.leaseExpiresAt,
+          input.occurredAt,
+          input.occurredAt,
+        );
+      const job = this.requirePublicationJob(input.dayDate);
+      this.#database.exec("COMMIT");
+      return { outcome: "acquired", job };
+    } catch (error) {
+      this.#database.exec("ROLLBACK");
+      throw error;
+    }
+  }
+
+  completePublication(dayDate: string, leaseOwner: string, completedAt: string): PublicationJob {
+    return this.finishPublication(dayDate, leaseOwner, completedAt, "triggered", null);
+  }
+
+  failPublication(
+    dayDate: string,
+    leaseOwner: string,
+    failedAt: string,
+    errorMessage: string,
+  ): PublicationJob {
+    assertNonEmpty(errorMessage, "errorMessage");
+    return this.finishPublication(dayDate, leaseOwner, failedAt, "failed", errorMessage);
+  }
+
   private getLog(id: number): OperationalLog {
     const row = this.#database
       .prepare("SELECT * FROM operational_logs WHERE id = ?")
@@ -321,6 +433,54 @@ export class OperationsStore {
       throw new Error(`Feedback ticket ${id} does not exist.`);
     }
     return mapFeedbackTicket(row);
+  }
+
+  private getPublicationJob(dayDate: string): PublicationJob | null {
+    const row = this.#database
+      .prepare("SELECT * FROM publication_jobs WHERE day_date = ?")
+      .get(dayDate) as PublicationJobRow | undefined;
+    return row === undefined ? null : mapPublicationJob(row);
+  }
+
+  private requirePublicationJob(dayDate: string): PublicationJob {
+    const job = this.getPublicationJob(dayDate);
+    if (job === null) {
+      throw new Error(`Publication job ${dayDate} does not exist.`);
+    }
+    return job;
+  }
+
+  private finishPublication(
+    dayDate: string,
+    leaseOwner: string,
+    occurredAt: string,
+    state: "triggered" | "failed",
+    errorMessage: string | null,
+  ): PublicationJob {
+    assertCalendarDate(dayDate, "dayDate");
+    assertNonEmpty(leaseOwner, "leaseOwner");
+    assertTimestamp(occurredAt, "occurredAt");
+    const result = this.#database
+      .prepare(
+        `
+          UPDATE publication_jobs
+          SET state = ?, lease_owner = NULL, lease_expires_at = NULL,
+              last_error = ?, completed_at = ?, updated_at = ?
+          WHERE day_date = ? AND state = 'triggering' AND lease_owner = ?
+        `,
+      )
+      .run(
+        state,
+        errorMessage,
+        state === "triggered" ? occurredAt : null,
+        occurredAt,
+        dayDate,
+        leaseOwner,
+      );
+    if (result.changes !== 1) {
+      throw new Error(`Publication lease for ${dayDate} is not owned by ${leaseOwner}.`);
+    }
+    return this.requirePublicationJob(dayDate);
   }
 }
 
@@ -356,6 +516,23 @@ function mapOperationalLog(row: OperationalLogRow): OperationalLog {
     message: row.message,
     details,
     occurredAt: row.occurred_at,
+  };
+}
+
+function mapPublicationJob(row: PublicationJobRow): PublicationJob {
+  if (!includes(PUBLICATION_STATES, row.state)) {
+    throw new Error(`Publication job ${row.day_date} has invalid state ${row.state}.`);
+  }
+  return {
+    dayDate: row.day_date,
+    state: row.state,
+    attemptCount: row.attempt_count,
+    leaseOwner: row.lease_owner,
+    leaseExpiresAt: row.lease_expires_at,
+    lastError: row.last_error,
+    startedAt: row.started_at,
+    completedAt: row.completed_at,
+    updatedAt: row.updated_at,
   };
 }
 
@@ -397,6 +574,12 @@ function assertNonEmpty(value: string, path: string): void {
 function assertTimestamp(value: string, path: string): void {
   if (!isUtcTimestamp(value)) {
     throw new TypeError(`${path} must be an ISO 8601 UTC timestamp.`);
+  }
+}
+
+function assertCalendarDate(value: string, path: string): void {
+  if (!isCalendarDate(value)) {
+    throw new TypeError(`${path} must use YYYY-MM-DD format.`);
   }
 }
 

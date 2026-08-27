@@ -36,6 +36,7 @@ npm install
 npm run typecheck
 npm test
 npm run build
+npm run generate
 ```
 
 ## Status
@@ -45,8 +46,9 @@ artifact validation. `packages/db` now provides transactional migrations and typ
 SQLite persistence for daily metadata, including normalized company, topic, and
 development tables. `packages/pipeline` provides the tested orchestration foundation,
 Israel-time windows, bounded editorial revision loop, failure boundaries, and an
-OpenAI-compatible client. Production research prompts and persistence adapters remain
-to be connected.
+OpenAI-compatible client. Production prompts, Brave Search, compensating Markdown +
+SQLite persistence, operational logging, and System-ticket failure reporting are now
+wired. The next major unit is the Astro website and publish workflow.
 
 ## Documentation
 

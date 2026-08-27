@@ -9,6 +9,9 @@
   ],
   "scripts": {
     "build": "npm run build --workspaces --if-present",
+    "pregenerate": "npm run build",
+    "generate": "node --env-file=.env packages/pipeline/dist/cli.js",
+    "rate-limits:reset": "node --env-file-if-exists=.env scripts/reset-rate-limits.mjs",
     "test": "npm run test --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present"
   },

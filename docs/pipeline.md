@@ -5,8 +5,9 @@ behind an abstraction layer. One model may serve every stage; research, writing,
 review stay logically separate.
 
 The orchestration foundation is implemented with dependency-injected ports for every
-stage. Production prompts, search integration, and the combined filesystem/SQLite
-sink remain separate adapters, so they can be changed without altering the run logic.
+stage. Hardened prompts, an OpenAI-compatible model adapter, a Brave Search adapter,
+and the combined filesystem/SQLite sink are implemented separately, so any provider
+can be changed without altering the run logic.
 
 ## Time window
 
@@ -22,6 +23,10 @@ in UTC internally; user-facing times are Israel time.
    Hugging Face, notable startups, major open source, AI models, dev tools, hardware,
    robotics, computing, consumer tech) are a guide, not a hard whitelist. Raw research
    is not archived.
+
+   The default adapter uses exact-date freshness filtering in Brave Search. Search
+   results are treated as untrusted data, and an AI-produced source URL is rejected
+   unless that exact URL appeared in the supplied search results.
 
 2. **Filter, rank, deduplicate.** Keep real launches and changes with practical
    impact that happened inside the window. Drop rumors, unverified leaks, tiny

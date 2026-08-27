@@ -1,3 +1,5 @@
+import type { BriefArtifact } from "@daily-tech/core";
+
 import type {
   BriefDraft,
   ResearchCandidate,
@@ -91,3 +93,18 @@ export const twoItemDraft: BriefDraft = {
 export function stageResult<T>(value: T): StageResult<T> {
   return { value };
 }
+
+export const validArtifact: BriefArtifact = {
+  filePath:
+    "tech_briefs/daily/2026/august/2026-08-27/2026-08-27-tech_briefs.md",
+  content: oneItemDraft.markdown,
+  metadata: {
+    date: "2026-08-27",
+    ...oneItemDraft.metadata,
+    status: "ready",
+    source_count: 1,
+    created_at: "2026-08-28T01:00:00.000Z",
+    published_at: null,
+    updated_at: null,
+  },
+};

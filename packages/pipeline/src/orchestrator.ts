@@ -202,6 +202,8 @@ export class DailyBriefPipeline {
         selectedDevelopments: developments.length,
         revisionRounds,
         missingItemsAdded,
+        sourceCount: artifact.metadata.source_count,
+        validationPassed: true,
         totalTokens: finalUsage.totalTokens,
         costUsd: finalUsage.costUsd,
       });

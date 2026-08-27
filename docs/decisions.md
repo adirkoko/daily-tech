@@ -59,3 +59,11 @@ queryable and indexable while preserving the order produced by the pipeline.
 The database package uses `better-sqlite3`: its synchronous transaction model fits
 the small, local metadata workload and avoids basing a critical persistence layer on
 Node's still-experimental `node:sqlite` API.
+
+## Brave Search as the default research adapter
+
+The pipeline keeps search behind a provider interface, with Brave Search as the first
+production adapter. It supports exact custom date ranges, returns structured web/news
+results, and uses an independent index. This is a default integration, not a business
+logic dependency; another provider can replace it without changing the agents or
+orchestrator.

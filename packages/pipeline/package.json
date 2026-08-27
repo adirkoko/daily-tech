@@ -13,15 +13,19 @@
   "files": [
     "dist"
   ],
+  "bin": {
+    "daily-tech-generate": "./dist/cli.js"
+  },
   "scripts": {
-    "prebuild": "npm run build --workspace @daily-tech/core",
+    "prebuild": "npm run build --workspace @daily-tech/db",
     "build": "tsc -p tsconfig.build.json",
-    "pretest": "npm run build --workspace @daily-tech/core",
+    "pretest": "npm run build --workspace @daily-tech/db",
     "test": "vitest run",
-    "pretypecheck": "npm run build --workspace @daily-tech/core",
+    "pretypecheck": "npm run build --workspace @daily-tech/db",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@daily-tech/core": "0.1.0"
+    "@daily-tech/core": "0.1.0",
+    "@daily-tech/db": "0.1.0"
   }
 }

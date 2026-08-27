@@ -2,7 +2,7 @@
 
 The daily brief orchestration layer for Daily Tech.
 
-## Implemented foundation
+## Implemented
 
 - Previous-day windows based on `Asia/Jerusalem`, including 23-hour and 25-hour DST
   transition days.
@@ -15,10 +15,28 @@ The daily brief orchestration layer for Daily Tech.
 - Token and provider-cost aggregation across AI stages.
 - A small OpenAI-compatible chat-completions client with timeouts, cancellation, JSON
   mode, error sanitization, and caller-owned response parsing.
+- Hardened prompts and strict response parsing for every AI stage. Model-returned
+  source URLs must exist in the search results supplied to that model call.
+- A Brave Search adapter with exact-date freshness filtering.
+- A compensating filesystem + SQLite sink: a failed metadata write restores the prior
+  Markdown file instead of leaving a partial artifact.
+- SQLite-backed operational logging, failed-day state, and System tickets.
 
-## Integration model
+## Run locally
 
-`DailyBriefPipeline` receives every external capability as a dependency. Production
-adapters will connect these ports to prompts/search, filesystem + SQLite persistence,
-operational logging, and system tickets. Tests use in-memory fakes and never call an
-AI provider or the network.
+Copy `.env.example` to `.env`, fill in the model and Brave Search credentials, then:
+
+```sh
+npm run generate
+```
+
+For a deterministic backfill window, pass an ISO run timestamp. The generated brief
+always covers the previous Israel calendar day:
+
+```sh
+npm run generate -- --run-at=2026-08-28T01:00:00.000Z
+```
+
+`DailyBriefPipeline` still receives every external capability as a dependency, so the
+search provider, model provider, storage, logger, and failure reporter remain
+replaceable. Automated tests use fakes and never call either external API.

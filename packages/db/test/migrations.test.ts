@@ -34,6 +34,9 @@ describe("database migrations", () => {
       "daily_brief_developments",
       "daily_brief_topics",
       "daily_briefs",
+      "feedback_tickets",
+      "operational_logs",
+      "rate_limit_counters",
       "schema_migrations",
     ]);
   });

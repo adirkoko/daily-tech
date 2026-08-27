@@ -48,9 +48,14 @@ Outside the daily run, the log also records admin actions, login attempts, feedb
 submissions, and system tickets.
 
 The AI cost figure depends on the provider returning usage / token counts through the
-OpenAI-compatible layer, which surfaces them to the caller. Where log records are
-stored — a table in the SQLite database or structured files under `logs/` — is not
-decided; `logs/` is ignored by git either way.
+OpenAI-compatible layer, which surfaces them to the caller. Logs are stored in the
+SQLite `operational_logs` table as structured JSON details plus indexed run, date,
+severity, and timestamp columns.
+
+Feedback and automated System tickets are stored in `feedback_tickets`. Categories
+are `general`, `correction`, `suggestion`, and `system`; statuses are `open` and
+`resolved`. Fixed-window counters live in `rate_limit_counters`, keyed by a one-way
+caller hash rather than a raw IP address.
 
 ## AI usage budget
 

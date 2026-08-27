@@ -70,6 +70,6 @@ statistics and filtering without parsing JSON.
 ## Other stored data
 
 The same database also holds user feedback tickets (including automated
-`system`-category tickets), an operational log, and rate-limit counters for admin
-login attempts and feedback submissions. Their schemas are defined next to the
-features that use them.
+`system`-category tickets), structured operational logs, and fixed-window rate-limit
+counters for admin login attempts and feedback submissions. These tables are created
+through the same ordered migration system as the daily metadata tables.

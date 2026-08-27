@@ -59,6 +59,57 @@ const migrations: readonly Migration[] = [
         ON daily_brief_topics (topic, day_date DESC);
     `,
   },
+  {
+    version: 2,
+    name: "create_operations_and_feedback",
+    sql: `
+      CREATE TABLE operational_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        run_id TEXT,
+        brief_date TEXT,
+        event_type TEXT NOT NULL CHECK (length(trim(event_type)) > 0),
+        level TEXT NOT NULL CHECK (level IN ('info', 'warning', 'error')),
+        message TEXT,
+        details_json TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(details_json)),
+        occurred_at TEXT NOT NULL
+      ) STRICT;
+
+      CREATE INDEX operational_logs_run_idx
+        ON operational_logs (run_id, occurred_at DESC);
+      CREATE INDEX operational_logs_date_idx
+        ON operational_logs (brief_date, occurred_at DESC);
+      CREATE INDEX operational_logs_level_idx
+        ON operational_logs (level, occurred_at DESC);
+
+      CREATE TABLE feedback_tickets (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL CHECK (length(trim(title)) > 0),
+        submitter_name TEXT,
+        category TEXT NOT NULL CHECK (
+          category IN ('general', 'correction', 'suggestion', 'system')
+        ),
+        body TEXT NOT NULL CHECK (length(trim(body)) > 0),
+        status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'resolved')),
+        created_at TEXT NOT NULL,
+        resolved_at TEXT
+      ) STRICT;
+
+      CREATE INDEX feedback_tickets_inbox_idx
+        ON feedback_tickets (status, category, created_at DESC);
+
+      CREATE TABLE rate_limit_counters (
+        scope TEXT NOT NULL CHECK (scope IN ('admin_login', 'feedback')),
+        key_hash TEXT NOT NULL CHECK (length(trim(key_hash)) > 0),
+        window_started_at TEXT NOT NULL,
+        attempt_count INTEGER NOT NULL CHECK (attempt_count >= 1),
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY (scope, key_hash, window_started_at)
+      ) STRICT;
+
+      CREATE INDEX rate_limit_counters_window_idx
+        ON rate_limit_counters (scope, window_started_at);
+    `,
+  },
 ];
 
 export const LATEST_SCHEMA_VERSION = migrations.at(-1)?.version ?? 0;

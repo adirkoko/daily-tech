@@ -4,6 +4,10 @@ Implemented in `packages/pipeline`. Model access goes through an OpenAI-compatib
 behind an abstraction layer. One model may serve every stage; research, writing, and
 review stay logically separate.
 
+The orchestration foundation is implemented with dependency-injected ports for every
+stage. Production prompts, search integration, and the combined filesystem/SQLite
+sink remain separate adapters, so they can be changed without altering the run logic.
+
 ## Time window
 
 Each brief summarizes `00:00–23:59 of the previous day, Israel time`. The system runs

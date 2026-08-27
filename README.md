@@ -43,7 +43,10 @@ npm run build
 Early implementation stage. `packages/core` provides the metadata contract and full
 artifact validation. `packages/db` now provides transactional migrations and typed
 SQLite persistence for daily metadata, including normalized company, topic, and
-development tables. Both packages have automated tests and independent builds.
+development tables. `packages/pipeline` provides the tested orchestration foundation,
+Israel-time windows, bounded editorial revision loop, failure boundaries, and an
+OpenAI-compatible client. Production research prompts and persistence adapters remain
+to be connected.
 
 ## Documentation
 

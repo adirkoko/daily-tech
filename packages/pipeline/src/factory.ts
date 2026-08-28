@@ -1,38 +1,26 @@
 import { DailyTechDatabase } from "@daily-tech/db";
 
-import type { AiCompletionClient } from "./ai-client.js";
-import {
-  PromptedBriefWriter,
-  PromptedEditorialReviewer,
-  PromptedNewsFilter,
-  SearchBackedMissingNewsChecker,
-  SearchBackedNewsResearcher,
-  type NewsSearchProvider,
-} from "./agents.js";
-import {
-  DatabaseFailureReporter,
-  DatabasePipelineLogger,
-} from "./operations-adapters.js";
-import {
-  DailyBriefPipeline,
-  type DailyBriefPipelineOptions,
-} from "./orchestrator.js";
+import type { AiCompletionClient, AiWebResearchClient } from "./ai/contracts.js";
+import { DatabaseFailureReporter, DatabasePipelineLogger } from "./operations-adapters.js";
+import { DailyBriefPipeline, type DailyBriefPipelineOptions } from "./orchestrator.js";
 import { FileSystemDatabaseArtifactSink } from "./persistence.js";
+import { ModelNewsResearchProvider } from "./research/model-news-research-provider.js";
+import type { StoryIdFactory } from "./research/contracts.js";
 import type { Clock } from "./types.js";
+import { ModelBriefWriter } from "./writing/model-brief-writer.js";
 
 export interface ProductionPipelineOptions {
-  readonly client: AiCompletionClient;
-  readonly search: NewsSearchProvider;
+  readonly completionClient: AiCompletionClient;
+  readonly webResearchClient: AiWebResearchClient;
   readonly database: DailyTechDatabase;
   readonly storageRoot: string;
   readonly maxRevisionRounds?: number;
   readonly clock?: Clock;
   readonly createRunId?: () => string;
+  readonly storyIds?: StoryIdFactory;
 }
 
-export function createProductionPipeline(
-  options: ProductionPipelineOptions,
-): DailyBriefPipeline {
+export function createProductionPipeline(options: ProductionPipelineOptions): DailyBriefPipeline {
   const pipelineOptions: DailyBriefPipelineOptions = {
     storageRoot: options.storageRoot,
     ...(options.maxRevisionRounds === undefined
@@ -41,17 +29,8 @@ export function createProductionPipeline(
   };
   return new DailyBriefPipeline(
     {
-      researcher: new SearchBackedNewsResearcher({
-        client: options.client,
-        search: options.search,
-      }),
-      filter: new PromptedNewsFilter(options.client),
-      writer: new PromptedBriefWriter(options.client),
-      reviewer: new PromptedEditorialReviewer(options.client),
-      missingNewsChecker: new SearchBackedMissingNewsChecker({
-        client: options.client,
-        search: options.search,
-      }),
+      researchProvider: new ModelNewsResearchProvider({ client: options.webResearchClient }),
+      writer: new ModelBriefWriter({ client: options.completionClient }),
       sink: new FileSystemDatabaseArtifactSink({
         storageRoot: options.storageRoot,
         metadataStore: options.database,
@@ -59,9 +38,8 @@ export function createProductionPipeline(
       logger: new DatabasePipelineLogger(options.database),
       failureReporter: new DatabaseFailureReporter(options.database),
       ...(options.clock === undefined ? {} : { clock: options.clock }),
-      ...(options.createRunId === undefined
-        ? {}
-        : { createRunId: options.createRunId }),
+      ...(options.createRunId === undefined ? {} : { createRunId: options.createRunId }),
+      ...(options.storyIds === undefined ? {} : { storyIds: options.storyIds }),
     },
     pipelineOptions,
   );

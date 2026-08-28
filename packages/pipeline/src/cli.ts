@@ -6,8 +6,8 @@ import { pathToFileURL } from "node:url";
 
 import { DailyTechDatabase } from "@daily-tech/db";
 
-import { OpenAiCompatibleClient } from "./ai-client.js";
-import { BraveSearchProvider } from "./brave-search.js";
+import { OpenAiCompatibleCompletionClient } from "./ai/completion-client.js";
+import { OpenAiResponsesWebResearchClient } from "./ai/web-research-client.js";
 import { loadPipelineEnvironment } from "./config.js";
 import { createProductionPipeline } from "./factory.js";
 
@@ -20,13 +20,14 @@ export async function runPipelineCli(
   await mkdir(dirname(config.databaseFile), { recursive: true });
   const database = DailyTechDatabase.open({ filename: config.databaseFile });
   try {
+    const sharedOptions = {
+      apiKey: config.aiApiKey,
+      model: config.aiModel,
+      baseUrl: config.aiBaseUrl,
+    };
     const pipeline = createProductionPipeline({
-      client: new OpenAiCompatibleClient({
-        apiKey: config.aiApiKey,
-        model: config.aiModel,
-        baseUrl: config.aiBaseUrl,
-      }),
-      search: new BraveSearchProvider({ apiKey: config.braveSearchApiKey }),
+      completionClient: new OpenAiCompatibleCompletionClient(sharedOptions),
+      webResearchClient: new OpenAiResponsesWebResearchClient(sharedOptions),
       database,
       storageRoot: config.dailyStorageRoot,
       maxRevisionRounds: config.maxRevisionRounds,
@@ -37,8 +38,12 @@ export async function runPipelineCli(
         runId: result.runId,
         date: result.window.date,
         status: result.artifact.metadata.status,
-        developments: result.selectedDevelopments,
+        researchedStories: result.researchedStories,
+        includedStories: result.includedStories,
         revisionRounds: result.revisionRounds,
+        gapStoriesAdded: result.gapStoriesAdded,
+        rejectedStories: result.rejectedStories,
+        modelRequests: result.modelRequests,
         sourceCount: result.artifact.metadata.source_count,
         usage: result.usage,
       })}\n`,
@@ -49,11 +54,9 @@ export async function runPipelineCli(
 }
 
 function parseRunAt(arguments_: readonly string[]): Date | undefined {
-  const runAtArgument = arguments_.find((argument) => argument.startsWith("--run-at="));
-  if (runAtArgument === undefined) {
-    return undefined;
-  }
-  const value = new Date(runAtArgument.slice("--run-at=".length));
+  const argument = arguments_.find((value) => value.startsWith("--run-at="));
+  if (argument === undefined) return undefined;
+  const value = new Date(argument.slice("--run-at=".length));
   if (Number.isNaN(value.getTime())) {
     throw new TypeError("--run-at must contain a valid ISO timestamp.");
   }
@@ -63,8 +66,7 @@ function parseRunAt(arguments_: readonly string[]): Date | undefined {
 const entryPoint = process.argv[1];
 if (entryPoint !== undefined && import.meta.url === pathToFileURL(entryPoint).href) {
   runPipelineCli().catch((error: unknown) => {
-    const message = error instanceof Error ? error.message : "Unknown pipeline error.";
-    process.stderr.write(`${message}\n`);
+    process.stderr.write(`${error instanceof Error ? error.message : "Unknown pipeline error."}\n`);
     process.exitCode = 1;
   });
 }

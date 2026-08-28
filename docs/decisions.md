@@ -25,12 +25,14 @@ The Markdown files stay clean, portable, and hand-editable. SQLite provides type
 enum enforcement plus fast queries for search, filtering, and the statistics page,
 without re-analyzing the archive with an AI.
 
-## Model access behind an abstraction
+## Domain research and provider access are separate
 
-The pipeline reaches the model through a thin OpenAI-compatible layer. Swapping model
-or provider must not touch business code. One model can serve every AI stage; the
-research, writing, and review roles stay logically separate as distinct agents or role
-prompts.
+`NewsResearchProvider` owns the Daily Tech domain: the Israel-time window, relevant
+categories, significance threshold, researched stories, and the narrow gap check.
+`AiWebResearchClient` owns provider mechanics: live web-search tools, strict structured
+output, machine-readable citations, usage, and tool cost. The writing client is kept
+separate. This allows provider replacement without reducing research back to raw
+result lists or leaking provider details into business code.
 
 ## Single repository, workspace-shaped
 
@@ -44,8 +46,7 @@ Publication is separate from AI generation. A SQLite lease prevents overlapping
 scheduler runs from publishing the same date concurrently and permits recovery after
 a crashed or failed attempt. Once the artifact is revalidated, its status changes
 atomically from `ready` to `published`. The standalone server sees that transition
-immediately, so no deployment service is required. An optional HTTP webhook remains
-available for deployments that need an external cache or build trigger.
+immediately, so publication has no external deployment service or outbound trigger.
 
 ## One HTTP service
 
@@ -84,10 +85,10 @@ The database package uses `better-sqlite3`: its synchronous transaction model fi
 the small, local metadata workload and avoids basing a critical persistence layer on
 Node's still-experimental `node:sqlite` API.
 
-## Brave Search as the default research adapter
+## Model-native web research
 
-The pipeline keeps search behind a provider interface, with Brave Search as the first
-production adapter. It supports exact custom date ranges, returns structured web/news
-results, and uses an independent index. This is a default integration, not a business
-logic dependency; another provider can replace it without changing the agents or
-orchestrator.
+Research is one high-level model request that searches the live web, compares sources,
+deduplicates events, ranks significance, and returns factual `ResearchedStory` inputs.
+Provider-returned citation annotations are authoritative; a URL written only inside
+model JSON is rejected. Code validates evidence consistency per story, conservatively
+deduplicates obvious repeats, and assigns internal IDs only afterward.

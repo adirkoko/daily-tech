@@ -50,14 +50,14 @@ describe("database operations adapters", () => {
       date: "2026-08-27",
       stage: "research",
       occurredAt: "2026-08-28T01:05:00.000Z",
-      message: "Search provider unavailable",
+      message: "Research provider unavailable",
     });
 
     expect(database.operations.listTickets()).toEqual([
       expect.objectContaining({
         category: "system",
         status: "open",
-        body: expect.stringContaining("Search provider unavailable"),
+        body: expect.stringContaining("Research provider unavailable"),
       }),
     ]);
     expect(database.getDay("2026-08-27")).toEqual(

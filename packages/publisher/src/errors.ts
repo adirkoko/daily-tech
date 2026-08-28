@@ -33,13 +33,3 @@ export class PublicationInProgressError extends Error {
     this.leaseExpiresAt = leaseExpiresAt;
   }
 }
-
-export class DeploymentTriggerError extends Error {
-  readonly status: number | null;
-
-  constructor(message: string, options: { readonly status?: number; readonly cause?: unknown } = {}) {
-    super(message, options.cause === undefined ? undefined : { cause: options.cause });
-    this.name = "DeploymentTriggerError";
-    this.status = options.status ?? null;
-  }
-}

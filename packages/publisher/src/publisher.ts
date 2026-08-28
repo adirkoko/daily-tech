@@ -15,7 +15,6 @@ import {
   PublicationValidationError,
 } from "./errors.js";
 import type {
-  DeploymentTrigger,
   PublicationPhase,
   PublicationResult,
   PublisherClock,
@@ -24,7 +23,6 @@ import type {
 export interface BriefPublisherOptions {
   readonly database: DailyTechDatabase;
   readonly dailyStorageRoot: string;
-  readonly deploymentTrigger: DeploymentTrigger;
   readonly clock?: PublisherClock;
   readonly leaseDurationMs?: number;
 }
@@ -34,14 +32,12 @@ const systemClock: PublisherClock = { now: () => new Date() };
 export class BriefPublisher {
   readonly #database: DailyTechDatabase;
   readonly #dailyStorageRoot: string;
-  readonly #deploymentTrigger: DeploymentTrigger;
   readonly #clock: PublisherClock;
   readonly #leaseDurationMs: number;
 
   constructor(options: BriefPublisherOptions) {
     this.#database = options.database;
     this.#dailyStorageRoot = options.dailyStorageRoot;
-    this.#deploymentTrigger = options.deploymentTrigger;
     this.#clock = options.clock ?? systemClock;
     this.#leaseDurationMs = options.leaseDurationMs ?? 600_000;
     if (!Number.isInteger(this.#leaseDurationMs) || this.#leaseDurationMs < 1) {
@@ -95,7 +91,6 @@ export class BriefPublisher {
           date,
           outcome: "already_triggered",
           publishedAt: original.published_at ?? lease.job.completedAt ?? startedAt,
-          deploymentRequestId: null,
           attemptCount: lease.job.attemptCount,
         };
       }
@@ -135,9 +130,6 @@ export class BriefPublisher {
         transition: transition.outcome,
       });
 
-      phase = "deploy";
-      const receipt = await this.#deploymentTrigger.trigger({ runId, date, publishedAt });
-
       phase = "finalize";
       const completedAt = this.#timestamp();
       const completed = this.#database.operations.completePublication(
@@ -149,14 +141,12 @@ export class BriefPublisher {
       this.#log(runId, date, "publication_completed", "info", completedAt, null, {
         outcome,
         attemptCount: completed.attemptCount,
-        deploymentRequestId: receipt.requestId,
       });
       return {
         runId,
         date,
         outcome,
         publishedAt,
-        deploymentRequestId: receipt.requestId,
         attemptCount: completed.attemptCount,
       };
     } catch (error) {

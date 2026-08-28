@@ -1,274 +1,158 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
-  ArtifactValidationError,
   DailyBriefPipeline,
   PipelineRunError,
-  RevisionLimitExceededError,
+  type BriefWriter,
   type DailyBriefPipelineDependencies,
+  type FailureReporter,
+  type ModelUsage,
+  type NewsResearchProvider,
   type PipelineFailure,
   type PipelineLogEvent,
+  type PipelineLogger,
+  type StoryIdFactory,
 } from "../src/index.js";
 import {
-  firstCandidate,
+  firstStoryInput,
   oneItemDraft,
-  secondCandidate,
-  stageResult,
+  secondStoryInput,
   twoItemDraft,
 } from "./fixtures.js";
 
-const runAt = new Date("2026-08-28T01:00:00.000Z");
+const usage: ModelUsage = { inputTokens: 10, outputTokens: 5, totalTokens: 15 };
+const webUsage: ModelUsage = { ...usage, webSearchCalls: 1 };
 
-function createDependencies(): DailyBriefPipelineDependencies & {
+function dependencies(): DailyBriefPipelineDependencies & {
+  readonly researchProvider: NewsResearchProvider;
+  readonly writer: BriefWriter;
   readonly events: PipelineLogEvent[];
   readonly failures: PipelineFailure[];
 } {
   const events: PipelineLogEvent[] = [];
   const failures: PipelineFailure[] = [];
+  let id = 0;
+  const storyIds: StoryIdFactory = { create: () => `story-${++id}` };
+  const researchProvider: NewsResearchProvider = {
+    research: vi.fn().mockResolvedValue({
+      value: { stories: [firstStoryInput], rejectedStories: [] },
+      usage: webUsage,
+    }),
+    findGaps: vi.fn().mockResolvedValue({
+      value: { missingStories: [], rejectedStories: [] },
+      usage: webUsage,
+    }),
+  };
+  const writer: BriefWriter = {
+    write: vi.fn().mockResolvedValue({ value: oneItemDraft, usage }),
+    revise: vi.fn().mockResolvedValue({ value: twoItemDraft, usage }),
+  };
+  const logger: PipelineLogger = { log: (event) => { events.push(event); } };
+  const failureReporter: FailureReporter = {
+    report: async (failure) => { failures.push(failure); },
+  };
   return {
-    researcher: {
-      collect: vi.fn().mockResolvedValue(
-        stageResult([firstCandidate]),
-      ),
-    },
-    filter: {
-      select: vi.fn().mockResolvedValue(stageResult([firstCandidate])),
-    },
-    writer: {
-      write: vi.fn().mockResolvedValue(stageResult(oneItemDraft)),
-      revise: vi.fn().mockResolvedValue(stageResult(oneItemDraft)),
-    },
-    reviewer: {
-      review: vi.fn().mockResolvedValue(
-        stageResult({ approved: true, feedback: [] }),
-      ),
-    },
-    missingNewsChecker: {
-      check: vi.fn().mockResolvedValue(
-        stageResult({ missing: [], notes: [] }),
-      ),
-    },
+    researchProvider,
+    writer,
     sink: { saveReady: vi.fn().mockResolvedValue(undefined) },
-    failureReporter: {
-      report: vi.fn(async (failure: PipelineFailure) => {
-        failures.push(failure);
-      }),
-    },
-    logger: {
-      log: vi.fn((event: PipelineLogEvent) => {
-        events.push(event);
-      }),
-    },
-    clock: { now: () => runAt },
-    createRunId: () => "run-2026-08-27",
+    failureReporter,
+    logger,
+    clock: { now: () => new Date("2026-08-28T01:00:00.000Z") },
+    createRunId: () => "run-1",
+    storyIds,
     events,
     failures,
   };
 }
 
 describe("DailyBriefPipeline", () => {
-  it("runs every stage and persists only a validated ready artifact", async () => {
-    const dependencies = createDependencies();
-    vi.mocked(dependencies.researcher.collect).mockResolvedValue({
-      value: [firstCandidate],
+  it("uses exactly Research, Draft, and Gap Check model requests on a normal run", async () => {
+    const deps = dependencies();
+    const pipeline = new DailyBriefPipeline(deps, { storageRoot: "tech_briefs/daily" });
+
+    const result = await pipeline.run(new Date("2026-08-28T01:00:00.000Z"));
+
+    expect(result).toMatchObject({
+      researchedStories: 1,
+      includedStories: 1,
+      revisionRounds: 0,
+      gapStoriesAdded: 0,
+      modelRequests: 3,
       usage: {
-        inputTokens: 100,
-        outputTokens: 20,
-        totalTokens: 120,
-        costUsd: 0.03,
+        inputTokens: 30,
+        outputTokens: 15,
+        totalTokens: 45,
+        webSearchCalls: 2,
       },
     });
-    const pipeline = new DailyBriefPipeline(dependencies);
+    expect(deps.researchProvider.research).toHaveBeenCalledOnce();
+    expect(deps.writer.write).toHaveBeenCalledOnce();
+    expect(deps.researchProvider.findGaps).toHaveBeenCalledOnce();
+    expect(deps.writer.revise).not.toHaveBeenCalled();
+    expect(deps.sink.saveReady).toHaveBeenCalledOnce();
+    expect(deps.failures).toEqual([]);
+  });
 
-    const result = await pipeline.run(runAt);
+  it("uses five model requests when one meaningful gap forces revision", async () => {
+    const deps = dependencies();
+    vi.mocked(deps.researchProvider.findGaps)
+      .mockResolvedValueOnce({
+        value: { missingStories: [secondStoryInput], rejectedStories: [] },
+        usage: webUsage,
+      })
+      .mockResolvedValueOnce({
+        value: { missingStories: [], rejectedStories: [] },
+        usage: webUsage,
+      });
+    const pipeline = new DailyBriefPipeline(deps);
 
-    expect(result.window.date).toBe("2026-08-27");
-    expect(result.artifact.filePath).toBe(
-      "tech_briefs/daily/2026/august/2026-08-27/2026-08-27-tech_briefs.md",
-    );
-    expect(result.artifact.metadata).toEqual(
-      expect.objectContaining({
-        date: "2026-08-27",
-        status: "ready",
-        source_count: 1,
-        created_at: runAt.toISOString(),
-        published_at: null,
-      }),
-    );
-    expect(result.usage).toEqual({
-      inputTokens: 100,
-      outputTokens: 20,
-      totalTokens: 120,
-      costUsd: 0.03,
+    const result = await pipeline.run(new Date("2026-08-28T01:00:00.000Z"));
+
+    expect(result).toMatchObject({
+      includedStories: 2,
+      revisionRounds: 1,
+      gapStoriesAdded: 1,
+      modelRequests: 5,
     });
-    expect(dependencies.sink.saveReady).toHaveBeenCalledOnce();
-    expect(dependencies.failures).toHaveLength(0);
-    expect(dependencies.events.at(0)?.type).toBe("run_started");
-    expect(dependencies.events.at(-1)?.type).toBe("run_completed");
+    expect(deps.writer.revise).toHaveBeenCalledOnce();
+    expect(deps.researchProvider.findGaps).toHaveBeenCalledTimes(2);
   });
 
-  it("revises the brief and merges newly discovered missing news", async () => {
-    const dependencies = createDependencies();
-    vi.mocked(dependencies.reviewer.review)
-      .mockResolvedValueOnce(
-        stageResult({ approved: false, feedback: ["חסר הקשר"] }),
-      )
-      .mockResolvedValueOnce(stageResult({ approved: true, feedback: [] }));
-    vi.mocked(dependencies.missingNewsChecker.check)
-      .mockResolvedValueOnce(
-        stageResult({ missing: [secondCandidate], notes: ["נמצא עדכון נוסף"] }),
-      )
-      .mockResolvedValueOnce(stageResult({ missing: [], notes: [] }));
-    vi.mocked(dependencies.writer.revise).mockResolvedValue(
-      stageResult(twoItemDraft),
-    );
-    const pipeline = new DailyBriefPipeline(dependencies);
-
-    const result = await pipeline.run(runAt);
-
-    expect(result.revisionRounds).toBe(1);
-    expect(result.missingItemsAdded).toBe(1);
-    expect(result.selectedDevelopments).toBe(2);
-    expect(result.artifact.metadata.source_count).toBe(2);
-    expect(dependencies.writer.revise).toHaveBeenCalledWith(
-      expect.objectContaining({
-        developments: [firstCandidate, secondCandidate],
-        editorialFeedback: ["חסר הקשר"],
-      }),
-    );
-  });
-
-  it("reports deterministic validation failures without persisting", async () => {
-    const dependencies = createDependencies();
-    vi.mocked(dependencies.writer.write).mockResolvedValue(
-      stageResult({
-        ...oneItemDraft,
-        metadata: { ...oneItemDraft.metadata, significant_items: 2 },
-      }),
-    );
-    const pipeline = new DailyBriefPipeline(dependencies);
-
-    const error = await pipeline.run(runAt).catch((caught: unknown) => caught);
-
-    expect(error).toBeInstanceOf(PipelineRunError);
-    expect((error as PipelineRunError).stage).toBe("validate");
-    expect((error as PipelineRunError).cause).toBeInstanceOf(ArtifactValidationError);
-    expect(dependencies.sink.saveReady).not.toHaveBeenCalled();
-    expect(dependencies.failures).toEqual([
-      expect.objectContaining({
-        stage: "validate",
-        validationIssues: expect.arrayContaining([
-          expect.objectContaining({ code: "item_count_mismatch" }),
-        ]),
-      }),
-    ]);
-  });
-
-  it("reports upstream failures and never writes a partial artifact", async () => {
-    const dependencies = createDependencies();
-    vi.mocked(dependencies.researcher.collect).mockRejectedValue(
-      new Error("search unavailable"),
-    );
-    const pipeline = new DailyBriefPipeline(dependencies);
-
-    await expect(pipeline.run(runAt)).rejects.toMatchObject({
-      name: "PipelineRunError",
-      stage: "research",
+  it("does not call the writer for a genuine quiet day", async () => {
+    const deps = dependencies();
+    vi.mocked(deps.researchProvider.research).mockResolvedValue({
+      value: { stories: [], rejectedStories: [] },
+      usage: webUsage,
     });
-    expect(dependencies.failures).toEqual([
-      expect.objectContaining({
-        stage: "research",
-        message: "search unavailable",
-      }),
-    ]);
-    expect(dependencies.sink.saveReady).not.toHaveBeenCalled();
-  });
+    const pipeline = new DailyBriefPipeline(deps);
 
-  it("preserves the original failure when failure reporting also fails", async () => {
-    const dependencies = createDependencies();
-    const researchError = new Error("search unavailable");
-    const reportingError = new Error("ticket database unavailable");
-    vi.mocked(dependencies.researcher.collect).mockRejectedValue(researchError);
-    vi.mocked(dependencies.failureReporter.report).mockRejectedValue(reportingError);
-    const pipeline = new DailyBriefPipeline(dependencies);
+    const result = await pipeline.run(new Date("2026-08-28T01:00:00.000Z"));
 
-    const error = await pipeline.run(runAt).catch((caught: unknown) => caught);
-
-    expect(error).toBeInstanceOf(PipelineRunError);
-    expect((error as PipelineRunError).cause).toBe(researchError);
-    expect((error as PipelineRunError).reportingError).toBe(reportingError);
-  });
-
-  it("accepts a quiet-day brief without inventing developments", async () => {
-    const dependencies = createDependencies();
-    vi.mocked(dependencies.researcher.collect).mockResolvedValue(stageResult([]));
-    vi.mocked(dependencies.filter.select).mockResolvedValue(stageResult([]));
-    vi.mocked(dependencies.writer.write).mockResolvedValue(
-      stageResult({
-        markdown: "# Daily Tech — 27 באוגוסט 2026\n\nהיום היה שקט.",
-        metadata: {
-          summary: "היום היה שקט.",
-          significant_items: 0,
-          worth_watching_items: 0,
-          day_intensity: "minimal",
-          companies: [],
-          topics: [],
-          developments: [],
-        },
-      }),
-    );
-    const pipeline = new DailyBriefPipeline(dependencies);
-
-    const result = await pipeline.run(runAt);
-
-    expect(result.selectedDevelopments).toBe(0);
-    expect(result.artifact.metadata.source_count).toBe(0);
+    expect(result.modelRequests).toBe(2);
+    expect(result.includedStories).toBe(0);
     expect(result.artifact.metadata.day_intensity).toBe("minimal");
-    expect(dependencies.sink.saveReady).toHaveBeenCalledOnce();
+    expect(deps.writer.write).not.toHaveBeenCalled();
+    expect(deps.writer.revise).not.toHaveBeenCalled();
   });
 
-  it("stops after the configured revision limit", async () => {
-    const dependencies = createDependencies();
-    vi.mocked(dependencies.reviewer.review).mockResolvedValue(
-      stageResult({ approved: false, feedback: ["עדיין לא תקין"] }),
-    );
-    const pipeline = new DailyBriefPipeline(dependencies, {
-      maxRevisionRounds: 1,
+  it("fails before persistence when the draft crosses the research boundary", async () => {
+    const deps = dependencies();
+    vi.mocked(deps.writer.write).mockResolvedValue({
+      value: {
+        ...oneItemDraft,
+        markdown: `${oneItemDraft.markdown}\n[Invented](https://invented.example/fact)`,
+      },
+      usage,
     });
+    const pipeline = new DailyBriefPipeline(deps);
 
-    const error = await pipeline.run(runAt).catch((caught: unknown) => caught);
-
-    expect(error).toBeInstanceOf(PipelineRunError);
-    expect((error as PipelineRunError).cause).toBeInstanceOf(
-      RevisionLimitExceededError,
-    );
-    expect(dependencies.writer.revise).toHaveBeenCalledOnce();
-    expect(dependencies.sink.saveReady).not.toHaveBeenCalled();
-  });
-
-  it("deduplicates selected candidates by stable ID", async () => {
-    const dependencies = createDependencies();
-    vi.mocked(dependencies.filter.select).mockResolvedValue(
-      stageResult([firstCandidate, firstCandidate]),
-    );
-    const pipeline = new DailyBriefPipeline(dependencies);
-
-    const result = await pipeline.run(runAt);
-
-    expect(result.selectedDevelopments).toBe(1);
-    expect(dependencies.writer.write).toHaveBeenCalledWith(
-      expect.anything(),
-      [firstCandidate],
-    );
-  });
-
-  it("validates configuration eagerly", () => {
-    const dependencies = createDependencies();
-    expect(
-      () => new DailyBriefPipeline(dependencies, { maxRevisionRounds: 0 }),
-    ).toThrow(RangeError);
-    expect(
-      () => new DailyBriefPipeline(dependencies, { storageRoot: "///" }),
-    ).toThrow(TypeError);
+    await expect(
+      pipeline.run(new Date("2026-08-28T01:00:00.000Z")),
+    ).rejects.toMatchObject({
+      name: "PipelineRunError",
+      stage: "draft_validation",
+    } satisfies Partial<PipelineRunError>);
+    expect(deps.sink.saveReady).not.toHaveBeenCalled();
+    expect(deps.failures).toHaveLength(1);
   });
 });

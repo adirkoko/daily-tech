@@ -1,44 +1,9 @@
-import type {
-  BriefArtifact,
-  DayIntensity,
-  ValidationIssue,
-} from "@daily-tech/core";
-
-export const SOURCE_TYPES = [
-  "official_blog",
-  "official_docs",
-  "github",
-  "release_notes",
-  "journalism",
-  "other",
-] as const;
-
-export type SourceType = (typeof SOURCE_TYPES)[number];
-
-export interface ResearchSource {
-  readonly url: string;
-  readonly title: string;
-  readonly publisher: string;
-  readonly publishedAt: string | null;
-  readonly type: SourceType;
-}
-
-export interface ResearchCandidate {
-  /** Stable within a run and used to deduplicate missing-news results. */
-  readonly id: string;
-  readonly headline: string;
-  readonly summary: string;
-  readonly occurredAt: string;
-  readonly companies: readonly string[];
-  readonly topics: readonly string[];
-  readonly sources: readonly ResearchSource[];
-}
+import type { BriefArtifact, ValidationIssue } from "@daily-tech/core";
 
 export interface BriefWindow {
   readonly date: string;
   readonly timeZone: "Asia/Jerusalem";
   readonly start: Date;
-  /** Exclusive upper bound: local midnight at the beginning of the next day. */
   readonly endExclusive: Date;
 }
 
@@ -52,78 +17,13 @@ export interface ModelUsage {
   readonly outputTokens: number;
   readonly totalTokens: number;
   readonly costUsd?: number;
+  readonly webSearchCalls?: number;
+  readonly webSearchCostUsd?: number;
 }
 
 export interface StageResult<T> {
   readonly value: T;
   readonly usage?: ModelUsage;
-}
-
-export interface GeneratedDayMetadata {
-  readonly summary: string;
-  readonly significant_items: number;
-  readonly worth_watching_items: number;
-  readonly day_intensity: DayIntensity;
-  readonly companies: readonly string[];
-  readonly topics: readonly string[];
-  readonly developments: readonly string[];
-}
-
-export interface BriefDraft {
-  readonly markdown: string;
-  readonly metadata: GeneratedDayMetadata;
-}
-
-export interface EditorialReview {
-  readonly approved: boolean;
-  readonly feedback: readonly string[];
-}
-
-export interface MissingNewsReview {
-  readonly missing: readonly ResearchCandidate[];
-  readonly notes: readonly string[];
-}
-
-export interface RevisionRequest {
-  readonly context: PipelineContext;
-  readonly developments: readonly ResearchCandidate[];
-  readonly draft: BriefDraft;
-  readonly editorialFeedback: readonly string[];
-  readonly missingNews: MissingNewsReview;
-}
-
-export interface NewsResearcher {
-  collect(context: PipelineContext): Promise<StageResult<readonly ResearchCandidate[]>>;
-}
-
-export interface NewsFilter {
-  select(
-    context: PipelineContext,
-    candidates: readonly ResearchCandidate[],
-  ): Promise<StageResult<readonly ResearchCandidate[]>>;
-}
-
-export interface BriefWriter {
-  write(
-    context: PipelineContext,
-    developments: readonly ResearchCandidate[],
-  ): Promise<StageResult<BriefDraft>>;
-  revise(request: RevisionRequest): Promise<StageResult<BriefDraft>>;
-}
-
-export interface EditorialReviewer {
-  review(
-    context: PipelineContext,
-    developments: readonly ResearchCandidate[],
-    draft: BriefDraft,
-  ): Promise<StageResult<EditorialReview>>;
-}
-
-export interface MissingNewsChecker {
-  check(
-    context: PipelineContext,
-    draft: BriefDraft,
-  ): Promise<StageResult<MissingNewsReview>>;
 }
 
 export interface ArtifactSink {
@@ -133,11 +33,11 @@ export interface ArtifactSink {
 export type PipelineStage =
   | "initialize"
   | "research"
-  | "filter"
-  | "write"
-  | "review"
-  | "missing_news"
-  | "revise"
+  | "research_validation"
+  | "draft"
+  | "draft_validation"
+  | "gap_check"
+  | "revision"
   | "validate"
   | "persist";
 
@@ -183,15 +83,19 @@ export interface PipelineUsage {
   readonly outputTokens: number;
   readonly totalTokens: number;
   readonly costUsd: number;
+  readonly webSearchCalls: number;
+  readonly webSearchCostUsd: number;
 }
 
 export interface PipelineRunResult {
   readonly runId: string;
   readonly window: BriefWindow;
   readonly artifact: BriefArtifact;
-  readonly researchCandidates: number;
-  readonly selectedDevelopments: number;
+  readonly researchedStories: number;
+  readonly includedStories: number;
   readonly revisionRounds: number;
-  readonly missingItemsAdded: number;
+  readonly gapStoriesAdded: number;
+  readonly rejectedStories: number;
+  readonly modelRequests: number;
   readonly usage: PipelineUsage;
 }

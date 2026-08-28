@@ -2,15 +2,27 @@ import type { BriefArtifact } from "@daily-tech/core";
 
 import type {
   BriefDraft,
-  ResearchCandidate,
+  ResearchedStory,
+  ResearchStoryInput,
   StageResult,
 } from "../src/index.js";
 
-export const firstCandidate: ResearchCandidate = {
-  id: "model-launch",
-  headline: "מודל חדש הושק",
-  summary: "החברה השיקה מודל חדש למפתחים.",
+export const firstStoryInput: ResearchStoryInput = {
+  title: "מודל חדש הושק",
+  factualSummary: "החברה השיקה מודל חדש למפתחים.",
+  whyItMatters: "המודל מוסיף יכולות חדשות למפתחים.",
+  keyFacts: ["המודל זמין למפתחים"],
+  availability: "זמין כעת",
+  category: "ai",
+  importance: 4,
+  occurredOn: "2026-08-27",
   occurredAt: "2026-08-27T10:00:00.000Z",
+  eventDateEvidence: {
+    eventDate: "2026-08-27",
+    kind: "official_announcement_date",
+    sourceUrl: "https://example.com/model",
+    explanation: "ההודעה הרשמית פורסמה בתאריך היעד ומתארת את ההשקה כאירוע חדש.",
+  },
   companies: ["OpenAI"],
   topics: ["AI models"],
   sources: [
@@ -24,11 +36,22 @@ export const firstCandidate: ResearchCandidate = {
   ],
 };
 
-export const secondCandidate: ResearchCandidate = {
-  id: "tool-update",
-  headline: "כלי פיתוח קיבל עדכון",
-  summary: "נוספה יכולת חדשה לכלי הפיתוח.",
+export const secondStoryInput: ResearchStoryInput = {
+  title: "כלי פיתוח קיבל עדכון",
+  factualSummary: "נוספה יכולת חדשה לכלי הפיתוח.",
+  whyItMatters: "העדכון מקצר תהליך עבודה נפוץ.",
+  keyFacts: ["היכולת זמינה בגרסה החדשה"],
+  availability: "זמין בגרסה החדשה",
+  category: "developer_tools",
+  importance: 3,
+  occurredOn: "2026-08-27",
   occurredAt: "2026-08-27T14:00:00.000Z",
+  eventDateEvidence: {
+    eventDate: "2026-08-27",
+    kind: "release_effective_date",
+    sourceUrl: "https://example.com/tool",
+    explanation: "הערות הגרסה מציינות שהגרסה החדשה פורסמה בתאריך היעד.",
+  },
   companies: ["Google"],
   topics: ["Developer tools"],
   sources: [
@@ -42,6 +65,9 @@ export const secondCandidate: ResearchCandidate = {
   ],
 };
 
+export const firstStory: ResearchedStory = { id: "story-1", ...firstStoryInput };
+export const secondStory: ResearchedStory = { id: "story-2", ...secondStoryInput };
+
 export const oneItemDraft: BriefDraft = {
   markdown: `# Daily Tech — 27 באוגוסט 2026
 
@@ -53,6 +79,7 @@ export const oneItemDraft: BriefDraft = {
 
 המודל זמין למפתחים. [OpenAI](https://example.com/model)
 `,
+  includedStoryIds: ["story-1"],
   metadata: {
     summary: "יום עם התפתחות חשובה אחת.",
     significant_items: 1,
@@ -79,6 +106,7 @@ export const twoItemDraft: BriefDraft = {
 
 נוספה יכולת חדשה. [Google](https://example.com/tool)
 `,
+  includedStoryIds: ["story-1", "story-2"],
   metadata: {
     summary: "יום עם שתי התפתחויות חשובות.",
     significant_items: 2,
@@ -95,8 +123,7 @@ export function stageResult<T>(value: T): StageResult<T> {
 }
 
 export const validArtifact: BriefArtifact = {
-  filePath:
-    "tech_briefs/daily/2026/august/2026-08-27/2026-08-27-tech_briefs.md",
+  filePath: "tech_briefs/daily/2026/august/2026-08-27/2026-08-27-tech_briefs.md",
   content: oneItemDraft.markdown,
   metadata: {
     date: "2026-08-27",

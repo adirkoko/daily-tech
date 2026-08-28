@@ -3,9 +3,11 @@
 An automated engine that builds, over time, a curated Hebrew archive of the
 developments that actually mattered in technology.
 
-Once a day a pipeline of AI agents researches the previous day, filters noise and
-duplicates, writes a short brief in Hebrew, reviews it, and runs deterministic
-validation. Only after every check passes is the brief saved as a Markdown file (the
+Once a day, a web-enabled model researches the previous Israel calendar day and
+returns cited, deduplicated stories. Deterministic code validates their source and
+event-date evidence, a constrained writer turns only those stories into a Hebrew
+brief, and a narrow web gap check looks for significant omissions. Only after every
+check passes is the brief saved as a Markdown file (the
 source of truth) with its metadata in SQLite, and published at a fixed hour. One
 standalone Node service serves the public site, secure admin, feedback endpoint,
 in-admin system alerts, and the daily generation/publication scheduler. The website
@@ -22,8 +24,8 @@ AI creates content  ->  code validates it  ->  SQLite + files store it  ->  the 
 | `apps/web/`         | Standalone Astro service: public site, secure admin, feedback, and alerts. |
 | `packages/core/`    | Shared TypeScript: metadata schema, enums, deterministic validators. |
 | `packages/db/`      | SQLite access layer and schema for the metadata database. |
-| `packages/pipeline/`| The daily generation engine (research → filter → write → review → validate). |
-| `packages/publisher/` | Safe local publication transition with an optional deployment webhook. |
+| `packages/pipeline/`| The daily generation engine (web research → evidence validation → writing → gap check → validation). |
+| `packages/publisher/` | Safe local publication transition with a durable SQLite lease. |
 | `scripts/`          | Operational scripts (e.g. reset login-attempt counters). |
 | `tech_briefs/`      | Default content store: `daily/` Markdown briefs + `meta/` SQLite DB. |
 | `docs/`             | Project documentation. |
@@ -76,13 +78,15 @@ rendering partial content. Set `SITE_URL` to the production origin for canonical
 Early implementation stage. `packages/core` provides the metadata contract and full
 artifact validation. `packages/db` now provides transactional migrations and typed
 SQLite persistence for daily metadata, including normalized company, topic, and
-development tables. `packages/pipeline` provides the tested orchestration foundation,
-Israel-time windows, bounded editorial revision loop, failure boundaries, and an
-OpenAI-compatible client. Production prompts, Brave Search, compensating Markdown +
-SQLite persistence, operational logging, and System-ticket failure reporting are now
-wired. `packages/publisher` revalidates ready artifacts, coordinates concurrent
-publication attempts through SQLite leases, and transitions metadata atomically;
-external deployment hooks are optional. `apps/web` provides the Hebrew RTL site,
+development tables. `packages/pipeline` provides a tested model-native web-research
+architecture, Israel-time windows, story-level evidence validation, conservative
+deterministic deduplication, a strict research-only writing boundary, a bounded
+gap/revision loop, and isolated AI-provider clients. Compensating Markdown + SQLite
+persistence, operational logging, and System-ticket failure reporting are wired.
+`packages/publisher` revalidates ready artifacts, coordinates
+concurrent publication attempts through SQLite leases, and transitions metadata
+atomically; the running service sees published content immediately. `apps/web`
+provides the Hebrew RTL site,
 password-protected admin editor, server-side sessions, CSRF protection, public
 feedback form, feedback inbox, and system-alert view. The remaining release work is
 production hosting and TLS configuration; the in-process scheduler, health checks,

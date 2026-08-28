@@ -109,5 +109,5 @@ without hover, responsive charts, and simple, uncrowded navigation.
 
 Pages are rendered on demand from local SQLite and Markdown with minimal browser
 JavaScript. This keeps admin changes immediately visible while retaining fast loads,
-SEO-friendly HTML, and resilience when AI/search providers are down. No AI or external
+SEO-friendly HTML, and resilience when AI providers are down. No AI or external
 API runs on a reader's request path.

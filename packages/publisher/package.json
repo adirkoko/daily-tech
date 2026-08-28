@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Reliable publication and deployment orchestration for Daily Tech briefs.",
+  "description": "Reliable local publication orchestration for Daily Tech briefs.",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",

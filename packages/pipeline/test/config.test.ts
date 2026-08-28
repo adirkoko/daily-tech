@@ -10,7 +10,6 @@ describe("loadPipelineEnvironment", () => {
       loadPipelineEnvironment({
         AI_API_KEY: "ai-key",
         AI_MODEL: "model-name",
-        BRAVE_SEARCH_API_KEY: "search-key",
         TECH_BRIEFS_ROOT: "custom-content",
         PIPELINE_MAX_REVISION_ROUNDS: "2",
       }),
@@ -18,7 +17,6 @@ describe("loadPipelineEnvironment", () => {
       aiApiKey: "ai-key",
       aiModel: "model-name",
       aiBaseUrl: "https://api.openai.com/v1",
-      braveSearchApiKey: "search-key",
       contentRoot: resolve("custom-content"),
       dailyStorageRoot: resolve("custom-content", "daily"),
       databaseFile: resolve("custom-content", "meta", "tech_briefs.db"),
@@ -32,7 +30,6 @@ describe("loadPipelineEnvironment", () => {
       loadPipelineEnvironment({
         AI_API_KEY: "key",
         AI_MODEL: "model",
-        BRAVE_SEARCH_API_KEY: "search",
         PIPELINE_MAX_REVISION_ROUNDS: "4",
       }),
     ).toThrow(RangeError);

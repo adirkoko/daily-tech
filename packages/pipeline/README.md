@@ -1,30 +1,55 @@
 # @daily-tech/pipeline
 
-The daily brief orchestration layer for Daily Tech.
+The daily brief generation engine for Daily Tech.
 
-## Implemented
+## Architecture
 
-- Previous-day windows based on `Asia/Jerusalem`, including 23-hour and 25-hour DST
-  transition days.
-- Separate ports for research, filtering, writing, editorial review, and missing-news
-  review. Implementations can use one model while keeping agent roles isolated.
-- A bounded review/revision loop with missing-item deduplication.
-- Deterministic artifact validation through `@daily-tech/core` before persistence.
-- Failure reporting and structured stage/run events. The sink is never called with an
-  invalid or partial artifact.
-- Token and provider-cost aggregation across AI stages.
-- A small OpenAI-compatible chat-completions client with timeouts, cancellation, JSON
-  mode, error sanitization, and caller-owned response parsing.
-- Hardened prompts and strict response parsing for every AI stage. Model-returned
-  source URLs must exist in the search results supplied to that model call.
-- A Brave Search adapter with exact-date freshness filtering.
-- A compensating filesystem + SQLite sink: a failed metadata write restores the prior
-  Markdown file instead of leaving a partial artifact.
-- SQLite-backed operational logging, failed-day state, and System tickets.
+The production path is deliberately singular:
+
+```text
+Model Web Research
+  -> story-level event-date evidence validation
+  -> conservative deterministic deduplication and code-assigned IDs
+  -> constrained Draft
+  -> deterministic draft validation
+  -> narrow Model Web Gap Check
+  -> optional Revision + another Gap Check
+  -> final artifact validation
+  -> Markdown + SQLite persistence as status=ready
+```
+
+`NewsResearchProvider` owns the news domain, significance threshold, research window,
+stories, and gap question. `AiWebResearchClient` owns provider-specific web tools,
+strict structured output, machine-readable citations, usage, and web-tool cost.
+`BriefWriter` may only reorganize and phrase accepted `ResearchedStory[]`; it may not
+introduce factual details or URLs from outside that input.
+
+Citation validation fails closed. A missing citation set or structurally broken
+provider response fails the Research request. A story with an unverifiable source or
+inconsistent event-date evidence is rejected on its own, allowing other valid stories
+to continue. If a non-empty response leaves no valid stories, Research fails. An
+explicitly empty response is a quiet day and skips Draft.
+
+An ordinary non-empty run makes three model requests: Research, Draft, and Gap Check.
+One justified revision makes five: Research, Draft, Gap Check, Revision, and Gap Check.
+These are outcomes of the required stages, not quotas; quiet days do not make
+artificial writing calls.
+
+## Other guarantees
+
+- Previous-day windows use `Asia/Jerusalem`, including DST transition days.
+- Deterministic artifact validation runs through `@daily-tech/core` before persistence.
+- A bounded revision loop prevents uncontrolled cost.
+- Model, token, web-tool, and provider-cost usage is aggregated across the run.
+- A compensating filesystem + SQLite sink restores the prior Markdown file if the
+  metadata transaction fails.
+- Structured logs, failed-day state, and System tickets share SQLite.
 
 ## Run locally
 
-Copy `.env.example` to `.env`, fill in the model and Brave Search credentials, then:
+Copy `.env.example` to `.env` and configure a provider that supports chat completions,
+Responses-compatible live web research, strict structured output, and
+machine-readable citations. Then run:
 
 ```sh
 npm run generate
@@ -37,6 +62,5 @@ always covers the previous Israel calendar day:
 npm run generate -- --run-at=2026-08-28T01:00:00.000Z
 ```
 
-`DailyBriefPipeline` still receives every external capability as a dependency, so the
-search provider, model provider, storage, logger, and failure reporter remain
-replaceable. Automated tests use fakes and never call either external API.
+External capabilities remain dependency-injected, so research, writing, storage,
+logging, and failure reporting are testable without calling an external API.

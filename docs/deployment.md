@@ -26,8 +26,8 @@ the scheduler by default; set `DAILY_TECH_SCHEDULER_ENABLED=false` only when a m
 run is intentionally required.
 
 `npm start` reads `.env` and starts `apps/web/dist/server/entry.mjs`. Put an HTTPS
-reverse proxy or load balancer in front of it and forward traffic to the configured
-`HOST`/`PORT`. The `TECH_BRIEFS_ROOT` directory must be a private persistent volume;
+reverse proxy or load balancer in front of it. The server binds to the runtime's
+standard address defaults. The `TECH_BRIEFS_ROOT` directory must be a private persistent volume;
 both its Markdown files and `meta/tech_briefs.db` must survive releases and restarts.
 
 ## Required server configuration
@@ -57,12 +57,14 @@ npm run generate
 npm run publish:brief
 ```
 
-The generation job requires the AI and search variables listed in `.env.example`.
+The generation job requires `AI_API_KEY`, `AI_MODEL`, and `AI_BASE_URL` from
+`.env.example`. The provider must expose both chat completions for writing and a
+Responses-compatible live web-research endpoint that returns machine-readable source
+citations.
 The publisher targets the previous Israel calendar day unless `--date=YYYY-MM-DD` is
 provided. It acquires a SQLite lease, revalidates the ready artifact, atomically moves
-it to `published`, and finalizes the publication job. The running site sees the change
-immediately, so `PUBLISH_WEBHOOK_URL` is optional. If supplied, the existing bounded
-webhook integration runs after the status transition for external cache/build needs.
+it to `published`, and finalizes the publication job locally. The running site sees
+the change immediately; publication has no external deployment trigger.
 
 Failures are written to structured logs and create a `system` ticket visible at
 `/admin/alerts`. There are deliberately no email, Telegram, or Slack dependencies.

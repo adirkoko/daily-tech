@@ -4,7 +4,6 @@ export interface PipelineEnvironmentConfig {
   readonly aiApiKey: string;
   readonly aiModel: string;
   readonly aiBaseUrl: string;
-  readonly braveSearchApiKey: string;
   readonly contentRoot: string;
   readonly dailyStorageRoot: string;
   readonly databaseFile: string;
@@ -27,7 +26,6 @@ export function loadPipelineEnvironment(
     aiApiKey: requiredVariable(environment, "AI_API_KEY"),
     aiModel: requiredVariable(environment, "AI_MODEL"),
     aiBaseUrl: environment.AI_BASE_URL ?? "https://api.openai.com/v1",
-    braveSearchApiKey: requiredVariable(environment, "BRAVE_SEARCH_API_KEY"),
     contentRoot,
     dailyStorageRoot: resolve(contentRoot, "daily"),
     databaseFile: resolve(contentRoot, "meta", "tech_briefs.db"),

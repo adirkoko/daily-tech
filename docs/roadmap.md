@@ -5,9 +5,9 @@
 | Area | Status |
 | ---- | ------ |
 | Core validation, SQLite schema, and lifecycle | Implemented and tested |
-| AI research, writing, review, missing-news check, and persistence | Implemented; production credentials still required |
+| Cited AI web research, writing, narrow gap check, and persistence | Implemented; production credentials still required |
 | Hebrew website, archive, heatmap, and basic statistics | Implemented and tested |
-| Safe local publication; optional deployment webhook | Implemented and tested |
+| Safe local publication with a durable lease | Implemented and tested |
 | Single standalone Node service | Implemented and integration-tested |
 | Secure admin authentication and editing UI | Implemented and integration-tested |
 | Public feedback, admin inbox, and in-admin alerts | Implemented and integration-tested |
@@ -22,10 +22,9 @@ deployment-specific.
 ## Required for the first version
 
 - Automatic brief generation once a day.
-- Research and filtering of developments.
+- Cited web research and deterministic evidence validation.
 - Brief written in Hebrew.
-- Editorial review.
-- Missing-news check.
+- Narrow significant-omission gap check.
 - Deterministic code validation.
 - Markdown storage.
 - Metadata stored in SQLite.
@@ -54,7 +53,7 @@ deployment-specific.
 ## Development priority
 
 1. **Daily brief quality** — good news selection, clear phrasing, reliable sources.
-2. **Pipeline reliability** — review, missing-news check, validation, failure handling.
+2. **Pipeline reliability** — evidence validation, gap check, failure handling.
 3. **A useful archive** — daily pages and a calendar that accumulate into something
    valuable over time.
 4. **Simple operations** — admin, logs, feedback, and the ability to fix problems
@@ -70,7 +69,7 @@ Tracked over time:
 - Consecutive days running without intervention.
 - Manual fixes needed after publishing.
 - Published items later found to be wrong.
-- Times the missing-news check caught something significant.
+- Times the gap check caught something significant.
 - Site load time.
 - Returning-visitor rate.
 - Use of the archive, the calendar, and the statistics page.

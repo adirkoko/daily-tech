@@ -10,8 +10,6 @@ import { DailyTechDatabase } from "@daily-tech/db";
 import { loadPublisherEnvironment } from "./config.js";
 import { previousIsraelCalendarDate } from "./date.js";
 import { BriefPublisher } from "./publisher.js";
-import { LocalDeploymentTrigger } from "./local.js";
-import { WebhookDeploymentTrigger } from "./webhook.js";
 
 export async function runPublisherCli(
   environment: NodeJS.ProcessEnv = process.env,
@@ -27,13 +25,6 @@ export async function runPublisherCli(
       database,
       dailyStorageRoot: config.dailyStorageRoot,
       leaseDurationMs: config.leaseDurationMs,
-      deploymentTrigger: config.webhookUrl === null
-        ? new LocalDeploymentTrigger()
-        : new WebhookDeploymentTrigger({
-            url: config.webhookUrl,
-            token: config.webhookToken,
-            timeoutMs: config.webhookTimeoutMs,
-          }),
     });
     const result = await publisher.publish(date);
     process.stdout.write(`${JSON.stringify(result)}\n`);

@@ -10,13 +10,12 @@ The publisher:
    same publication concurrently.
 3. Revalidates the Markdown bytes, path, metadata, links, and item counts.
 4. Atomically changes the brief to `published` and sets `published_at`.
-5. Completes locally by default, or sends a bounded HTTP POST when an optional
-   deployment webhook is configured.
+5. Finalizes the durable publication job locally.
 6. Records completion, structured logs, and any failure as a System ticket.
 
-A failed optional webhook can be retried safely. If the metadata transition already happened,
-the retry keeps the original `published_at` and only triggers deployment again. A
-successfully triggered date is a no-op on later runs.
+The standalone site reads SQLite and Markdown on demand, so the status transition is
+visible immediately and requires no external deployment trigger. A successfully
+published date is a no-op on later runs.
 
 ## Command
 
@@ -33,17 +32,3 @@ explicit date or deterministic clock for recovery and testing:
 npm run publish:brief -- --date=2026-08-27
 npm run publish:brief -- --run-at=2026-08-28T04:00:00.000Z
 ```
-
-When `PUBLISH_WEBHOOK_URL` is configured, the webhook receives:
-
-```json
-{
-  "event": "brief.published",
-  "runId": "publish-2026-08-27-...",
-  "date": "2026-08-27",
-  "publishedAt": "2026-08-28T04:00:00.000Z"
-}
-```
-
-An HTTP success means the deployment provider accepted the trigger; it does not claim
-that an asynchronous build has already completed.

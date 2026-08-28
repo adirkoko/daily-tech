@@ -14,10 +14,10 @@ serve pages when AI services are unavailable.
 
 | Component | Responsibility |
 | --------- | -------------- |
-| `packages/pipeline` | The daily generation engine: research, filtering, ranking, deduplication, writing, editorial review, missing-news check. Reaches the model through a thin OpenAI-compatible abstraction so the model or provider can be swapped. |
+| `packages/pipeline` | The daily generation engine: cited model web research, deterministic evidence validation, constrained writing, a narrow gap check, and final artifact validation. `NewsResearchProvider` owns the Daily Tech domain while `AiWebResearchClient` isolates provider-specific web tools, citations, structured output, and usage. |
 | `packages/core` | Framework-free TypeScript shared by everything: the metadata schema, its allowed values (`status`, `day_intensity`), and the deterministic validators run before a brief is accepted. |
 | `packages/db` | SQLite access: schema and typed read/write functions for day metadata, feedback tickets, logs, and rate-limit counters. |
-| `packages/publisher` | Revalidates a ready artifact, coordinates publication with a durable SQLite lease, and atomically marks it published. Publication is local by default; an HTTP webhook is optional. |
+| `packages/publisher` | Revalidates a ready artifact, coordinates local publication with a durable SQLite lease, and atomically marks it published. |
 | `apps/web` | One standalone Astro/Node service for public server-rendered pages, password-protected admin, feedback API/inbox, and system alerts. It reads Markdown and SQLite on demand and ships almost no client JavaScript. |
 | `scripts` | Operational scripts, e.g. resetting all login-attempt counters. |
 | `tech_briefs/` | The content store. `daily/` holds the Markdown briefs (source of truth); `meta/` holds the SQLite database. The path is configurable; this is the default. |

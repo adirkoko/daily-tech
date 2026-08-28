@@ -30,7 +30,7 @@ category, which carries a dedicated color or marking so it stands out. Examples:
 
 - Brief-generation failure.
 - Publishing failure.
-- Search-service failure.
+- Web-research provider failure.
 - Any other failure needing the admin's attention.
 
 The Admin alert center is the only notification channel in this architecture. There
@@ -41,11 +41,11 @@ is no email, Telegram, Slack, or other outbound incident-notification dependency
 Each daily run records at least:
 
 - Start and end time of the run.
-- Number of sources found.
-- Number of candidates that passed filtering.
+- Number of cited research sources.
+- Number of stories accepted or rejected by evidence validation.
 - Number of developments that entered the brief.
-- Whether the missing-news check found additional items.
-- How many review iterations ran.
+- Whether the gap check found a significant missing story.
+- How many revision rounds ran.
 - Whether validation passed.
 - Whether publishing succeeded.
 - Errors that occurred.
@@ -53,7 +53,7 @@ Each daily run records at least:
 
 Outside the daily run, the log also records admin actions, login attempts, feedback
 submissions, system tickets, and every publication attempt. Publication logs distinguish
-start, status transition, accepted deployment trigger, overlap/no-op, and failure.
+start, status transition, local completion, overlap/no-op, and failure.
 The embedded scheduler additionally records claimed, completed, and failed generation
 and publication jobs. Its durable terminal state prevents repeated execution after a
 restart.
@@ -70,6 +70,8 @@ caller hash rather than a raw IP address.
 
 ## AI usage budget
 
-The daily model budget — number of searches, number of review loops, or a token
+The daily model budget — web tool calls, model requests, revision rounds, or a token
 budget — is not fixed in the first version. It can later become an explicit system
-setting.
+setting. An ordinary non-empty run uses one Research request, one Draft request, and
+one Gap Check request. Quiet days skip Draft; each justified revision adds one
+Revision request and one new Gap Check.

@@ -4,6 +4,7 @@ import {
   InvalidAiResponseError,
   OpenAiCompatibleCompletionClient,
   OpenAiResponsesWebResearchClient,
+  parseJsonResult,
   parseResponsesPayload,
 } from "../src/index.js";
 
@@ -25,12 +26,63 @@ describe("AI clients", () => {
 
     await expect(client.complete({
       messages: [{ role: "user", content: "write" }],
-      responseFormat: "json",
+      responseFormat: {
+        type: "json_schema",
+        name: "brief",
+        schema: {
+          type: "object",
+          additionalProperties: false,
+          required: ["markdown"],
+          properties: { markdown: { type: "string" } },
+        },
+      },
     })).resolves.toMatchObject({
       content: "{\"markdown\":\"ok\"}",
       usage: { inputTokens: 4, outputTokens: 2, totalTokens: 6 },
     });
     expect(fetchMock.mock.calls[0]?.[0]).toBe("https://provider.example/v1/chat/completions");
+    expect(requestBody(fetchMock)).toMatchObject({
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "brief",
+          strict: true,
+          schema: {
+            properties: { markdown: { type: "string" } },
+          },
+        },
+      },
+    });
+  });
+
+  it("omits temperature by default, including for a default-only model", async () => {
+    const fetchMock = completionFetchMock();
+    const client = new OpenAiCompatibleCompletionClient({
+      apiKey: "secret",
+      model: "gpt-5.6-luna",
+      fetch: fetchMock,
+    });
+
+    await client.complete({
+      messages: [{ role: "user", content: "write" }],
+    });
+
+    const body = requestBody(fetchMock);
+    expect(body).not.toHaveProperty("temperature");
+  });
+
+  it("keeps an explicit custom-temperature opt-in for a known provider need", async () => {
+    const fetchMock = completionFetchMock();
+    const client = new OpenAiCompatibleCompletionClient({
+      apiKey: "secret",
+      model: "provider-model-with-custom-temperature",
+      fetch: fetchMock,
+    });
+    await client.complete({
+      messages: [{ role: "user", content: "write" }],
+      temperature: 0.2,
+    });
+    expect(requestBody(fetchMock)).toMatchObject({ temperature: 0.2 });
   });
 
   it("forces a web-search tool and strict structured output in Responses API", async () => {
@@ -79,6 +131,18 @@ describe("AI clients", () => {
       ],
     })).toThrow(/citations/u);
   });
+
+  it("distinguishes invalid JSON syntax from validation after parsing", () => {
+    expect(() => parseJsonResult("not-json", () => null)).toThrowError(
+      new InvalidAiResponseError("AI response content was not valid JSON."),
+    );
+    expect(() => parseJsonResult("{}", () => {
+      throw new TypeError("schema field is missing");
+    })).toThrowError(TypeError);
+    expect(() => parseJsonResult("{}", () => {
+      throw new TypeError("schema field is missing");
+    })).toThrow(/schema field is missing/u);
+  });
 });
 
 function responsesPayload(): Record<string, unknown> {
@@ -105,4 +169,18 @@ function responsesPayload(): Record<string, unknown> {
     ],
     usage: { input_tokens: 10, output_tokens: 4, total_tokens: 14 },
   };
+}
+
+function completionFetchMock(): ReturnType<typeof vi.fn<typeof fetch>> {
+  return vi.fn<typeof fetch>().mockResolvedValue(
+    new Response(JSON.stringify({
+      model: "writer-model",
+      choices: [{ message: { content: "ok" } }],
+      usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+    }), { status: 200 }),
+  );
+}
+
+function requestBody(fetchMock: ReturnType<typeof vi.fn<typeof fetch>>): Record<string, unknown> {
+  return JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as Record<string, unknown>;
 }

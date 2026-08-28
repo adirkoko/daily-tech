@@ -1,14 +1,37 @@
 const nullableString = { type: ["string", "null"] } as const;
 
+const nullableCalendarDate = {
+  anyOf: [
+    {
+      type: "string",
+      format: "date",
+      pattern: "^\\d{4}-\\d{2}-\\d{2}$",
+    },
+    { type: "null" },
+  ],
+} as const;
+
+const nullableUtcTimestamp = {
+  anyOf: [
+    {
+      type: "string",
+      format: "date-time",
+      pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,3})?Z$",
+    },
+    { type: "null" },
+  ],
+} as const;
+
 const sourceSchema = {
   type: "object",
   additionalProperties: false,
-  required: ["url", "title", "publisher", "publishedAt", "type"],
+  required: ["url", "title", "publisher", "publishedOn", "publishedAt", "type"],
   properties: {
     url: { type: "string" },
     title: { type: "string" },
     publisher: { type: "string" },
-    publishedAt: nullableString,
+    publishedOn: nullableCalendarDate,
+    publishedAt: nullableUtcTimestamp,
     type: {
       type: "string",
       enum: ["official_blog", "official_docs", "github", "release_notes", "journalism", "other"],

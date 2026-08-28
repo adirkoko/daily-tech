@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
-  InvalidAiResponseError,
+  InvalidResearchResponseError,
   ModelNewsResearchProvider,
   type AiWebResearchClient,
   type PipelineContext,
@@ -50,6 +50,92 @@ describe("ModelNewsResearchProvider", () => {
     ]);
     const provider = new ModelNewsResearchProvider({ client });
 
+    const promise = provider.research({
+      context,
+      scope: {
+        categories: ["ai"],
+        minimumImportance: 3,
+        maximumStories: 10,
+        preferredSourceTypes: ["official_blog"],
+      },
+    });
+
+    await expect(promise).rejects.toBeInstanceOf(InvalidResearchResponseError);
+    await expect(promise).rejects.toMatchObject({
+      rejectedStories: [{
+        index: 0,
+        title: firstStoryInput.title,
+        reason: expect.stringContaining("stories[0].sources[0].url"),
+      }],
+    });
+    await expect(promise).rejects.toThrow(
+      /index=0; title=.*provider citations.*https:\/\/example\.com\/model/su,
+    );
+  });
+
+  it("accepts source publication metadata with date-only precision", async () => {
+    const dateOnlySource = {
+      ...firstStoryInput,
+      sources: [{
+        ...firstStoryInput.sources[0],
+        publishedOn: "2026-08-27",
+        publishedAt: null,
+      }],
+    };
+    const provider = new ModelNewsResearchProvider({
+      client: clientReturning({ stories: [dateOnlySource] }, ["https://example.com/model"]),
+    });
+
+    const result = await provider.research({
+      context,
+      scope: {
+        categories: ["ai"],
+        minimumImportance: 3,
+        maximumStories: 10,
+        preferredSourceTypes: ["official_blog"],
+      },
+    });
+
+    expect(result.value.stories[0]?.sources[0]).toMatchObject({
+      publishedOn: "2026-08-27",
+      publishedAt: null,
+    });
+  });
+
+  it("derives publishedOn from an exact UTC publishedAt", async () => {
+    const exactTimestampSource = {
+      ...firstStoryInput,
+      sources: [{ ...firstStoryInput.sources[0], publishedOn: null }],
+    };
+    const provider = new ModelNewsResearchProvider({
+      client: clientReturning(
+        { stories: [exactTimestampSource] },
+        ["https://example.com/model"],
+      ),
+    });
+
+    const result = await provider.research({
+      context,
+      scope: {
+        categories: ["ai"],
+        minimumImportance: 3,
+        maximumStories: 10,
+        preferredSourceTypes: ["official_blog"],
+      },
+    });
+
+    expect(result.value.stories[0]?.sources[0]?.publishedOn).toBe("2026-08-27");
+  });
+
+  it("rejects inconsistent source publication date precision", async () => {
+    const inconsistentSource = {
+      ...firstStoryInput,
+      sources: [{ ...firstStoryInput.sources[0], publishedOn: "2026-08-26" }],
+    };
+    const provider = new ModelNewsResearchProvider({
+      client: clientReturning({ stories: [inconsistentSource] }, ["https://example.com/model"]),
+    });
+
     await expect(provider.research({
       context,
       scope: {
@@ -58,7 +144,31 @@ describe("ModelNewsResearchProvider", () => {
         maximumStories: 10,
         preferredSourceTypes: ["official_blog"],
       },
-    })).rejects.toBeInstanceOf(InvalidAiResponseError);
+    })).rejects.toThrow(
+      'publishedOn="2026-08-26"; publishedAt="2026-08-27T10:00:00.000Z"',
+    );
+  });
+
+  it("still rejects a date-only value placed in publishedAt", async () => {
+    const dateOnlySource = {
+      ...firstStoryInput,
+      sources: [{ ...firstStoryInput.sources[0], publishedAt: "2026-08-27" }],
+    };
+    const provider = new ModelNewsResearchProvider({
+      client: clientReturning({ stories: [dateOnlySource] }, ["https://example.com/model"]),
+    });
+
+    await expect(provider.research({
+      context,
+      scope: {
+        categories: ["ai"],
+        minimumImportance: 3,
+        maximumStories: 10,
+        preferredSourceTypes: ["official_blog"],
+      },
+    })).rejects.toThrow(
+      'stories[0].sources[0].publishedAt must be an ISO UTC timestamp; value="2026-08-27"',
+    );
   });
 
   it("keeps gap research narrow and returns an empty list when nothing is missing", async () => {

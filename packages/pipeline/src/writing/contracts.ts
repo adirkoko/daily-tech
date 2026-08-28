@@ -37,4 +37,6 @@ export interface BriefWriter {
 
 export interface ModelBriefWriterOptions {
   readonly client: AiCompletionClient;
+  /** Optional explicit provider/model override; omitted by default. */
+  readonly temperature?: number;
 }

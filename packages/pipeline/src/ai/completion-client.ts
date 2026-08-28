@@ -46,6 +46,12 @@ export class OpenAiCompatibleCompletionClient implements AiCompletionClient {
   async complete(request: AiCompletionRequest): Promise<AiCompletion> {
     if (request.messages.length === 0) throw new TypeError("At least one message is required.");
     if (
+      typeof request.responseFormat === "object"
+      && request.responseFormat.name.trim().length === 0
+    ) {
+      throw new TypeError("Structured-output schema name cannot be empty.");
+    }
+    if (
       request.temperature !== undefined &&
       (!Number.isFinite(request.temperature) || request.temperature < 0 || request.temperature > 2)
     ) {
@@ -70,9 +76,7 @@ export class OpenAiCompatibleCompletionClient implements AiCompletionClient {
           model: request.model ?? this.#model,
           messages: request.messages,
           ...(request.temperature === undefined ? {} : { temperature: request.temperature }),
-          ...(request.responseFormat === "json"
-            ? { response_format: { type: "json_object" } }
-            : {}),
+          ...responseFormatPayload(request.responseFormat),
         }),
         signal: abortController.signal,
       });
@@ -99,6 +103,22 @@ export class OpenAiCompatibleCompletionClient implements AiCompletionClient {
       request.signal?.removeEventListener("abort", onAbort);
     }
   }
+}
+
+function responseFormatPayload(
+  format: AiCompletionRequest["responseFormat"],
+): Readonly<Record<string, unknown>> {
+  if (format === undefined || format === "text") return {};
+  return {
+    response_format: {
+      type: "json_schema",
+      json_schema: {
+        name: format.name,
+        strict: true,
+        schema: format.schema,
+      },
+    },
+  };
 }
 
 async function readJsonResponse(response: Response): Promise<unknown> {

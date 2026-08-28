@@ -28,9 +28,18 @@ import { WEB_GAP_RESEARCH_PROMPT, WEB_RESEARCH_PROMPT } from "./prompts.js";
 import { GAP_RESPONSE_SCHEMA, RESEARCH_RESPONSE_SCHEMA } from "./schemas.js";
 
 export class InvalidResearchResponseError extends Error {
-  constructor(message: string, cause?: unknown) {
-    super(message, { cause });
+  readonly rejectedStories: readonly RejectedResearchStory[];
+
+  constructor(
+    message: string,
+    options: {
+      readonly cause?: unknown;
+      readonly rejectedStories?: readonly RejectedResearchStory[];
+    } = {},
+  ) {
+    super(message, { cause: options.cause });
     this.name = "InvalidResearchResponseError";
+    this.rejectedStories = options.rejectedStories ?? [];
   }
 }
 
@@ -120,7 +129,8 @@ function parseBatch(
     });
     if (rawStories.length > 0 && stories.length === 0) {
       throw new InvalidResearchResponseError(
-        `Every story in ${property} failed source or schema validation.`,
+        formatAllRejectedMessage(property, rejectedStories),
+        { rejectedStories },
       );
     }
     return { stories, rejectedStories };
@@ -146,9 +156,12 @@ function parseStory(
   const evidenceRecord = asRecord(record.eventDateEvidence, `${path}.eventDateEvidence`);
   const evidenceSourceUrl = citations.require(
     asString(evidenceRecord.sourceUrl, `${path}.eventDateEvidence.sourceUrl`),
+    `${path}.eventDateEvidence.sourceUrl`,
   );
   if (!sourceUrls.has(evidenceSourceUrl)) {
-    throw new TypeError(`${path}.eventDateEvidence.sourceUrl must be a story source.`);
+    throw new TypeError(
+      `${path}.eventDateEvidence.sourceUrl must be a story source; value=${JSON.stringify(evidenceSourceUrl)}`,
+    );
   }
   const evidenceDate = asString(
     evidenceRecord.eventDate,
@@ -197,11 +210,21 @@ function parseSource(
   citations: CitationIndex,
 ): ResearchSource {
   const record = asRecord(value, path);
+  const publishedOn = nullableCalendarDate(record.publishedOn, `${path}.publishedOn`);
+  const publishedAt = nullableTimestamp(record.publishedAt, `${path}.publishedAt`);
+  const timestampDate = publishedAt?.slice(0, 10) ?? null;
+  if (publishedOn !== null && timestampDate !== null && publishedOn !== timestampDate) {
+    throw new TypeError(
+      `${path}.publishedOn must match the UTC calendar date in ${path}.publishedAt; `
+      + `publishedOn=${JSON.stringify(publishedOn)}; publishedAt=${JSON.stringify(publishedAt)}`,
+    );
+  }
   return {
-    url: citations.require(asString(record.url, `${path}.url`)),
+    url: citations.require(asString(record.url, `${path}.url`), `${path}.url`),
     title: asString(record.title, `${path}.title`),
     publisher: asString(record.publisher, `${path}.publisher`),
-    publishedAt: nullableTimestamp(record.publishedAt, `${path}.publishedAt`),
+    publishedOn: publishedOn ?? timestampDate,
+    publishedAt,
     type: asEnum(record.type, SOURCE_TYPES, `${path}.type`) as SourceType,
   };
 }
@@ -254,8 +277,23 @@ function nullableString(value: unknown, path: string): string | null {
 function nullableTimestamp(value: unknown, path: string): string | null {
   if (value === null) return null;
   const timestamp = asString(value, path);
-  if (!isUtcTimestamp(timestamp)) throw new TypeError(`${path} must be an ISO UTC timestamp.`);
+  if (!isUtcTimestamp(timestamp)) {
+    throw new TypeError(
+      `${path} must be an ISO UTC timestamp; value=${JSON.stringify(timestamp)}`,
+    );
+  }
   return timestamp;
+}
+
+function nullableCalendarDate(value: unknown, path: string): string | null {
+  if (value === null) return null;
+  const date = asString(value, path);
+  if (!isCalendarDate(date)) {
+    throw new TypeError(
+      `${path} must be a calendar date in YYYY-MM-DD format; value=${JSON.stringify(date)}`,
+    );
+  }
+  return date;
 }
 
 function asStringArray(value: unknown, path: string): readonly string[] {
@@ -281,4 +319,17 @@ function asImportance(value: unknown, path: string): Importance {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Unknown story validation failure.";
+}
+
+function formatAllRejectedMessage(
+  property: "stories" | "missingStories",
+  rejectedStories: readonly RejectedResearchStory[],
+): string {
+  const details = rejectedStories.map(({ index, title, reason }) =>
+    `  - index=${index}; title=${title === null ? "<missing>" : JSON.stringify(title)}; reason=${reason}`
+  );
+  return [
+    `Every story in ${property} failed source or schema validation:`,
+    ...details,
+  ].join("\n");
 }

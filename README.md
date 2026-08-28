@@ -97,6 +97,7 @@ trusted-proxy handling, and one-service container are implemented.
 - [`docs/architecture.md`](docs/architecture.md) — components and dependency direction.
 - [`docs/data-model.md`](docs/data-model.md) — file layout, brief structure, SQLite schema.
 - [`docs/pipeline.md`](docs/pipeline.md) — how the daily brief is generated.
+- [`docs/provider-smoke-test.md`](docs/provider-smoke-test.md) — run the real pipeline and provider without DB writes or publication.
 - [`docs/website.md`](docs/website.md) — pages, states, calendar, statistics, branding, mobile.
 - [`docs/admin.md`](docs/admin.md) — admin area and security.
 - [`docs/operations.md`](docs/operations.md) — feedback, system notifications, logging.

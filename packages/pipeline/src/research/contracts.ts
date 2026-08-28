@@ -36,6 +36,9 @@ export interface ResearchSource {
   readonly url: string;
   readonly title: string;
   readonly publisher: string;
+  /** Calendar publication date when the source exposes date precision only. */
+  readonly publishedOn: string | null;
+  /** Exact UTC publication timestamp; null when the source does not expose a time. */
   readonly publishedAt: string | null;
   readonly type: SourceType;
 }

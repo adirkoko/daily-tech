@@ -21,13 +21,31 @@ export class CitationIndex {
     this.#byUrl = byUrl;
   }
 
-  require(url: string): string {
-    const canonical = canonicalizeUrl(url);
+  require(url: string, path = "source.url"): string {
+    let canonical: string;
+    try {
+      canonical = canonicalizeUrl(url);
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : "invalid URL";
+      throw new TypeError(`${path} is invalid (${reason}); value=${displayValue(url)}`, {
+        cause: error,
+      });
+    }
     if (!this.#byUrl.has(canonical)) {
-      throw new TypeError("Source URL was not present in provider citations.");
+      throw new TypeError(
+        `${path} was not present in provider citations; value=${displayValue(url)}; canonical=${displayValue(canonical)}`,
+      );
     }
     return canonical;
   }
+}
+
+function displayValue(value: string): string {
+  const maximumLength = 500;
+  const shortened = value.length > maximumLength
+    ? `${value.slice(0, maximumLength)}…`
+    : value;
+  return JSON.stringify(shortened);
 }
 
 export function canonicalizeUrl(value: string): string {

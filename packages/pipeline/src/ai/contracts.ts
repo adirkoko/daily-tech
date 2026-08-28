@@ -5,11 +5,17 @@ export interface AiMessage {
   readonly content: string;
 }
 
+export interface AiJsonSchemaResponseFormat {
+  readonly type: "json_schema";
+  readonly name: string;
+  readonly schema: Readonly<Record<string, unknown>>;
+}
+
 export interface AiCompletionRequest {
   readonly messages: readonly AiMessage[];
   readonly model?: string;
   readonly temperature?: number;
-  readonly responseFormat?: "text" | "json";
+  readonly responseFormat?: "text" | AiJsonSchemaResponseFormat;
   readonly signal?: AbortSignal;
 }
 
@@ -69,10 +75,11 @@ export function parseJsonResult<T>(
   content: string,
   parse: (value: unknown) => T,
 ): T {
+  let value: unknown;
   try {
-    return parse(JSON.parse(content) as unknown);
+    value = JSON.parse(content) as unknown;
   } catch (error) {
-    if (error instanceof InvalidAiResponseError) throw error;
-    throw new InvalidAiResponseError("AI response was not valid expected JSON.", error);
+    throw new InvalidAiResponseError("AI response content was not valid JSON.", error);
   }
+  return parse(value);
 }

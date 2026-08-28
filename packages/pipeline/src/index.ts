@@ -5,6 +5,7 @@ export {
   type AiCompletion,
   type AiCompletionClient,
   type AiCompletionRequest,
+  type AiJsonSchemaResponseFormat,
   type AiMessage,
   type AiWebResearchClient,
   type AiWebResearchRequest,
@@ -91,6 +92,7 @@ export type {
   StageResult,
 } from "./types.js";
 export {
+  DraftResponseValidationError,
   ModelBriefWriter,
 } from "./writing/model-brief-writer.js";
 export {

@@ -38,7 +38,6 @@ describe("AI clients", () => {
       },
     })).resolves.toMatchObject({
       content: "{\"markdown\":\"ok\"}",
-      usage: { inputTokens: 4, outputTokens: 2, totalTokens: 6 },
     });
     expect(fetchMock.mock.calls[0]?.[0]).toBe("https://provider.example/v1/chat/completions");
     expect(requestBody(fetchMock)).toMatchObject({
@@ -104,9 +103,7 @@ describe("AI clients", () => {
 
     expect(result).toMatchObject({
       content: "{\"stories\":[]}",
-      webSearchCalls: 1,
       citations: [{ url: "https://example.com/news", title: "News" }],
-      usage: { inputTokens: 10, outputTokens: 4, totalTokens: 14 },
     });
     const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
     expect(body).toMatchObject({

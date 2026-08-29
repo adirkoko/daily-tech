@@ -75,29 +75,16 @@ rendering partial content. Set `SITE_URL` to the production origin for canonical
 
 ## Status
 
-Early implementation stage. `packages/core` provides the metadata contract and full
-artifact validation. `packages/db` now provides transactional migrations and typed
-SQLite persistence for daily metadata, including normalized company, topic, and
-development tables. `packages/pipeline` provides a tested model-native web-research
-architecture, Israel-time windows, story-level evidence validation, conservative
-deterministic deduplication, a strict research-only writing boundary, a bounded
-gap/revision loop, and isolated AI-provider clients. Compensating Markdown + SQLite
-persistence, operational logging, and System-ticket failure reporting are wired.
-`packages/publisher` revalidates ready artifacts, coordinates
-concurrent publication attempts through SQLite leases, and transitions metadata
-atomically; the running service sees published content immediately. `apps/web`
-provides the Hebrew RTL site,
-password-protected admin editor, server-side sessions, CSRF protection, public
-feedback form, feedback inbox, and system-alert view. The remaining release work is
-production hosting and TLS configuration; the in-process scheduler, health checks,
-trusted-proxy handling, and one-service container are implemented.
+The application is implemented and tested end to end: daily research and writing,
+deterministic validation, local publication, the Hebrew public site, secure Admin,
+feedback and in-admin alerts, and the embedded scheduler all run in one service.
+Production hosting, TLS, and persistent-volume configuration remain deployment work.
 
 ## Documentation
 
 - [`docs/architecture.md`](docs/architecture.md) — components and dependency direction.
 - [`docs/data-model.md`](docs/data-model.md) — file layout, brief structure, SQLite schema.
 - [`docs/pipeline.md`](docs/pipeline.md) — how the daily brief is generated.
-- [`docs/provider-smoke-test.md`](docs/provider-smoke-test.md) — run the real pipeline and provider without DB writes or publication.
 - [`docs/website.md`](docs/website.md) — pages, states, calendar, statistics, branding, mobile.
 - [`docs/admin.md`](docs/admin.md) — admin area and security.
 - [`docs/operations.md`](docs/operations.md) — feedback, system notifications, logging.

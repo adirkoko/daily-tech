@@ -19,25 +19,25 @@ describe("database operations adapters", () => {
     database.close();
   });
 
-  it("stores pipeline events as structured operational logs", () => {
+  it("stores pipeline events as structured operational logs, tagged with the stage", () => {
     const logger = new DatabasePipelineLogger(database);
 
     logger.log({
       runId: "run-1",
       date: "2026-08-27",
-      type: "stage_completed",
-      stage: "research",
+      type: "run_completed",
+      stage: "persist",
       occurredAt: "2026-08-28T01:05:00.000Z",
-      details: { candidates: 12 },
+      details: { sourceCount: 12 },
     });
 
     expect(database.operations.listLogs()).toEqual([
       expect.objectContaining({
         runId: "run-1",
         briefDate: "2026-08-27",
-        eventType: "stage_completed",
+        eventType: "run_completed",
         level: "info",
-        details: { candidates: 12 },
+        details: { stage: "persist", sourceCount: 12 },
       }),
     ]);
   });

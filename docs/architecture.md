@@ -14,7 +14,7 @@ serve pages when AI services are unavailable.
 
 | Component | Responsibility |
 | --------- | -------------- |
-| `packages/pipeline` | The daily generation engine: cited model web research, deterministic evidence validation, constrained writing, a narrow gap check, and final artifact validation. `NewsResearchProvider` owns the Daily Tech domain while `AiWebResearchClient` isolates provider-specific web tools, citations, structured output, and usage. |
+| `packages/pipeline` | The daily generation engine: cited model web research, deterministic validation, constrained writing, a narrow gap check, and final artifact creation. `NewsResearchProvider` owns the news domain while `AiWebResearchClient` isolates provider-specific web tools, citations, and structured output. |
 | `packages/core` | Framework-free TypeScript shared by everything: the metadata schema, its allowed values (`status`, `day_intensity`), and the deterministic validators run before a brief is accepted. |
 | `packages/db` | SQLite access: schema and typed read/write functions for day metadata, feedback tickets, logs, and rate-limit counters. |
 | `packages/publisher` | Revalidates a ready artifact, coordinates local publication with a durable SQLite lease, and atomically marks it published. |
@@ -25,7 +25,7 @@ serve pages when AI services are unavailable.
 Dependency direction:
 
 ```
-apps/web           -> core, db
+apps/web           -> core, db, pipeline, publisher
 packages/pipeline  -> core, db
 packages/publisher -> core, db
 packages/db        -> core

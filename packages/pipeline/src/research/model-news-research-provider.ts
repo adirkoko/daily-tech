@@ -1,11 +1,10 @@
-import { isCalendarDate, isUtcTimestamp } from "@daily-tech/core";
+import { isCalendarDate } from "@daily-tech/core";
 
 import {
   parseJsonResult,
   type AiWebResearchClient,
   type AiWebResearchResult,
 } from "../ai/contracts.js";
-import type { ModelUsage, StageResult } from "../types.js";
 import { CitationIndex, canonicalizeUrl } from "./citation-validation.js";
 import {
   EVENT_DATE_EVIDENCE_KINDS,
@@ -54,7 +53,7 @@ export class ModelNewsResearchProvider implements NewsResearchProvider {
     this.#client = options.client;
   }
 
-  async research(request: NewsResearchRequest): Promise<StageResult<ResearchBatch>> {
+  async research(request: NewsResearchRequest): Promise<ResearchBatch> {
     const result = await this.#client.execute({
       instructions: WEB_RESEARCH_PROMPT,
       input: {
@@ -64,13 +63,10 @@ export class ModelNewsResearchProvider implements NewsResearchProvider {
       schemaName: "daily_tech_research",
       schema: RESEARCH_RESPONSE_SCHEMA,
     });
-    return {
-      value: parseBatch(result, "stories", request.scope.maximumStories),
-      usage: usageFrom(result),
-    };
+    return parseBatch(result, "stories", request.scope.maximumStories);
   }
 
-  async findGaps(request: GapResearchRequest): Promise<StageResult<GapResearchBatch>> {
+  async findGaps(request: GapResearchRequest): Promise<GapResearchBatch> {
     const result = await this.#client.execute({
       instructions: WEB_GAP_RESEARCH_PROMPT,
       input: {
@@ -85,11 +81,8 @@ export class ModelNewsResearchProvider implements NewsResearchProvider {
     });
     const batch = parseBatch(result, "missingStories", request.maximumMissingStories);
     return {
-      value: {
-        missingStories: batch.stories,
-        rejectedStories: batch.rejectedStories,
-      },
-      usage: usageFrom(result),
+      missingStories: batch.stories,
+      rejectedStories: batch.rejectedStories,
     };
   }
 }
@@ -147,7 +140,6 @@ function parseStory(
   if (!isCalendarDate(occurredOn)) {
     throw new TypeError(`${path}.occurredOn must use YYYY-MM-DD format.`);
   }
-  const occurredAt = nullableTimestamp(record.occurredAt, `${path}.occurredAt`);
   const sources = asArray(record.sources, `${path}.sources`).map((source, index) =>
     parseSource(source, `${path}.sources[${index}]`, citations),
   );
@@ -188,7 +180,6 @@ function parseStory(
     ) as ResearchCategory,
     importance: asImportance(record.importance, `${path}.importance`),
     occurredOn,
-    occurredAt,
     eventDateEvidence: {
       eventDate: evidenceDate,
       kind: evidenceKind,
@@ -210,21 +201,11 @@ function parseSource(
   citations: CitationIndex,
 ): ResearchSource {
   const record = asRecord(value, path);
-  const publishedOn = nullableCalendarDate(record.publishedOn, `${path}.publishedOn`);
-  const publishedAt = nullableTimestamp(record.publishedAt, `${path}.publishedAt`);
-  const timestampDate = publishedAt?.slice(0, 10) ?? null;
-  if (publishedOn !== null && timestampDate !== null && publishedOn !== timestampDate) {
-    throw new TypeError(
-      `${path}.publishedOn must match the UTC calendar date in ${path}.publishedAt; `
-      + `publishedOn=${JSON.stringify(publishedOn)}; publishedAt=${JSON.stringify(publishedAt)}`,
-    );
-  }
   return {
     url: citations.require(asString(record.url, `${path}.url`), `${path}.url`),
     title: asString(record.title, `${path}.title`),
     publisher: asString(record.publisher, `${path}.publisher`),
-    publishedOn: publishedOn ?? timestampDate,
-    publishedAt,
+    publishedOn: nullableCalendarDate(record.publishedOn, `${path}.publishedOn`),
     type: asEnum(record.type, SOURCE_TYPES, `${path}.type`) as SourceType,
   };
 }
@@ -233,15 +214,6 @@ function serializeWindow(context: NewsResearchRequest["context"]): Record<string
   return {
     date: context.window.date,
     timeZone: context.window.timeZone,
-    start: context.window.start.toISOString(),
-    endExclusive: context.window.endExclusive.toISOString(),
-  };
-}
-
-function usageFrom(result: AiWebResearchResult): ModelUsage {
-  return {
-    ...result.usage,
-    webSearchCalls: result.webSearchCalls,
   };
 }
 
@@ -272,17 +244,6 @@ function asString(value: unknown, path: string): string {
 
 function nullableString(value: unknown, path: string): string | null {
   return value === null ? null : asString(value, path);
-}
-
-function nullableTimestamp(value: unknown, path: string): string | null {
-  if (value === null) return null;
-  const timestamp = asString(value, path);
-  if (!isUtcTimestamp(timestamp)) {
-    throw new TypeError(
-      `${path} must be an ISO UTC timestamp; value=${JSON.stringify(timestamp)}`,
-    );
-  }
-  return timestamp;
 }
 
 function nullableCalendarDate(value: unknown, path: string): string | null {

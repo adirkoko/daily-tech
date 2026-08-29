@@ -1,77 +1,50 @@
 # Operations
 
-Covers user feedback, system notifications, and logging.
+## Feedback
 
-> **Implementation status:** implemented end to end. Structured logs, public feedback,
-> the admin inbox, System alerts, ticket resolution, and rate limiting share SQLite.
+The public feedback form accepts:
 
-## Feedback form
+- A required, length-limited title.
+- An optional name.
+- A category.
+- A body limited by characters and lines.
 
-A simple contact form on the site. Fields:
+Submissions are limited to three per caller within a 12-hour fixed window. The window
+duration is configurable. Rate-limit keys use a one-way caller hash; raw IP addresses
+are not stored.
 
-- **Title** — required, short, single line, character-limited.
-- **Name** — optional.
-- **Category** — chosen from a list.
-- **Body** — limited in characters and number of lines.
+`/admin/feedback` lists submissions and lets the operator resolve open tickets.
+Ticket categories are `general`, `correction`, `suggestion`, and `system`; statuses
+are `open` and `resolved`.
 
-Rate limit: up to **3 submissions per IP within a 12-hour window**. Counters reset on
-a fixed time window, not a per-user timer.
+## System alerts
 
-## Admin feedback inbox
+Material generation, publication, scheduler, or provider failures create a `system`
+ticket. `/admin/alerts` combines those tickets with recent error-level operational
+logs.
 
-After login, `/admin/feedback` lists reader submissions and lets the operator mark an
-open ticket resolved. `/admin/alerts` separately highlights System tickets and recent
-error-level operational logs.
-
-## System tickets
-
-Material system failures are also recorded as an automated ticket in the **System**
-category, which carries a dedicated color or marking so it stands out. Examples:
-
-- Brief-generation failure.
-- Publishing failure.
-- Web-research provider failure.
-- Any other failure needing the admin's attention.
-
-The Admin alert center is the only notification channel in this architecture. There
-is no email, Telegram, Slack, or other outbound incident-notification dependency.
+Admin is the only incident-notification channel. The application has no email,
+Telegram, Slack, webhook, or other outbound alert integration.
 
 ## Logging
 
-Each daily run records at least:
+Each generation run records one terminal event:
 
-- Start and end time of the run.
-- Number of cited research sources.
-- Number of stories accepted or rejected by evidence validation.
-- Number of developments that entered the brief.
-- Whether the gap check found a significant missing story.
-- How many revision rounds ran.
-- Whether validation passed.
-- Whether publishing succeeded.
-- Errors that occurred.
-- AI model usage cost for the run.
+- `run_completed` with the final status and accepted-research source count.
+- `run_failed` with the failing stage and error message; the same failure also creates
+  a System ticket.
 
-Outside the daily run, the log also records admin actions, login attempts, feedback
-submissions, system tickets, and every publication attempt. Publication logs distinguish
-start, status transition, local completion, overlap/no-op, and failure.
-The embedded scheduler additionally records claimed, completed, and failed generation
-and publication jobs. Its durable terminal state prevents repeated execution after a
-restart.
+The pipeline does not write per-stage events or maintain local token/cost accounting.
+Provider usage remains available through the provider's own reporting.
 
-The AI cost figure depends on the provider returning usage / token counts through the
-OpenAI-compatible layer, which surfaces them to the caller. Logs are stored in the
-SQLite `operational_logs` table as structured JSON details plus indexed run, date,
-severity, and timestamp columns.
+Operational logs also cover Admin actions, login attempts, feedback handling,
+publication attempts, and scheduler claims/completions/failures. Publication events
+distinguish successful transitions, no-ops caused by an existing publication or
+active lease, and failures.
 
-Feedback and automated System tickets are stored in `feedback_tickets`. Categories
-are `general`, `correction`, `suggestion`, and `system`; statuses are `open` and
-`resolved`. Fixed-window counters live in `rate_limit_counters`, keyed by a one-way
-caller hash rather than a raw IP address.
+Logs are stored in `operational_logs` as structured JSON details with indexed run,
+date, severity, and timestamp fields. Feedback and System tickets live in
+`feedback_tickets`; fixed-window counters live in `rate_limit_counters`.
 
-## AI usage budget
-
-The daily model budget — web tool calls, model requests, revision rounds, or a token
-budget — is not fixed in the first version. It can later become an explicit system
-setting. An ordinary non-empty run uses one Research request, one Draft request, and
-one Gap Check request. Quiet days skip Draft; each justified revision adds one
-Revision request and one new Gap Check.
+For pipeline-specific failure diagnostics, see
+[`pipeline.md`](pipeline.md#failures-and-diagnostics).

@@ -1,66 +1,79 @@
 # @daily-tech/pipeline
 
-The daily brief generation engine for Daily Tech.
+Generates one cited, validated Hebrew technology brief for the previous Israel
+calendar day.
 
-## Architecture
+The package coordinates model-native web research, story-level validation,
+code-assigned IDs, structured writing, one narrow Gap Check, optional Revision, final
+Markdown rendering, and persistence. The full stage contract is documented in
+[`docs/pipeline.md`](../../docs/pipeline.md).
 
-The production path is deliberately singular:
+## Boundaries
 
-```text
-Model Web Research
-  -> story-level event-date evidence validation
-  -> conservative deterministic deduplication and code-assigned IDs
-  -> constrained Draft
-  -> deterministic draft validation
-  -> narrow Model Web Gap Check
-  -> optional Revision + another Gap Check
-  -> final artifact validation
-  -> Markdown + SQLite persistence as status=ready
+- `NewsResearchProvider` owns research scope, significance, stories, and Gap Check.
+- `AiWebResearchClient` owns provider web-search tools, structured output, and
+  machine-readable citations.
+- `BriefWriter` writes only from accepted `ResearchedStory[]` and cannot search.
+- `@daily-tech/core` validates the final Markdown and metadata artifact.
+- External research, writing, persistence, logging, and failure reporting are
+  dependency-injected for tests.
+
+## Provider configuration
+
+Copy the example environment file from the repository root:
+
+```powershell
+Copy-Item .env.example .env
 ```
 
-`NewsResearchProvider` owns the news domain, significance threshold, research window,
-stories, and gap question. `AiWebResearchClient` owns provider-specific web tools,
-strict structured output, machine-readable citations, usage, and web-tool cost.
-`BriefWriter` may only reorganize and phrase accepted `ResearchedStory[]`; it may not
-introduce factual details or URLs from outside that input.
+Required:
 
-Citation validation fails closed. A missing citation set or structurally broken
-provider response fails the Research request. A story with an unverifiable source or
-inconsistent event-date evidence is rejected on its own, allowing other valid stories
-to continue. If a non-empty response leaves no valid stories, Research fails. An
-explicitly empty response is a quiet day and skips Draft.
+- `AI_API_KEY`
+- `AI_MODEL`
 
-An ordinary non-empty run makes three model requests: Research, Draft, and Gap Check.
-One justified revision makes five: Research, Draft, Gap Check, Revision, and Gap Check.
-These are outcomes of the required stages, not quotas; quiet days do not make
-artificial writing calls.
+Optional:
 
-## Other guarantees
+- `AI_BASE_URL` — defaults to `https://api.openai.com/v1`.
+- `TECH_BRIEFS_ROOT` — defaults to `tech_briefs` and is used by production generation.
 
-- Previous-day windows use `Asia/Jerusalem`, including DST transition days.
-- Deterministic artifact validation runs through `@daily-tech/core` before persistence.
-- A bounded revision loop prevents uncontrolled cost.
-- Model, token, web-tool, and provider-cost usage is aggregated across the run.
-- A compensating filesystem + SQLite sink restores the prior Markdown file if the
-  metadata transaction fails.
-- Structured logs, failed-day state, and System tickets share SQLite.
+The configured provider must support chat completions for writing and a
+Responses-compatible live web-search endpoint with strict structured output and
+machine-readable URL citations.
 
-## Run locally
-
-Copy `.env.example` to `.env` and configure a provider that supports chat completions,
-Responses-compatible live web research, strict structured output, and
-machine-readable citations. Then run:
+## Production generation
 
 ```sh
 npm run generate
 ```
 
-For a deterministic backfill window, pass an ISO run timestamp. The generated brief
-always covers the previous Israel calendar day:
+The default run covers the previous Israel calendar day and persists a validated
+artifact as `ready`. For deterministic recovery or backfill, provide the instant from
+which that previous-day window is calculated:
 
 ```sh
 npm run generate -- --run-at=2026-08-28T01:00:00.000Z
 ```
 
-External capabilities remain dependency-injected, so research, writing, storage,
-logging, and failure reporting are testable without calling an external API.
+## Real-provider dry run
+
+The dry run uses the same provider and pipeline but does not open SQLite, write the
+production content store, or publish:
+
+```sh
+npm run generate:dry-run -- --date=2026-08-27
+```
+
+The explicit date prevents accidental provider spend for the wrong day. Use
+`--output-root=PATH` to replace the default `tmp/pipeline-dry-run` directory.
+
+A successful run prints `SUCCESS` and the absolute paths of:
+
+```text
+tmp/pipeline-dry-run/daily/2026/august/2026-08-27/2026-08-27-tech_briefs.md
+tmp/pipeline-dry-run/meta/2026-08-27-database-write.yaml
+```
+
+The Markdown is the production-shaped artifact. The YAML mirrors the values that
+would be persisted for the run, excluding database-generated IDs. On failure the
+command exits non-zero and prints the failing stage, message, and deterministic
+validation issues when available.

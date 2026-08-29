@@ -12,16 +12,6 @@ export class ArtifactValidationError extends Error {
   }
 }
 
-export class RevisionLimitExceededError extends Error {
-  readonly revisionRounds: number;
-
-  constructor(revisionRounds: number) {
-    super(`Brief was not approved after ${revisionRounds} revision rounds.`);
-    this.name = "RevisionLimitExceededError";
-    this.revisionRounds = revisionRounds;
-  }
-}
-
 export class PipelineRunError extends Error {
   readonly stage: PipelineStage;
   readonly reportingError: unknown;

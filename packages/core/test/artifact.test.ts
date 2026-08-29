@@ -61,7 +61,7 @@ describe("validateBriefArtifact", () => {
     const result = validateBriefArtifact({
       filePath:
         "tech_briefs/daily/2026/august/2026-08-28/2026-08-28-tech_briefs.md",
-      content: validMarkdown.replace("### כלי הפיתוח קיבל עדכון", "כלי הפיתוח קיבל עדכון"),
+      content: validMarkdown.replace("## 2. כלי הפיתוח קיבל עדכון", "כלי הפיתוח קיבל עדכון"),
       metadata: validMetadata,
     });
 

@@ -3,15 +3,25 @@ import { dirname, join } from "node:path";
 
 import { expectedBriefRelativePath, type DayMetadata } from "@daily-tech/core";
 
-export const validMarkdown = `# Daily Tech — 27 באוגוסט 2026
+export const validMarkdown = `# עדכון טכנולוגי יומי — 27 באוגוסט 2026
+
+## תמצית היום
 
 יום עם התפתחות חשובה אחת.
 
-## ההתפתחויות המשמעותיות
+## 1. מודל חדש הושק
 
-### מודל חדש הושק
+### מה השתנה
 
-המודל זמין למפתחים. [מקור](https://example.com/model)
+המודל זמין למפתחים.
+
+### מקורות
+
+- [מקור](https://example.com/model)
+
+## שורה תחתונה
+
+יום שקט יחסית עם התפתחות אחת משמעותית.
 `;
 
 export function readyMetadata(overrides: Partial<DayMetadata> = {}): DayMetadata {

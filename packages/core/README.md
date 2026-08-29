@@ -14,10 +14,9 @@ Framework-free TypeScript contracts and deterministic validation for Daily Tech.
 verify UTF-8 before content is accepted. It returns every issue found in one pass,
 using stable machine-readable issue codes and human-readable messages.
 
-Markdown item counts use level-three headings under these level-two sections:
+Markdown item counts recognize two shapes:
 
-- `## ההתפתחויות המשמעותיות`
-- `## שווה לעקוב`
-
-English aliases are accepted, and lower-level Markdown inspection can receive custom
-headings when required.
+- A significant development is its own numbered level-two heading, e.g. `## 1. Title`.
+- A worth-watching item is a level-three heading under `## שווה לעקוב` (the English
+  alias `## Worth watching` is also accepted). Lower-level Markdown inspection can
+  receive a custom heading when required.

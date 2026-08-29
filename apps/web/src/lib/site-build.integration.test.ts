@@ -194,7 +194,7 @@ describe("standalone site service", () => {
       });
       expect(rejectedEdit.status).toBe(403);
 
-      const updatedMarkdown = "# Updated brief\n\n## Meaningful developments\n\n### Updated integration item\n\n[Source](https://example.com/updated)";
+      const updatedMarkdown = "# Updated brief\n\n## 1. Updated integration item\n\n[Source](https://example.com/updated)";
       const savedEdit = await fetch(`${origin}/api/admin/briefs/${day.date}`, {
         method: "POST",
         redirect: "manual",

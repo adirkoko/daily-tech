@@ -11,7 +11,6 @@ describe("loadPipelineEnvironment", () => {
         AI_API_KEY: "ai-key",
         AI_MODEL: "model-name",
         TECH_BRIEFS_ROOT: "custom-content",
-        PIPELINE_MAX_REVISION_ROUNDS: "2",
       }),
     ).toEqual({
       aiApiKey: "ai-key",
@@ -20,18 +19,10 @@ describe("loadPipelineEnvironment", () => {
       contentRoot: resolve("custom-content"),
       dailyStorageRoot: resolve("custom-content", "daily"),
       databaseFile: resolve("custom-content", "meta", "tech_briefs.db"),
-      maxRevisionRounds: 2,
     });
   });
 
-  it("rejects missing secrets and invalid safety limits", () => {
+  it("rejects missing secrets", () => {
     expect(() => loadPipelineEnvironment({})).toThrow(/AI_API_KEY/u);
-    expect(() =>
-      loadPipelineEnvironment({
-        AI_API_KEY: "key",
-        AI_MODEL: "model",
-        PIPELINE_MAX_REVISION_ROUNDS: "4",
-      }),
-    ).toThrow(RangeError);
   });
 });

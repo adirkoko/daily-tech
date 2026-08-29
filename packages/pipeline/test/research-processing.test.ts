@@ -82,8 +82,36 @@ describe("deterministic research processing", () => {
 
     expect(result.stories).toHaveLength(1);
     expect(result.stories[0]?.id).toBe("story-valid");
-    expect(result.rejectedStories).toHaveLength(1);
-    expect(result.rejectedStories[0]?.title).toBe(wrongDay.title);
+  });
+
+  it("reports index, title, and reason for every story when the whole batch is rejected", () => {
+    const wrongDay = {
+      ...firstStoryInput,
+      eventDateEvidence: {
+        ...firstStoryInput.eventDateEvidence,
+        eventDate: "2026-08-26",
+      },
+    };
+    const tooMinor = { ...secondStoryInput, importance: 1 as const };
+    const attempt = (): unknown => finalizeResearchBatch(
+      { stories: [wrongDay, tooMinor], rejectedStories: [] },
+      context,
+      3,
+      ids("unused", "unused"),
+    );
+
+    expect(attempt).toThrow(ResearchProcessingError);
+    expect(attempt).toThrow(/index=0; title=.*index=1; title=/su);
+    try {
+      attempt();
+      throw new Error("finalizeResearchBatch should have thrown ResearchProcessingError.");
+    } catch (error) {
+      expect(error).toBeInstanceOf(ResearchProcessingError);
+      expect((error as InstanceType<typeof ResearchProcessingError>).rejectedStories).toEqual([
+        { index: 0, title: wrongDay.title, reason: expect.any(String) },
+        { index: 1, title: tooMinor.title, reason: expect.any(String) },
+      ]);
+    }
   });
 
   it("fails closed when code-generated story IDs collide", () => {

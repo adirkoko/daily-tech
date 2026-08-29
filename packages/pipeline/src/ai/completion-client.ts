@@ -140,17 +140,9 @@ function parseCompletionPayload(payload: unknown): AiCompletion {
   if (typeof message.content !== "string") {
     throw new InvalidAiResponseError("AI response message content must be a string.");
   }
-  const usage = isRecord(root.usage) ? root.usage : {};
-  const inputTokens = nonNegativeNumber(usage.prompt_tokens);
-  const outputTokens = nonNegativeNumber(usage.completion_tokens);
   return {
     content: message.content,
     model: typeof root.model === "string" ? root.model : "unknown",
-    usage: {
-      inputTokens,
-      outputTokens,
-      totalTokens: nonNegativeNumber(usage.total_tokens, inputTokens + outputTokens),
-    },
   };
 }
 
@@ -161,10 +153,4 @@ function asRecord(value: unknown, path: string): Record<string, unknown> {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function nonNegativeNumber(value: unknown, fallback = 0): number {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0
-    ? value
-    : fallback;
 }

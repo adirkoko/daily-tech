@@ -1,4 +1,4 @@
-import type { PipelineContext, StageResult } from "../types.js";
+import type { PipelineContext } from "../types.js";
 import type { BriefDraft } from "../writing/contracts.js";
 
 export const RESEARCH_CATEGORIES = [
@@ -36,10 +36,8 @@ export interface ResearchSource {
   readonly url: string;
   readonly title: string;
   readonly publisher: string;
-  /** Calendar publication date when the source exposes date precision only. */
+  /** The source's own publication date; null when none is reliably known. */
   readonly publishedOn: string | null;
-  /** Exact UTC publication timestamp; null when the source does not expose a time. */
-  readonly publishedAt: string | null;
   readonly type: SourceType;
 }
 
@@ -59,8 +57,8 @@ export interface ResearchStoryInput {
   readonly availability: string | null;
   readonly category: ResearchCategory;
   readonly importance: Importance;
+  /** The calendar date (YYYY-MM-DD) the event belongs to. No time of day is tracked. */
   readonly occurredOn: string;
-  readonly occurredAt: string | null;
   readonly eventDateEvidence: EventDateEvidence;
   readonly companies: readonly string[];
   readonly topics: readonly string[];
@@ -108,8 +106,8 @@ export interface GapResearchRequest {
 }
 
 export interface NewsResearchProvider {
-  research(request: NewsResearchRequest): Promise<StageResult<ResearchBatch>>;
-  findGaps(request: GapResearchRequest): Promise<StageResult<GapResearchBatch>>;
+  research(request: NewsResearchRequest): Promise<ResearchBatch>;
+  findGaps(request: GapResearchRequest): Promise<GapResearchBatch>;
 }
 
 export interface StoryIdFactory {

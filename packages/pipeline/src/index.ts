@@ -26,7 +26,6 @@ export { createProductionPipeline, type ProductionPipelineOptions } from "./fact
 export {
   ArtifactValidationError,
   PipelineRunError,
-  RevisionLimitExceededError,
 } from "./errors.js";
 export {
   DailyBriefPipeline,
@@ -80,7 +79,6 @@ export type {
   BriefWindow,
   Clock,
   FailureReporter,
-  ModelUsage,
   PipelineContext,
   PipelineEventType,
   PipelineFailure,
@@ -88,8 +86,6 @@ export type {
   PipelineLogger,
   PipelineRunResult,
   PipelineStage,
-  PipelineUsage,
-  StageResult,
 } from "./types.js";
 export {
   DraftResponseValidationError,
@@ -103,9 +99,13 @@ export {
 export type {
   BriefDraft,
   BriefWriter,
+  DraftDevelopment,
+  DraftSourceCitation,
+  DraftWorthWatchingItem,
   GeneratedDayMetadata,
   ModelBriefWriterOptions,
   RevisionRequest,
 } from "./writing/contracts.js";
+export { renderBriefMarkdown } from "./writing/render-markdown.js";
 export { previousIsraelDayWindow } from "./window.js";
 export { runPipelineCli } from "./cli.js";

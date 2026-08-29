@@ -31,9 +31,6 @@ describe("database migrations", () => {
       .map((row) => row.name);
     expect(tables).toEqual([
       "admin_sessions",
-      "daily_brief_companies",
-      "daily_brief_developments",
-      "daily_brief_topics",
       "daily_briefs",
       "feedback_tickets",
       "operational_logs",
@@ -70,39 +67,64 @@ describe("database migrations", () => {
     );
   });
 
-  it("enforces status and foreign-key constraints in SQLite", () => {
+  it("enforces the status and JSON-array constraints on daily_briefs", () => {
     database = new Database(":memory:");
-    database.pragma("foreign_keys = ON");
     runMigrations(database);
+    const insert = database.prepare(
+      `
+        INSERT INTO daily_briefs (
+          date, summary, significant_items, worth_watching_items,
+          day_intensity, companies, topics, developments, status, source_count, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+    );
 
     expect(() =>
-      database!
-        .prepare(
-          `
-            INSERT INTO daily_briefs (
-              date, summary, significant_items, worth_watching_items,
-              day_intensity, status, source_count, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-          `,
-        )
-        .run(
-          "2026-08-27",
-          "Summary",
-          0,
-          0,
-          "minimal",
-          "archived",
-          0,
-          "2026-08-28T01:00:00.000Z",
-        ),
+      insert.run(
+        "2026-08-27",
+        "Summary",
+        0,
+        0,
+        "minimal",
+        "[]",
+        "[]",
+        "[]",
+        "archived",
+        0,
+        "2026-08-28T01:00:00.000Z",
+      ),
     ).toThrow();
 
     expect(() =>
-      database!
-        .prepare(
-          "INSERT INTO daily_brief_topics (day_date, position, topic) VALUES (?, ?, ?)",
-        )
-        .run("2026-08-27", 0, "AI"),
+      insert.run(
+        "2026-08-27",
+        "Summary",
+        0,
+        0,
+        "minimal",
+        "not json",
+        "[]",
+        "[]",
+        "ready",
+        0,
+        "2026-08-28T01:00:00.000Z",
+      ),
+    ).toThrow();
+
+    expect(() =>
+      insert.run(
+        "2026-08-27",
+        "Summary",
+        0,
+        0,
+        "minimal",
+        '{"not":"an array"}',
+        "[]",
+        "[]",
+        "ready",
+        0,
+        "2026-08-28T01:00:00.000Z",
+      ),
     ).toThrow();
   });
 });

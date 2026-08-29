@@ -2,10 +2,13 @@ import { isDayIntensity } from "@daily-tech/core";
 
 import { parseJsonResult, type AiCompletion } from "../ai/contracts.js";
 import type { ResearchedStory } from "../research/contracts.js";
-import type { ModelUsage, PipelineContext, StageResult } from "../types.js";
+import type { PipelineContext } from "../types.js";
 import type {
   BriefDraft,
   BriefWriter,
+  DraftDevelopment,
+  DraftSourceCitation,
+  DraftWorthWatchingItem,
   GeneratedDayMetadata,
   ModelBriefWriterOptions,
   RevisionRequest,
@@ -46,7 +49,7 @@ export class ModelBriefWriter implements BriefWriter {
   async write(
     context: PipelineContext,
     stories: readonly ResearchedStory[],
-  ): Promise<StageResult<BriefDraft>> {
+  ): Promise<BriefDraft> {
     if (stories.length === 0) throw new TypeError("ModelBriefWriter requires at least one story.");
     return this.#complete(DRAFT_PROMPT, {
       window: serializeWindow(context),
@@ -54,7 +57,7 @@ export class ModelBriefWriter implements BriefWriter {
     });
   }
 
-  async revise(request: RevisionRequest): Promise<StageResult<BriefDraft>> {
+  async revise(request: RevisionRequest): Promise<BriefDraft> {
     if (request.missingStories.length === 0) {
       throw new TypeError("Revision requires at least one missing story.");
     }
@@ -66,7 +69,7 @@ export class ModelBriefWriter implements BriefWriter {
     });
   }
 
-  async #complete(prompt: string, input: unknown): Promise<StageResult<BriefDraft>> {
+  async #complete(prompt: string, input: unknown): Promise<BriefDraft> {
     const completion = await this.#client.complete({
       messages: [
         { role: "system", content: prompt },
@@ -79,7 +82,7 @@ export class ModelBriefWriter implements BriefWriter {
       },
       ...(this.#temperature === undefined ? {} : { temperature: this.#temperature }),
     });
-    return { value: parseDraft(completion), usage: completionUsage(completion) };
+    return parseDraft(completion);
   }
 }
 
@@ -110,23 +113,62 @@ function parseDraft(completion: AiCompletion): BriefDraft {
       developments: asStringArray(metadata.developments, "metadata.developments"),
     };
     return {
-      markdown: asString(record.markdown, "markdown"),
-      includedStoryIds: asStringArray(record.included_story_ids, "included_story_ids"),
+      dayOverview: asString(record.day_overview, "day_overview"),
+      developments: asArray(record.developments, "developments").map((item, index) =>
+        asDevelopment(item, `developments[${index}]`),
+      ),
+      worthWatching: asArray(record.worth_watching, "worth_watching").map((item, index) =>
+        asWorthWatchingItem(item, `worth_watching[${index}]`),
+      ),
+      bottomLine: asString(record.bottom_line, "bottom_line"),
       metadata: parsedMetadata,
     };
   });
 }
 
-function completionUsage(completion: AiCompletion): ModelUsage {
-  return completion.usage;
+function asDevelopment(value: unknown, path: string): DraftDevelopment {
+  const record = asRecord(value, path);
+  return {
+    storyIds: asStringArray(record.storyIds, `${path}.storyIds`),
+    title: asString(record.title, `${path}.title`),
+    whatChanged: asString(record.whatChanged, `${path}.whatChanged`),
+    whyItMatters: asString(record.whyItMatters, `${path}.whyItMatters`),
+    whatToDoWithIt: asNullableString(record.whatToDoWithIt, `${path}.whatToDoWithIt`),
+    availability: asNullableString(record.availability, `${path}.availability`),
+    sources: asArray(record.sources, `${path}.sources`).map((source, index) =>
+      asSourceCitation(source, `${path}.sources[${index}]`),
+    ),
+  };
+}
+
+function asWorthWatchingItem(value: unknown, path: string): DraftWorthWatchingItem {
+  const record = asRecord(value, path);
+  return {
+    storyIds: asStringArray(record.storyIds, `${path}.storyIds`),
+    title: asString(record.title, `${path}.title`),
+    note: asString(record.note, `${path}.note`),
+    sources: asArray(record.sources, `${path}.sources`).map((source, index) =>
+      asSourceCitation(source, `${path}.sources[${index}]`),
+    ),
+  };
+}
+
+function asSourceCitation(value: unknown, path: string): DraftSourceCitation {
+  const record = asRecord(value, path);
+  return {
+    url: asString(record.url, `${path}.url`),
+    label: asString(record.label, `${path}.label`),
+  };
+}
+
+function asNullableString(value: unknown, path: string): string | null {
+  return value === null ? null : asString(value, path);
 }
 
 function serializeWindow(context: PipelineContext): Record<string, string> {
   return {
     date: context.window.date,
     timeZone: context.window.timeZone,
-    start: context.window.start.toISOString(),
-    endExclusive: context.window.endExclusive.toISOString(),
   };
 }
 
@@ -147,6 +189,11 @@ function asString(value: unknown, path: string): string {
 function asStringArray(value: unknown, path: string): readonly string[] {
   if (!Array.isArray(value)) throw validationError(path, value, "array of non-empty strings");
   return value.map((item, index) => asString(item, `${path}[${index}]`));
+}
+
+function asArray(value: unknown, path: string): readonly unknown[] {
+  if (!Array.isArray(value)) throw validationError(path, value, "array");
+  return value;
 }
 
 function asNonNegativeInteger(value: unknown, path: string): number {

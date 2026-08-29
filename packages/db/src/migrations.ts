@@ -19,6 +19,9 @@ const migrations: readonly Migration[] = [
         day_intensity TEXT NOT NULL CHECK (
           day_intensity IN ('minimal', 'low', 'medium', 'high', 'extreme')
         ),
+        companies TEXT NOT NULL CHECK (json_valid(companies) AND json_type(companies) = 'array'),
+        topics TEXT NOT NULL CHECK (json_valid(topics) AND json_type(topics) = 'array'),
+        developments TEXT NOT NULL CHECK (json_valid(developments) AND json_type(developments) = 'array'),
         status TEXT NOT NULL CHECK (
           status IN ('draft', 'ready', 'published', 'failed')
         ),
@@ -28,35 +31,8 @@ const migrations: readonly Migration[] = [
         updated_at TEXT
       ) STRICT;
 
-      CREATE TABLE daily_brief_companies (
-        day_date TEXT NOT NULL REFERENCES daily_briefs(date) ON DELETE CASCADE,
-        position INTEGER NOT NULL CHECK (position >= 0),
-        company TEXT NOT NULL CHECK (length(trim(company)) > 0),
-        PRIMARY KEY (day_date, company),
-        UNIQUE (day_date, position)
-      ) STRICT;
-
-      CREATE TABLE daily_brief_topics (
-        day_date TEXT NOT NULL REFERENCES daily_briefs(date) ON DELETE CASCADE,
-        position INTEGER NOT NULL CHECK (position >= 0),
-        topic TEXT NOT NULL CHECK (length(trim(topic)) > 0),
-        PRIMARY KEY (day_date, topic),
-        UNIQUE (day_date, position)
-      ) STRICT;
-
-      CREATE TABLE daily_brief_developments (
-        day_date TEXT NOT NULL REFERENCES daily_briefs(date) ON DELETE CASCADE,
-        position INTEGER NOT NULL CHECK (position >= 0),
-        digest TEXT NOT NULL CHECK (length(trim(digest)) > 0),
-        PRIMARY KEY (day_date, position)
-      ) STRICT;
-
       CREATE INDEX daily_briefs_status_date_idx
         ON daily_briefs (status, date DESC);
-      CREATE INDEX daily_brief_companies_company_idx
-        ON daily_brief_companies (company, day_date DESC);
-      CREATE INDEX daily_brief_topics_topic_idx
-        ON daily_brief_topics (topic, day_date DESC);
     `,
   },
   {

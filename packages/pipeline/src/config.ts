@@ -7,21 +7,12 @@ export interface PipelineEnvironmentConfig {
   readonly contentRoot: string;
   readonly dailyStorageRoot: string;
   readonly databaseFile: string;
-  readonly maxRevisionRounds: number;
 }
 
 export function loadPipelineEnvironment(
   environment: NodeJS.ProcessEnv,
 ): PipelineEnvironmentConfig {
   const contentRoot = resolve(environment.TECH_BRIEFS_ROOT ?? "tech_briefs");
-  const maxRevisionRounds = Number(environment.PIPELINE_MAX_REVISION_ROUNDS ?? "3");
-  if (
-    !Number.isInteger(maxRevisionRounds) ||
-    maxRevisionRounds < 1 ||
-    maxRevisionRounds > 3
-  ) {
-    throw new RangeError("PIPELINE_MAX_REVISION_ROUNDS must be 1, 2, or 3.");
-  }
   return {
     aiApiKey: requiredVariable(environment, "AI_API_KEY"),
     aiModel: requiredVariable(environment, "AI_MODEL"),
@@ -29,7 +20,6 @@ export function loadPipelineEnvironment(
     contentRoot,
     dailyStorageRoot: resolve(contentRoot, "daily"),
     databaseFile: resolve(contentRoot, "meta", "tech_briefs.db"),
-    maxRevisionRounds,
   };
 }
 

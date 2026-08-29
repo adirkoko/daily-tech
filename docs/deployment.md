@@ -22,18 +22,25 @@ docker compose up --build
 
 `compose.yaml` contains exactly one application service. Its named `/data` volume is
 the live persistent content store; no backup workflow is included. Compose enables
-the scheduler by default; set `DAILY_TECH_SCHEDULER_ENABLED=false` only when a manual
-run is intentionally required.
+the scheduler by default. Set the Compose input
+`DAILY_TECH_SCHEDULER_ENABLED=false` to disable it; this is passed to the application
+as `SCHEDULER_ENABLED`.
 
 `npm start` reads `.env` and starts `apps/web/dist/server/entry.mjs`. Put an HTTPS
 reverse proxy or load balancer in front of it. The server binds to the runtime's
-standard address defaults. The `TECH_BRIEFS_ROOT` directory must be a private persistent volume;
-both its Markdown files and `meta/tech_briefs.db` must survive releases and restarts.
+standard address defaults. The `TECH_BRIEFS_ROOT` directory must be a private
+persistent volume; both its Markdown files and `meta/tech_briefs.db` must survive
+releases and restarts.
 
-## Required server configuration
+## Server configuration
+
+Required by the application:
 
 - `ADMIN_PASSWORD_HASH` — generated with `npm run admin:hash-password`.
 - `ADMIN_SESSION_SECRET` — unique random value of at least 32 characters.
+
+Set explicitly for production:
+
 - `ADMIN_SECURE_COOKIES=true` — keep enabled in every HTTPS deployment.
 - `SITE_URL` — the public HTTPS origin used for canonical URLs.
 - `TECH_BRIEFS_ROOT` — persistent content/database path; defaults to `tech_briefs`.
@@ -57,10 +64,10 @@ npm run generate
 npm run publish:brief
 ```
 
-The generation job requires `AI_API_KEY`, `AI_MODEL`, and `AI_BASE_URL` from
-`.env.example`. The provider must expose both chat completions for writing and a
-Responses-compatible live web-research endpoint that returns machine-readable source
-citations.
+The generation job requires `AI_API_KEY` and `AI_MODEL`. `AI_BASE_URL` is optional and
+defaults to `https://api.openai.com/v1`. A different provider must expose both chat
+completions for writing and a Responses-compatible live web-research endpoint that
+returns machine-readable source citations.
 The publisher targets the previous Israel calendar day unless `--date=YYYY-MM-DD` is
 provided. It acquires a SQLite lease, revalidates the ready artifact, atomically moves
 it to `published`, and finalizes the publication job locally. The running site sees

@@ -39,9 +39,9 @@ describe("ModelNewsResearchProvider", () => {
       },
     });
 
-    expect(result.value.stories).toHaveLength(1);
-    expect(result.value.rejectedStories).toHaveLength(1);
-    expect(result.value.stories[0]?.title).toBe(firstStoryInput.title);
+    expect(result.stories).toHaveLength(1);
+    expect(result.rejectedStories).toHaveLength(1);
+    expect(result.stories[0]?.title).toBe(firstStoryInput.title);
   });
 
   it("fails the batch when every attempted story is invalid", async () => {
@@ -73,45 +73,13 @@ describe("ModelNewsResearchProvider", () => {
     );
   });
 
-  it("accepts source publication metadata with date-only precision", async () => {
-    const dateOnlySource = {
-      ...firstStoryInput,
-      sources: [{
-        ...firstStoryInput.sources[0],
-        publishedOn: "2026-08-27",
-        publishedAt: null,
-      }],
-    };
-    const provider = new ModelNewsResearchProvider({
-      client: clientReturning({ stories: [dateOnlySource] }, ["https://example.com/model"]),
-    });
-
-    const result = await provider.research({
-      context,
-      scope: {
-        categories: ["ai"],
-        minimumImportance: 3,
-        maximumStories: 10,
-        preferredSourceTypes: ["official_blog"],
-      },
-    });
-
-    expect(result.value.stories[0]?.sources[0]).toMatchObject({
-      publishedOn: "2026-08-27",
-      publishedAt: null,
-    });
-  });
-
-  it("derives publishedOn from an exact UTC publishedAt", async () => {
-    const exactTimestampSource = {
+  it("accepts a null publishedOn", async () => {
+    const undatedSource = {
       ...firstStoryInput,
       sources: [{ ...firstStoryInput.sources[0], publishedOn: null }],
     };
     const provider = new ModelNewsResearchProvider({
-      client: clientReturning(
-        { stories: [exactTimestampSource] },
-        ["https://example.com/model"],
-      ),
+      client: clientReturning({ stories: [undatedSource] }, ["https://example.com/model"]),
     });
 
     const result = await provider.research({
@@ -124,16 +92,16 @@ describe("ModelNewsResearchProvider", () => {
       },
     });
 
-    expect(result.value.stories[0]?.sources[0]?.publishedOn).toBe("2026-08-27");
+    expect(result.stories[0]?.sources[0]?.publishedOn).toBeNull();
   });
 
-  it("rejects inconsistent source publication date precision", async () => {
-    const inconsistentSource = {
+  it("rejects a malformed publishedOn value", async () => {
+    const malformedSource = {
       ...firstStoryInput,
-      sources: [{ ...firstStoryInput.sources[0], publishedOn: "2026-08-26" }],
+      sources: [{ ...firstStoryInput.sources[0], publishedOn: "27/08/2026" }],
     };
     const provider = new ModelNewsResearchProvider({
-      client: clientReturning({ stories: [inconsistentSource] }, ["https://example.com/model"]),
+      client: clientReturning({ stories: [malformedSource] }, ["https://example.com/model"]),
     });
 
     await expect(provider.research({
@@ -145,29 +113,7 @@ describe("ModelNewsResearchProvider", () => {
         preferredSourceTypes: ["official_blog"],
       },
     })).rejects.toThrow(
-      'publishedOn="2026-08-26"; publishedAt="2026-08-27T10:00:00.000Z"',
-    );
-  });
-
-  it("still rejects a date-only value placed in publishedAt", async () => {
-    const dateOnlySource = {
-      ...firstStoryInput,
-      sources: [{ ...firstStoryInput.sources[0], publishedAt: "2026-08-27" }],
-    };
-    const provider = new ModelNewsResearchProvider({
-      client: clientReturning({ stories: [dateOnlySource] }, ["https://example.com/model"]),
-    });
-
-    await expect(provider.research({
-      context,
-      scope: {
-        categories: ["ai"],
-        minimumImportance: 3,
-        maximumStories: 10,
-        preferredSourceTypes: ["official_blog"],
-      },
-    })).rejects.toThrow(
-      'stories[0].sources[0].publishedAt must be an ISO UTC timestamp; value="2026-08-27"',
+      'stories[0].sources[0].publishedOn must be a calendar date in YYYY-MM-DD format; value="27/08/2026"',
     );
   });
 
@@ -178,8 +124,10 @@ describe("ModelNewsResearchProvider", () => {
       context,
       existingStories: [],
       draft: {
-        markdown: "# Daily Tech",
-        includedStoryIds: [],
+        dayOverview: "quiet",
+        developments: [],
+        worthWatching: [],
+        bottomLine: "quiet",
         metadata: {
           summary: "quiet",
           significant_items: 0,
@@ -194,7 +142,7 @@ describe("ModelNewsResearchProvider", () => {
       maximumMissingStories: 4,
     });
 
-    expect(result.value.missingStories).toEqual([]);
+    expect(result.missingStories).toEqual([]);
     expect(vi.mocked(client.execute).mock.calls[0]?.[0].instructions).toContain(
       "Do not critique wording",
     );
@@ -210,8 +158,6 @@ function clientReturning(
       content: JSON.stringify(value),
       citations: urls.map((url) => ({ url, title: "Source" })),
       model: "research-model",
-      usage: { inputTokens: 5, outputTokens: 2, totalTokens: 7 },
-      webSearchCalls: 1,
     }),
   };
 }

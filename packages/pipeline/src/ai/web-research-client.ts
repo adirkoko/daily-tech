@@ -35,7 +35,7 @@ export class OpenAiResponsesWebResearchClient implements AiWebResearchClient {
       throw new TypeError("baseUrl must use HTTP or HTTPS.");
     }
     this.#timeoutMs = options.timeoutMs ?? 120_000;
-    this.#maxToolCalls = options.maxToolCalls ?? 12;
+    this.#maxToolCalls = options.maxToolCalls ?? 20;
     if (!Number.isInteger(this.#timeoutMs) || this.#timeoutMs < 1) {
       throw new RangeError("timeoutMs must be a positive integer.");
     }
@@ -164,19 +164,10 @@ export function parseResponsesPayload(payload: unknown): AiWebResearchResult {
     throw new InvalidAiResponseError("AI web-research response contained no machine-readable citations.");
   }
 
-  const usage = isRecord(root.usage) ? root.usage : {};
-  const inputTokens = nonNegativeNumber(usage.input_tokens);
-  const outputTokens = nonNegativeNumber(usage.output_tokens);
   return {
     content,
     citations: [...citations.values()],
     model: typeof root.model === "string" ? root.model : "unknown",
-    usage: {
-      inputTokens,
-      outputTokens,
-      totalTokens: nonNegativeNumber(usage.total_tokens, inputTokens + outputTokens),
-    },
-    webSearchCalls,
   };
 }
 
@@ -232,10 +223,4 @@ function isHttpUrl(value: string): boolean {
   } catch {
     return false;
   }
-}
-
-function nonNegativeNumber(value: unknown, fallback = 0): number {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0
-    ? value
-    : fallback;
 }

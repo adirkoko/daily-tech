@@ -20,17 +20,17 @@ export function representedByExistingStory(
   return existingStories.some((existing) => sameHighConfidenceEvent(existing, candidate));
 }
 
+/**
+ * Deliberately the only "clear duplicate" code can prove without judgment: the
+ * same cited source. Matching by title/company/category similarity is semantic
+ * deduplication, which the research prompt already asks the model to do.
+ */
 export function sameHighConfidenceEvent(
   first: ResearchStoryInput,
   second: ResearchStoryInput,
 ): boolean {
   const firstUrls = new Set(first.sources.map(({ url }) => canonicalizeUrl(url)));
-  if (second.sources.some(({ url }) => firstUrls.has(canonicalizeUrl(url)))) return true;
-  if (first.occurredOn !== second.occurredOn || first.category !== second.category) return false;
-  const firstCompanies = normalizedSet(first.companies);
-  const secondCompanies = normalizedSet(second.companies);
-  if (firstCompanies.size === 0 || !setsEqual(firstCompanies, secondCompanies)) return false;
-  return tokenSimilarity(first.title, second.title) >= 0.9;
+  return second.sources.some(({ url }) => firstUrls.has(canonicalizeUrl(url)));
 }
 
 function mergeStories(
@@ -68,23 +68,6 @@ function uniqueStrings(values: readonly string[]): readonly string[] {
   const byNormalized = new Map<string, string>();
   values.forEach((value) => byNormalized.set(normalize(value), value));
   return [...byNormalized.values()];
-}
-
-function normalizedSet(values: readonly string[]): ReadonlySet<string> {
-  return new Set(values.map(normalize).filter(Boolean));
-}
-
-function setsEqual(first: ReadonlySet<string>, second: ReadonlySet<string>): boolean {
-  return first.size === second.size && [...first].every((value) => second.has(value));
-}
-
-function tokenSimilarity(first: string, second: string): number {
-  const firstTokens = normalizedSet(first.split(/\s+/u));
-  const secondTokens = normalizedSet(second.split(/\s+/u));
-  if (firstTokens.size === 0 || secondTokens.size === 0) return 0;
-  const intersection = [...firstTokens].filter((token) => secondTokens.has(token)).length;
-  const union = new Set([...firstTokens, ...secondTokens]).size;
-  return intersection / union;
 }
 
 function normalize(value: string): string {

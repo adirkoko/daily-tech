@@ -11,6 +11,7 @@ import {
   DatabaseFailureReporter,
   DatabasePipelineLogger,
   FileSystemDatabaseArtifactSink,
+  renderBriefMarkdown,
   type BriefWriter,
   type NewsResearchProvider,
 } from "../src/index.js";
@@ -30,20 +31,11 @@ describe("daily pipeline end to end", () => {
     createdPaths.push(storageRoot);
     const database = DailyTechDatabase.open({ filename: ":memory:" });
     const researchProvider: NewsResearchProvider = {
-      research: vi.fn().mockResolvedValue({
-        value: { stories: [firstStoryInput], rejectedStories: [] },
-        usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15, webSearchCalls: 1 },
-      }),
-      findGaps: vi.fn().mockResolvedValue({
-        value: { missingStories: [], rejectedStories: [] },
-        usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15, webSearchCalls: 1 },
-      }),
+      research: vi.fn().mockResolvedValue({ stories: [firstStoryInput], rejectedStories: [] }),
+      findGaps: vi.fn().mockResolvedValue({ missingStories: [], rejectedStories: [] }),
     };
     const writer: BriefWriter = {
-      write: vi.fn().mockResolvedValue({
-        value: oneItemDraft,
-        usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
-      }),
+      write: vi.fn().mockResolvedValue(oneItemDraft),
       revise: vi.fn(),
     };
     const pipeline = new DailyBriefPipeline(
@@ -69,13 +61,18 @@ describe("daily pipeline end to end", () => {
         "2026-08-27",
         "2026-08-27-tech_briefs.md",
       );
-      expect(await readFile(storedPath, "utf8")).toBe(oneItemDraft.markdown);
+      expect(await readFile(storedPath, "utf8")).toBe(
+        renderBriefMarkdown("2026-08-27", oneItemDraft),
+      );
       expect(database.getDay("2026-08-27")).toMatchObject({
         status: "ready",
         source_count: 1,
       });
-      expect(result.modelRequests).toBe(3);
-      expect(database.operations.listLogs({ runId: "integration-run" }).length).toBeGreaterThan(0);
+      expect(result.artifact.metadata.status).toBe("ready");
+      const logs = database.operations.listLogs({ runId: "integration-run" });
+      expect(logs).toEqual([
+        expect.objectContaining({ eventType: "run_completed" }),
+      ]);
       expect(database.operations.listTickets({ category: "system" })).toHaveLength(0);
     } finally {
       database.close();

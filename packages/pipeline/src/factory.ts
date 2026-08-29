@@ -14,7 +14,6 @@ export interface ProductionPipelineOptions {
   readonly webResearchClient: AiWebResearchClient;
   readonly database: DailyTechDatabase;
   readonly storageRoot: string;
-  readonly maxRevisionRounds?: number;
   readonly clock?: Clock;
   readonly createRunId?: () => string;
   readonly storyIds?: StoryIdFactory;
@@ -23,9 +22,6 @@ export interface ProductionPipelineOptions {
 export function createProductionPipeline(options: ProductionPipelineOptions): DailyBriefPipeline {
   const pipelineOptions: DailyBriefPipelineOptions = {
     storageRoot: options.storageRoot,
-    ...(options.maxRevisionRounds === undefined
-      ? {}
-      : { maxRevisionRounds: options.maxRevisionRounds }),
   };
   return new DailyBriefPipeline(
     {

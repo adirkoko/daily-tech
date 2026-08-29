@@ -1,6 +1,7 @@
 import Database from "better-sqlite3";
 
 import {
+  VALIDATION_CODES,
   isBriefStatus,
   isCalendarDate,
   isUtcTimestamp,
@@ -90,54 +91,54 @@ export class DailyTechDatabase {
     }
 
     const metadata = validation.data;
-    this.#database.exec("BEGIN IMMEDIATE");
-    try {
-      this.#database
-        .prepare(
-          `
-            INSERT INTO daily_briefs (
-              date,
-              summary,
-              significant_items,
-              worth_watching_items,
-              day_intensity,
-              status,
-              source_count,
-              created_at,
-              published_at,
-              updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT (date) DO UPDATE SET
-              summary = excluded.summary,
-              significant_items = excluded.significant_items,
-              worth_watching_items = excluded.worth_watching_items,
-              day_intensity = excluded.day_intensity,
-              status = excluded.status,
-              source_count = excluded.source_count,
-              created_at = excluded.created_at,
-              published_at = excluded.published_at,
-              updated_at = excluded.updated_at
-          `,
-        )
-        .run(
-          metadata.date,
-          metadata.summary,
-          metadata.significant_items,
-          metadata.worth_watching_items,
-          metadata.day_intensity,
-          metadata.status,
-          metadata.source_count,
-          metadata.created_at,
-          metadata.published_at,
-          metadata.updated_at,
-        );
-
-      this.replaceRelatedValues(metadata);
-      this.#database.exec("COMMIT");
-    } catch (error) {
-      this.#database.exec("ROLLBACK");
-      throw error;
-    }
+    this.#database
+      .prepare(
+        `
+          INSERT INTO daily_briefs (
+            date,
+            summary,
+            significant_items,
+            worth_watching_items,
+            day_intensity,
+            companies,
+            topics,
+            developments,
+            status,
+            source_count,
+            created_at,
+            published_at,
+            updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT (date) DO UPDATE SET
+            summary = excluded.summary,
+            significant_items = excluded.significant_items,
+            worth_watching_items = excluded.worth_watching_items,
+            day_intensity = excluded.day_intensity,
+            companies = excluded.companies,
+            topics = excluded.topics,
+            developments = excluded.developments,
+            status = excluded.status,
+            source_count = excluded.source_count,
+            created_at = excluded.created_at,
+            published_at = excluded.published_at,
+            updated_at = excluded.updated_at
+        `,
+      )
+      .run(
+        metadata.date,
+        metadata.summary,
+        metadata.significant_items,
+        metadata.worth_watching_items,
+        metadata.day_intensity,
+        JSON.stringify(metadata.companies),
+        JSON.stringify(metadata.topics),
+        JSON.stringify(metadata.developments),
+        metadata.status,
+        metadata.source_count,
+        metadata.created_at,
+        metadata.published_at,
+        metadata.updated_at,
+      );
 
     return metadata;
   }
@@ -220,78 +221,7 @@ export class DailyTechDatabase {
     return result.changes === 1;
   }
 
-  #loadValues(
-    table: "daily_brief_companies" | "daily_brief_topics" | "daily_brief_developments",
-    valueColumn: "company" | "topic" | "digest",
-    dates: readonly string[],
-  ): ReadonlyMap<string, readonly string[]> {
-    const valuesByDate = new Map<string, string[]>();
-    if (dates.length === 0) {
-      return valuesByDate;
-    }
-
-    const placeholders = dates.map(() => "?").join(", ");
-    const rows = this.#database
-      .prepare(
-        `SELECT day_date, ${valueColumn} AS value FROM ${table} WHERE day_date IN (${placeholders}) ORDER BY day_date, position`,
-      )
-      .all(...dates) as Array<{ day_date: string; value: string }>;
-
-    for (const row of rows) {
-      const date = String(row.day_date);
-      const values = valuesByDate.get(date) ?? [];
-      values.push(String(row.value));
-      valuesByDate.set(date, values);
-    }
-    return valuesByDate;
-  }
-
-  private replaceRelatedValues(metadata: DayMetadata): void {
-    for (const table of [
-      "daily_brief_companies",
-      "daily_brief_topics",
-      "daily_brief_developments",
-    ]) {
-      this.#database.prepare(`DELETE FROM ${table} WHERE day_date = ?`).run(metadata.date);
-    }
-
-    insertPositionedValues(
-      this.#database,
-      "daily_brief_companies",
-      "company",
-      metadata.date,
-      metadata.companies,
-    );
-    insertPositionedValues(
-      this.#database,
-      "daily_brief_topics",
-      "topic",
-      metadata.date,
-      metadata.topics,
-    );
-    insertPositionedValues(
-      this.#database,
-      "daily_brief_developments",
-      "digest",
-      metadata.date,
-      metadata.developments,
-    );
-  }
-
   private hydrateRows(rows: readonly DatabaseRow[]): readonly DayMetadata[] {
-    const dates = rows.map((row) => String(row.date));
-    const companies = this.#loadValues(
-      "daily_brief_companies",
-      "company",
-      dates,
-    );
-    const topics = this.#loadValues("daily_brief_topics", "topic", dates);
-    const developments = this.#loadValues(
-      "daily_brief_developments",
-      "digest",
-      dates,
-    );
-
     return rows.map((row) => {
       const date = String(row.date);
       const candidate = {
@@ -300,9 +230,9 @@ export class DailyTechDatabase {
         significant_items: row.significant_items,
         worth_watching_items: row.worth_watching_items,
         day_intensity: row.day_intensity,
-        companies: companies.get(date) ?? [],
-        topics: topics.get(date) ?? [],
-        developments: developments.get(date) ?? [],
+        companies: parseStringArray(row.companies, date, "companies"),
+        topics: parseStringArray(row.topics, date, "topics"),
+        developments: parseStringArray(row.developments, date, "developments"),
         status: row.status,
         source_count: row.source_count,
         created_at: row.created_at,
@@ -318,17 +248,21 @@ export class DailyTechDatabase {
   }
 }
 
-function insertPositionedValues(
-  database: Database.Database,
-  table: string,
-  valueColumn: string,
-  date: string,
-  values: readonly string[],
-): void {
-  const statement = database.prepare(
-    `INSERT INTO ${table} (day_date, position, ${valueColumn}) VALUES (?, ?, ?)`,
-  );
-  values.forEach((value, position) => statement.run(date, position, value));
+function parseStringArray(value: unknown, date: string, column: string): readonly string[] {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(String(value));
+  } catch (error) {
+    throw new DatabaseIntegrityError(date, [
+      { code: VALIDATION_CODES.INVALID_TYPE, path: column, message: `${column} is not valid JSON.` },
+    ]);
+  }
+  if (!Array.isArray(parsed) || !parsed.every((item) => typeof item === "string")) {
+    throw new DatabaseIntegrityError(date, [
+      { code: VALIDATION_CODES.INVALID_TYPE, path: column, message: `${column} must be a JSON array of strings.` },
+    ]);
+  }
+  return parsed;
 }
 
 function assertDate(value: string, path: string): void {

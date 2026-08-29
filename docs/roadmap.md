@@ -36,7 +36,7 @@ deployment-specific.
 - Calendar with `day_intensity` heatmap.
 - Basic statistics page.
 - Working mobile layout.
-- Automatic deploy to the cloud.
+- Deployable as one production service with persistent local storage.
 - Admin area with manual editing and delete / copy / save.
 - Contact form and admin feedback inbox.
 - System notifications.
@@ -64,13 +64,12 @@ stably.
 
 ## Success metrics
 
-Tracked over time:
+Useful measures after launch:
 
 - Consecutive days running without intervention.
 - Manual fixes needed after publishing.
 - Published items later found to be wrong.
-- Times the gap check caught something significant.
 - Site load time.
 - Returning-visitor rate.
 - Use of the archive, the calendar, and the statistics page.
-- Average cost per daily brief.
+- Provider-reported AI cost per generated brief.

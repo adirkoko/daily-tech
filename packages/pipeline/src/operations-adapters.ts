@@ -26,11 +26,10 @@ export class DatabasePipelineLogger implements PipelineLogger {
       level: event.type === "run_failed" ? "error" : "info",
       message:
         typeof event.details?.message === "string" ? event.details.message : null,
-      ...(event.details === undefined
-        ? {}
-        : {
-            details: event.details as Readonly<Record<string, JsonValue>>,
-          }),
+      details: {
+        stage: event.stage,
+        ...(event.details as Readonly<Record<string, JsonValue>> | undefined),
+      },
       occurredAt: event.occurredAt,
     });
   }

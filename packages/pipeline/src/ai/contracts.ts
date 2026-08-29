@@ -1,5 +1,3 @@
-import type { ModelUsage } from "../types.js";
-
 export interface AiMessage {
   readonly role: "system" | "user" | "assistant";
   readonly content: string;
@@ -22,7 +20,6 @@ export interface AiCompletionRequest {
 export interface AiCompletion {
   readonly content: string;
   readonly model: string;
-  readonly usage: ModelUsage;
 }
 
 export interface AiCompletionClient {
@@ -46,8 +43,6 @@ export interface AiWebResearchResult {
   readonly content: string;
   readonly citations: readonly ProviderCitation[];
   readonly model: string;
-  readonly usage: ModelUsage;
-  readonly webSearchCalls: number;
 }
 
 export interface AiWebResearchClient {

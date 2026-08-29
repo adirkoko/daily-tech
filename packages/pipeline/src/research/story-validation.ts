@@ -1,4 +1,4 @@
-import { isCalendarDate, isUtcTimestamp } from "@daily-tech/core";
+import { isCalendarDate } from "@daily-tech/core";
 
 import type { PipelineContext } from "../types.js";
 import { deduplicateStoryInputs, representedByExistingStory } from "./deduplication.js";
@@ -13,15 +13,18 @@ import type {
 } from "./contracts.js";
 
 export class ResearchProcessingError extends Error {
-  constructor(message: string) {
+  /** Populated only when every story in the batch was rejected; empty otherwise. */
+  readonly rejectedStories: readonly RejectedResearchStory[];
+
+  constructor(message: string, rejectedStories: readonly RejectedResearchStory[] = []) {
     super(message);
     this.name = "ResearchProcessingError";
+    this.rejectedStories = rejectedStories;
   }
 }
 
 export interface ProcessedResearchStories {
   readonly stories: readonly ResearchedStory[];
-  readonly rejectedStories: readonly RejectedResearchStory[];
 }
 
 export function finalizeResearchBatch(
@@ -37,11 +40,9 @@ export function finalizeResearchBatch(
     batch.stories.length + batch.rejectedStories.length,
     deduplicated.length,
     "research",
-  );
-  return {
-    stories: assignIds(deduplicated, storyIds),
     rejectedStories,
-  };
+  );
+  return { stories: assignIds(deduplicated, storyIds) };
 }
 
 export function finalizeGapBatch(
@@ -60,6 +61,7 @@ export function finalizeGapBatch(
     batch.missingStories.length + batch.rejectedStories.length,
     uniqueMissing.length,
     "gap research",
+    rejectedStories,
     batch.missingStories.length > 0 && uniqueMissing.length === 0,
   );
   return {
@@ -68,7 +70,6 @@ export function finalizeGapBatch(
       storyIds,
       new Set(existingStories.map(({ id }) => id)),
     ),
-    rejectedStories,
   };
 }
 
@@ -94,6 +95,12 @@ function validateStories(
   return { stories: accepted, rejectedStories: rejected };
 }
 
+/**
+ * Deliberately narrow: only what code can check without judgment. Evidence
+ * wording quality and not inventing precision are the model's job (see the
+ * research prompt) — `occurredOn`, the calendar day and nothing finer, is the
+ * one hard, unambiguous date check the rest of the system relies on.
+ */
 export function validateStoryEvidence(
   story: ResearchStoryInput,
   context: PipelineContext,
@@ -107,18 +114,6 @@ export function validateStoryEvidence(
   }
   if (story.eventDateEvidence.eventDate !== story.occurredOn) {
     throw new TypeError("Event-date evidence does not match occurredOn.");
-  }
-  if (story.eventDateEvidence.explanation.trim().length < 12) {
-    throw new TypeError("Event-date evidence explanation is too weak.");
-  }
-  if (story.occurredAt !== null) {
-    if (!isUtcTimestamp(story.occurredAt)) {
-      throw new TypeError("Story occurredAt must be an ISO UTC timestamp.");
-    }
-    const time = Date.parse(story.occurredAt);
-    if (time < context.window.start.getTime() || time >= context.window.endExclusive.getTime()) {
-      throw new TypeError("Story occurredAt is outside the exact Israel-time window.");
-    }
   }
   if (story.keyFacts.length === 0) throw new TypeError("Story must include key facts.");
   if (story.sources.length === 0) throw new TypeError("Story must include sources.");
@@ -142,13 +137,32 @@ function assignIds(
   });
 }
 
+/**
+ * Trips only when every story attempted in this batch was rejected. The success path
+ * (some valid stories remain) never sees `rejectedStories` beyond this check — only a
+ * total loss needs the per-story diagnostic, to explain the resulting failure.
+ */
 function assertNotEntirelyRejected(
   attempted: number,
   accepted: number,
   stage: string,
+  rejectedStories: readonly RejectedResearchStory[],
   allowDeduplicatedToZero = false,
 ): void {
   if (attempted > 0 && accepted === 0 && !allowDeduplicatedToZero) {
-    throw new ResearchProcessingError(`Every story from ${stage} was rejected.`);
+    throw new ResearchProcessingError(
+      formatAllRejectedMessage(stage, rejectedStories),
+      rejectedStories,
+    );
   }
+}
+
+function formatAllRejectedMessage(
+  stage: string,
+  rejectedStories: readonly RejectedResearchStory[],
+): string {
+  const details = rejectedStories.map(({ index, title, reason }) =>
+    `  - index=${index}; title=${title === null ? "<missing>" : JSON.stringify(title)}; reason=${reason}`
+  );
+  return [`Every story from ${stage} was rejected:`, ...details].join("\n");
 }

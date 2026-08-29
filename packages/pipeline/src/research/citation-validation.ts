@@ -1,14 +1,5 @@
 import type { ProviderCitation } from "../ai/contracts.js";
 
-const TRACKING_PARAMETERS = new Set([
-  "fbclid",
-  "gclid",
-  "mc_cid",
-  "mc_eid",
-  "ref",
-  "ref_src",
-]);
-
 export class CitationIndex {
   readonly #byUrl: ReadonlyMap<string, ProviderCitation>;
 
@@ -48,6 +39,12 @@ function displayValue(value: string): string {
   return JSON.stringify(shortened);
 }
 
+/**
+ * Deliberately structural only: protocol, host, default port, trailing slash,
+ * fragment. No tracking-parameter stripping — that defends against a superficial
+ * URL mismatch that has no evidence of actually happening, at the cost of a
+ * hand-maintained list that's always incomplete.
+ */
 export function canonicalizeUrl(value: string): string {
   const url = new URL(value);
   if (url.protocol !== "http:" && url.protocol !== "https:") {
@@ -59,12 +56,6 @@ export function canonicalizeUrl(value: string): string {
       (url.protocol === "http:" && url.port === "80")) {
     url.port = "";
   }
-  for (const key of [...url.searchParams.keys()]) {
-    if (key.toLowerCase().startsWith("utm_") || TRACKING_PARAMETERS.has(key.toLowerCase())) {
-      url.searchParams.delete(key);
-    }
-  }
-  url.searchParams.sort();
   if (url.pathname !== "/") url.pathname = url.pathname.replace(/\/+$/u, "");
   return url.toString();
 }

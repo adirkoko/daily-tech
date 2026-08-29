@@ -1,94 +1,132 @@
 # Decisions
 
-A short running list of choices that shape the project, with the reasoning behind
-them, so they are not re-argued later. Not a formal process — new entries are appended
-as decisions are actually made. Unresolved choices live in
-[`deployment.md`](deployment.md#open-questions) and the "open point" notes in other
-docs.
+Durable choices that shape the project. This file records the current decision and
+the reasoning that should survive implementation changes; operational instructions
+belong in the other documents.
 
 ## Astro for the website
 
-The product is a mostly-static content archive. Astro ships zero JS by default, has
-native Markdown handling, and makes the "AI is never on the request path" rule easy to
-hold. Next.js would mean working against the framework for a static content site.
+Daily Tech is primarily a content archive. Astro provides server-rendered pages with
+minimal browser JavaScript, native Markdown support, and a clear boundary that keeps
+AI outside the reader request path.
 
-## TypeScript across the whole repo
+## TypeScript across the repository
 
-One language and toolchain for the site, the DB layer, and the pipeline. The metadata
-schema, the `day_intensity` / `status` enums, and the deterministic validators are
-defined once in `packages/core` and reused everywhere. An OpenAI-compatible client is
-small in TypeScript, so Python's AI ecosystem does not justify a second toolchain.
+The website, pipeline, publisher, and database layer share one language and toolchain.
+Metadata contracts and deterministic validators live in `packages/core` and are reused
+at every boundary.
 
-## Markdown as the source of truth, metadata in SQLite
+## Markdown content with SQLite metadata
 
-The Markdown files stay clean, portable, and hand-editable. SQLite provides type and
-enum enforcement plus fast queries for search, filtering, and the statistics page,
-without re-analyzing the archive with an AI.
+Markdown is the source of truth for each brief: portable, inspectable, and editable
+without proprietary tooling. SQLite stores lifecycle state, queryable metadata,
+operational data, sessions, and scheduler leases.
 
-## Domain research and provider access are separate
+## Model-native research behind a domain boundary
 
-`NewsResearchProvider` owns the Daily Tech domain: the Israel-time window, relevant
-categories, significance threshold, researched stories, and the narrow gap check.
-`AiWebResearchClient` owns provider mechanics: live web-search tools, strict structured
-output, machine-readable citations, usage, and tool cost. The writing client is kept
-separate. This allows provider replacement without reducing research back to raw
-result lists or leaking provider details into business code.
+Research is a high-level operation that returns cited stories, not raw search hits.
+`NewsResearchProvider` owns Daily Tech concepts such as scope, significance, stories,
+and the gap question. `AiWebResearchClient` owns provider mechanics such as web-search
+tools, structured output, and machine-readable citations. This keeps the domain
+independent of a specific AI provider.
 
-## Single repository, workspace-shaped
+## One workspace-shaped repository
 
-`apps/*` and `packages/*` live in one npm workspace. This keeps shared code (`core`)
-and its consumers in one place with one dependency graph and one set of root quality
-commands.
+Applications and packages live in one npm workspace. Shared contracts and their
+consumers therefore use one dependency graph and the same root quality commands.
 
-## Durable publication lease with local-first visibility
+## One application service
 
-Publication is separate from AI generation. A SQLite lease prevents overlapping
-scheduler runs from publishing the same date concurrently and permits recovery after
-a crashed or failed attempt. Once the artifact is revalidated, its status changes
-atomically from `ready` to `published`. The standalone server sees that transition
-immediately, so publication has no external deployment service or outbound trigger.
+The public site, Admin, feedback, alerts, and daily scheduler run in one standalone
+Astro/Node process against one private content store. Generation and publication also
+remain available as local CLI operations for deliberate recovery.
 
-## One HTTP service
+## Embedded scheduler with durable claims
 
-The public site, admin, feedback endpoint, inbox, and system-alert center run under
-one Astro standalone Node process. This avoids separate frontend/backend/admin
-deployments and keeps authentication, content, and operations on one persistent
-SQLite/filesystem boundary. Scheduled generation and publication are operational CLI
-jobs against that same store, not independent network services.
+Generation and publication are scheduled inside the application process. SQLite
+claims make each job/date pair restart-safe, prevent overlapping instances from doing
+the same work, and preserve terminal failures for operator review instead of silently
+repeating AI requests.
 
-## Embedded scheduler with durable daily claims
+## Local publication with a durable lease
 
-Generation and publication run inside the standalone service when scheduling is
-enabled. A generic SQLite job ledger claims each action/date once, recovers expired
-leases, and preserves terminal failures without automatic repeated AI spend. Manual
-CLI commands remain available for deliberate recovery.
+Publication does not trigger an external deployment. The publisher leases the target
+date, revalidates the artifact, and atomically changes its state from `ready` to
+`published`. Because the site reads the local store on demand, the result is visible
+immediately.
 
-## Password-only admin auth
+## Password-only Admin authentication
 
-The admin area is for a single operator. A password with no username, plus per-IP rate
-limiting, is enough and keeps the surface minimal. Secrets stay server-side.
+Admin is designed for one operator. A strong password, server-side sessions, CSRF
+protection, same-origin checks, and rate limiting provide the required boundary
+without introducing user-account management.
 
-## UTC internally, Israel time for content and users
+## UTC internally, Israel time at the product boundary
 
-The system runs in UTC behind the scenes. The content window
-(`00:00–23:59 of the previous day`) and every user-facing time are Israel time.
+Stored timestamps are UTC. Scheduling, research dates, publication dates, and all
+user-facing time use `Asia/Jerusalem`.
 
-## Normalized metadata lists in SQLite
+## JSON columns for metadata lists
 
-Companies, topics, and development digests use child tables rather than JSON columns.
-Each row retains its list position. This makes statistics and filtering directly
-queryable and indexable while preserving the order produced by the pipeline.
+Companies, topics, and development digests are stored as checked JSON arrays on the
+`daily_briefs` row. The dataset grows by one row per day, so separate child tables
+would add joins and ordering columns without a useful scale or integrity benefit.
 
-## better-sqlite3 for database access
+## `better-sqlite3` for database access
 
-The database package uses `better-sqlite3`: its synchronous transaction model fits
-the small, local metadata workload and avoids basing a critical persistence layer on
-Node's still-experimental `node:sqlite` API.
+The workload is small, local, and transaction-oriented. `better-sqlite3` provides a
+simple synchronous transaction model without depending on Node's experimental SQLite
+API.
 
-## Model-native web research
+## Deterministic code validates objective boundaries
 
-Research is one high-level model request that searches the live web, compares sources,
-deduplicates events, ranks significance, and returns factual `ResearchedStory` inputs.
-Provider-returned citation annotations are authoritative; a URL written only inside
-model JSON is rejected. Code validates evidence consistency per story, conservatively
-deduplicates obvious repeats, and assigns internal IDs only afterward.
+Code enforces properties it can establish reliably: schema shape, citation-backed
+URLs, calendar-date and event-evidence consistency, internal IDs, writer source
+boundaries, and final artifact structure. Semantic relevance, factual synthesis,
+confirmation, semantic deduplication, and editorial judgment remain explicit model
+instructions rather than heuristic validators.
+
+Validation fails closed at the narrowest safe boundary. A broken provider response or
+missing citation set fails the research request; an invalid individual story is
+discarded while valid siblings continue.
+
+## The research domain is date-only
+
+Stories use `occurredOn`; sources use nullable `publishedOn`. Both represent calendar
+dates, never inferred timestamps. Source publication metadata does not establish the
+event date, so each story carries separate event-date evidence. A story is omitted
+when the event cannot be placed confidently inside the requested Israel date.
+
+## Structured writing output and deterministic rendering
+
+The writer returns structured brief content and metadata rather than opaque Markdown.
+It retains editorial control over selection, grouping, order, wording, and which
+verified sources to cite. Code verifies story/source boundaries and renders the final
+Markdown structure consistently; it does not make editorial decisions.
+
+## Research gathers; the writer curates
+
+Research returns every story that meets the configured scope and importance threshold,
+up to the current limit. It does not preselect the final edition. The writer decides
+which accepted stories become full developments, forward-looking mentions, or are
+omitted.
+
+## Only confirmed developments are eligible
+
+Research and Gap Check exclude claims supported only by unconfirmed third-party
+reporting. Forward-looking items are eligible only when an authoritative party has
+announced them. `worthWatching` is reserved for genuinely pending developments, not
+as a lower tier for events that already happened.
+
+## One Gap Check and at most one Revision
+
+Each run performs one narrow Gap Check. Significant missing stories trigger one
+Revision followed by deterministic validation; the pipeline does not search again.
+Live search has no natural "nothing else exists" convergence point, so a bounded,
+predictable flow is preferable to a revision loop.
+
+## Minimal pipeline logging
+
+A generation run records one success event or one failure event. Failures also create
+a System ticket in Admin. Per-stage telemetry and duplicate token/cost accounting are
+not maintained locally; provider dashboards remain the source for provider usage.

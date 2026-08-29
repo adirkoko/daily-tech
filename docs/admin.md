@@ -1,8 +1,5 @@
 # Admin & Security
 
-> **Implementation status:** implemented. The admin UI, authentication, server-side
-> sessions, editing actions, feedback inbox, and system alerts run in `apps/web`.
-
 ## Login
 
 The login page is `/admin/login`. Authentication is by **password only**, with no

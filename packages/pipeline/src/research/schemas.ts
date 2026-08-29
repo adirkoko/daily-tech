@@ -11,27 +11,15 @@ const nullableCalendarDate = {
   ],
 } as const;
 
-const nullableUtcTimestamp = {
-  anyOf: [
-    {
-      type: "string",
-      format: "date-time",
-      pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,3})?Z$",
-    },
-    { type: "null" },
-  ],
-} as const;
-
 const sourceSchema = {
   type: "object",
   additionalProperties: false,
-  required: ["url", "title", "publisher", "publishedOn", "publishedAt", "type"],
+  required: ["url", "title", "publisher", "publishedOn", "type"],
   properties: {
     url: { type: "string" },
     title: { type: "string" },
     publisher: { type: "string" },
     publishedOn: nullableCalendarDate,
-    publishedAt: nullableUtcTimestamp,
     type: {
       type: "string",
       enum: ["official_blog", "official_docs", "github", "release_notes", "journalism", "other"],
@@ -44,7 +32,7 @@ const storySchema = {
   additionalProperties: false,
   required: [
     "title", "factualSummary", "whyItMatters", "keyFacts", "availability",
-    "category", "importance", "occurredOn", "occurredAt", "eventDateEvidence",
+    "category", "importance", "occurredOn", "eventDateEvidence",
     "companies", "topics", "sources",
   ],
   properties: {
@@ -59,7 +47,6 @@ const storySchema = {
     },
     importance: { type: "integer", minimum: 1, maximum: 5 },
     occurredOn: { type: "string" },
-    occurredAt: nullableString,
     eventDateEvidence: {
       type: "object",
       additionalProperties: false,

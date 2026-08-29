@@ -3,13 +3,14 @@ import {
   type ValidationIssue,
 } from "./types.js";
 
+/** A significant development is its own numbered level-two heading, e.g. "## 1. Title". */
+const NUMBERED_HEADING_PATTERN = /^\d+\.\s+.+/u;
+
 export const DEFAULT_MARKDOWN_HEADINGS = {
-  significant: ["ההתפתחויות המשמעותיות", "Meaningful developments"],
   worthWatching: ["שווה לעקוב", "Worth watching"],
 } as const;
 
 export interface BriefMarkdownHeadings {
-  readonly significant: readonly string[];
   readonly worthWatching: readonly string[];
 }
 
@@ -24,10 +25,9 @@ export function inspectMarkdownStructure(
   markdown: string,
   headings: BriefMarkdownHeadings = DEFAULT_MARKDOWN_HEADINGS,
 ): MarkdownStructure {
-  let activeSection: "significant" | "worthWatching" | null = null;
-  let significantSectionPresent = false;
-  let worthWatchingSectionPresent = false;
+  let activeSection: "worthWatching" | null = null;
   let significantItems = 0;
+  let worthWatchingSectionPresent = false;
   let worthWatchingItems = 0;
 
   for (const line of markdown.split(/\r?\n/u)) {
@@ -43,24 +43,22 @@ export function inspectMarkdownStructure(
     }
 
     if (level === 2) {
-      if (headings.significant.includes(title)) {
-        activeSection = "significant";
-        significantSectionPresent = true;
+      if (NUMBERED_HEADING_PATTERN.test(title)) {
+        significantItems += 1;
+        activeSection = null;
       } else if (headings.worthWatching.includes(title)) {
         activeSection = "worthWatching";
         worthWatchingSectionPresent = true;
       } else {
         activeSection = null;
       }
-    } else if (level === 3 && activeSection === "significant") {
-      significantItems += 1;
     } else if (level === 3 && activeSection === "worthWatching") {
       worthWatchingItems += 1;
     }
   }
 
   return {
-    significantSectionPresent,
+    significantSectionPresent: significantItems > 0,
     significantItems,
     worthWatchingSectionPresent,
     worthWatchingItems,

@@ -7,7 +7,7 @@ import {
   type DayMetadata,
 } from "@daily-tech/core";
 
-import { ArtifactValidationError, PipelineRunError, RevisionLimitExceededError } from "./errors.js";
+import { ArtifactValidationError, PipelineRunError } from "./errors.js";
 import {
   RESEARCH_CATEGORIES,
   SOURCE_TYPES,
@@ -23,16 +23,15 @@ import type {
   ArtifactSink,
   Clock,
   FailureReporter,
-  ModelUsage,
   PipelineContext,
   PipelineLogEvent,
   PipelineLogger,
   PipelineRunResult,
   PipelineStage,
-  PipelineUsage,
 } from "./types.js";
 import type { BriefDraft, BriefWriter } from "./writing/contracts.js";
 import { createQuietDayDraft, validateDraftAgainstStories } from "./writing/draft-validation.js";
+import { renderBriefMarkdown } from "./writing/render-markdown.js";
 import { previousIsraelDayWindow } from "./window.js";
 
 export interface DailyBriefPipelineDependencies {
@@ -47,7 +46,6 @@ export interface DailyBriefPipelineDependencies {
 }
 
 export interface DailyBriefPipelineOptions {
-  readonly maxRevisionRounds?: number;
   readonly storageRoot?: string;
   readonly minimumImportance?: Importance;
   readonly maximumStories?: number;
@@ -59,13 +57,12 @@ const silentLogger: PipelineLogger = { log: () => undefined };
 const defaultScope: NewsResearchScope = {
   categories: RESEARCH_CATEGORIES,
   minimumImportance: 3,
-  maximumStories: 12,
+  maximumStories: 20,
   preferredSourceTypes: SOURCE_TYPES,
 };
 
 export class DailyBriefPipeline {
   readonly #dependencies: Required<DailyBriefPipelineDependencies>;
-  readonly #maxRevisionRounds: number;
   readonly #storageRoot: string;
   readonly #scope: NewsResearchScope;
   readonly #maximumMissingStories: number;
@@ -74,14 +71,18 @@ export class DailyBriefPipeline {
     dependencies: DailyBriefPipelineDependencies,
     options: DailyBriefPipelineOptions = {},
   ) {
-    this.#maxRevisionRounds = boundedInteger(options.maxRevisionRounds ?? 3, 1, 3, "maxRevisionRounds");
     this.#maximumMissingStories = boundedInteger(
       options.maximumMissingStories ?? 4,
       1,
       12,
       "maximumMissingStories",
     );
-    const maximumStories = boundedInteger(options.maximumStories ?? 12, 1, 30, "maximumStories");
+    const maximumStories = boundedInteger(
+      options.maximumStories ?? defaultScope.maximumStories,
+      1,
+      30,
+      "maximumStories",
+    );
     this.#scope = {
       ...defaultScope,
       minimumImportance: options.minimumImportance ?? defaultScope.minimumImportance,
@@ -105,13 +106,8 @@ export class DailyBriefPipeline {
     const runId = this.#dependencies.createRunId();
     if (runId.trim().length === 0) throw new Error("createRunId returned an empty identifier.");
     const context: PipelineContext = { runId, window };
-    const usage = new UsageAccumulator();
     const createdAt = this.#dependencies.clock.now().toISOString();
     let activeStage: PipelineStage = "initialize";
-    let revisionRounds = 0;
-    let gapStoriesAdded = 0;
-    let rejectedStories = 0;
-    let modelRequests = 0;
 
     const log = async (
       type: PipelineLogEvent["type"],
@@ -129,89 +125,58 @@ export class DailyBriefPipeline {
     };
     const executeStage = async <T>(stage: PipelineStage, action: () => Promise<T>): Promise<T> => {
       activeStage = stage;
-      await log("stage_started", stage);
-      const value = await action();
-      await log("stage_completed", stage);
-      return value;
-    };
-    const accountModelRequest = (modelUsage: ModelUsage | undefined): void => {
-      modelRequests += 1;
-      usage.add(modelUsage);
+      return action();
     };
 
     try {
-      await log("run_started", "initialize");
       const rawResearch = await executeStage("research", () =>
         this.#dependencies.researchProvider.research({ context, scope: this.#scope }),
       );
-      accountModelRequest(rawResearch.usage);
       const processedResearch = await executeStage("research_validation", async () =>
         finalizeResearchBatch(
-          rawResearch.value,
+          rawResearch,
           context,
           this.#scope.minimumImportance,
           this.#dependencies.storyIds,
         ),
       );
-      rejectedStories += processedResearch.rejectedStories.length;
       let stories = [...processedResearch.stories];
 
-      let modelDraftCreated = stories.length > 0;
-      let draft: BriefDraft;
-      if (modelDraftCreated) {
-        const written = await executeStage("draft", () =>
-          this.#dependencies.writer.write(context, stories),
-        );
-        accountModelRequest(written.usage);
-        draft = written.value;
-      } else {
-        draft = await executeStage("draft", async () => createQuietDayDraft(context));
-      }
+      const hadStoriesFromResearch = stories.length > 0;
+      let draft: BriefDraft = hadStoriesFromResearch
+        ? await executeStage("draft", () => this.#dependencies.writer.write(context, stories))
+        : await executeStage("draft", async () => createQuietDayDraft());
       await executeStage("draft_validation", async () =>
         validateDraftAgainstStories(draft, stories),
       );
 
-      while (true) {
-        const gapResult = await executeStage("gap_check", () =>
-          this.#dependencies.researchProvider.findGaps({
-            context,
-            existingStories: stories,
-            draft,
-            minimumImportance: this.#scope.minimumImportance,
-            maximumMissingStories: this.#maximumMissingStories,
-          }),
-        );
-        accountModelRequest(gapResult.usage);
-        const processedGap = finalizeGapBatch(
-          gapResult.value,
-          stories,
+      // Exactly one Gap Check, exactly one Revision at most — never a loop. Live web
+      // research can always surface one more thing; a loop chasing zero missing
+      // stories has no natural end. One check, one fix, then move on.
+      const gapResult = await executeStage("gap_check", () =>
+        this.#dependencies.researchProvider.findGaps({
           context,
-          this.#scope.minimumImportance,
-          this.#dependencies.storyIds,
-        );
-        rejectedStories += processedGap.rejectedStories.length;
-        if (processedGap.stories.length === 0) break;
-        if (revisionRounds >= this.#maxRevisionRounds) {
-          throw new RevisionLimitExceededError(revisionRounds);
-        }
-
+          existingStories: stories,
+          draft,
+          minimumImportance: this.#scope.minimumImportance,
+          maximumMissingStories: this.#maximumMissingStories,
+        }),
+      );
+      const processedGap = finalizeGapBatch(
+        gapResult,
+        stories,
+        context,
+        this.#scope.minimumImportance,
+        this.#dependencies.storyIds,
+      );
+      if (processedGap.stories.length > 0) {
         const missingStories = processedGap.stories;
         stories = [...stories, ...missingStories];
-        gapStoriesAdded += missingStories.length;
-        const revised = await executeStage("revision", () =>
-          modelDraftCreated
-            ? this.#dependencies.writer.revise({
-                context,
-                stories,
-                draft,
-                missingStories,
-              })
+        draft = await executeStage("revision", () =>
+          hadStoriesFromResearch
+            ? this.#dependencies.writer.revise({ context, stories, draft, missingStories })
             : this.#dependencies.writer.write(context, stories),
         );
-        accountModelRequest(revised.usage);
-        draft = revised.value;
-        modelDraftCreated = true;
-        revisionRounds += 1;
         await executeStage("draft_validation", async () =>
           validateDraftAgainstStories(draft, stories),
         );
@@ -222,32 +187,11 @@ export class DailyBriefPipeline {
       );
       await executeStage("persist", () => this.#dependencies.sink.saveReady(artifact));
 
-      const finalUsage = usage.snapshot();
       await log("run_completed", "persist", {
-        researchedStories: processedResearch.stories.length,
-        includedStories: stories.length,
-        revisionRounds,
-        gapStoriesAdded,
-        rejectedStories,
+        status: artifact.metadata.status,
         sourceCount: artifact.metadata.source_count,
-        validationPassed: true,
-        modelRequests,
-        totalTokens: finalUsage.totalTokens,
-        costUsd: finalUsage.costUsd,
-        webSearchCalls: finalUsage.webSearchCalls,
       });
-      return {
-        runId,
-        window,
-        artifact,
-        researchedStories: processedResearch.stories.length,
-        includedStories: stories.length,
-        revisionRounds,
-        gapStoriesAdded,
-        rejectedStories,
-        modelRequests,
-        usage: finalUsage,
-      };
+      return { runId, window, artifact };
     } catch (error) {
       const failure = {
         runId,
@@ -293,7 +237,7 @@ export class DailyBriefPipeline {
     };
     const validation = validateBriefArtifact({
       filePath: `${this.#storageRoot}/${relativePath}`,
-      content: draft.markdown,
+      content: renderBriefMarkdown(context.window.date, draft),
       metadata,
     });
     if (!validation.valid) throw new ArtifactValidationError(validation.issues);
@@ -314,34 +258,4 @@ function boundedInteger(value: number, minimum: number, maximum: number, name: s
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Unknown pipeline error.";
-}
-
-class UsageAccumulator {
-  #inputTokens = 0;
-  #outputTokens = 0;
-  #totalTokens = 0;
-  #costUsd = 0;
-  #webSearchCalls = 0;
-  #webSearchCostUsd = 0;
-
-  add(usage: ModelUsage | undefined): void {
-    if (usage === undefined) return;
-    this.#inputTokens += usage.inputTokens;
-    this.#outputTokens += usage.outputTokens;
-    this.#totalTokens += usage.totalTokens;
-    this.#costUsd += usage.costUsd ?? 0;
-    this.#webSearchCalls += usage.webSearchCalls ?? 0;
-    this.#webSearchCostUsd += usage.webSearchCostUsd ?? 0;
-  }
-
-  snapshot(): PipelineUsage {
-    return {
-      inputTokens: this.#inputTokens,
-      outputTokens: this.#outputTokens,
-      totalTokens: this.#totalTokens,
-      costUsd: this.#costUsd,
-      webSearchCalls: this.#webSearchCalls,
-      webSearchCostUsd: this.#webSearchCostUsd,
-    };
-  }
 }

@@ -5,9 +5,9 @@ Typed SQLite persistence for Daily Tech, built on `better-sqlite3`.
 ## Responsibilities
 
 - Apply ordered, transactional schema migrations.
-- Store scalar day metadata in `daily_briefs`.
-- Store companies, topics, and development digests in normalized child tables.
-- Enforce allowed statuses, intensities, non-negative counts, and foreign keys in
+- Store day metadata, including companies/topics/development digests as JSON array
+  columns, in `daily_briefs`.
+- Enforce allowed statuses, intensities, non-negative counts, and JSON array shapes in
   SQLite as a second line of defense after `@daily-tech/core` validation.
 - Hydrate stored rows back into validated `DayMetadata` objects.
 - Store structured operational events and filter them by run, date, and severity.

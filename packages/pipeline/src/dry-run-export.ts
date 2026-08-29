@@ -9,19 +9,21 @@ import {
 
 import type { PipelineLogEvent } from "./types.js";
 
-export interface SmokeExportPaths {
+export interface DryRunExportPaths {
   readonly markdownPath: string;
   readonly yamlPath: string;
 }
 
-export async function exportSmokeArtifacts(
+/** Writes the Markdown a real run would save, plus a YAML preview of the database
+ * rows it would write, without opening SQLite or the production content store. */
+export async function exportDryRunArtifacts(
   artifact: BriefArtifact,
   events: readonly PipelineLogEvent[],
   outputRoot: string,
-): Promise<SmokeExportPaths> {
+): Promise<DryRunExportPaths> {
   const relativeMarkdownPath = expectedBriefRelativePath(artifact.metadata.date);
   if (relativeMarkdownPath === null) {
-    throw new TypeError(`Cannot create a smoke output path for ${artifact.metadata.date}.`);
+    throw new TypeError(`Cannot create a dry-run output path for ${artifact.metadata.date}.`);
   }
 
   const resolvedRoot = resolve(outputRoot);
@@ -60,23 +62,15 @@ export function databaseWriteYaml(
       significant_items: metadata.significant_items,
       worth_watching_items: metadata.worth_watching_items,
       day_intensity: metadata.day_intensity,
+      companies: metadata.companies,
+      topics: metadata.topics,
+      developments: metadata.developments,
       status: metadata.status,
       source_count: metadata.source_count,
       created_at: metadata.created_at,
       published_at: metadata.published_at,
       updated_at: metadata.updated_at,
     },
-    daily_brief_companies: positionedRows(
-      metadata.date,
-      "company",
-      metadata.companies,
-    ),
-    daily_brief_topics: positionedRows(metadata.date, "topic", metadata.topics),
-    daily_brief_developments: positionedRows(
-      metadata.date,
-      "digest",
-      metadata.developments,
-    ),
     operational_logs: events.map((event) => ({
       run_id: event.runId,
       brief_date: event.date,
@@ -84,29 +78,17 @@ export function databaseWriteYaml(
       level: event.type === "run_failed" ? "error" : "info",
       message:
         typeof event.details?.message === "string" ? event.details.message : null,
-      details_json: JSON.stringify(event.details ?? {}),
+      details_json: JSON.stringify({ stage: event.stage, ...event.details }),
       occurred_at: event.occurredAt,
     })),
   };
 
   return [
     "# Database rows the production pipeline would write for this successful run.",
-    "# SQLite-generated primary keys are omitted because this smoke test never opens a database.",
+    "# SQLite-generated primary keys are omitted because this dry run never opens a database.",
     renderYaml(document),
     "",
   ].join("\n");
-}
-
-function positionedRows(
-  date: string,
-  valueName: "company" | "topic" | "digest",
-  values: readonly string[],
-): readonly Readonly<Record<string, string | number>>[] {
-  return values.map((value, position) => ({
-    day_date: date,
-    position,
-    [valueName]: value,
-  }));
 }
 
 function renderYaml(value: unknown): string {

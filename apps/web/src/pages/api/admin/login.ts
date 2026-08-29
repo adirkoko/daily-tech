@@ -19,7 +19,7 @@ export const POST: APIRoute = async (context) => {
   try {
     rate = db.operations.consumeRateLimit({ scope: "admin_login", keyHash: callerHash(address), windowStartedAt: fixedWindowStart(now, config.loginWindowMs), occurredAt: now.toISOString(), limit: 3 });
   } finally { db.close(); }
-  const valid = rate.allowed && await verifyAdminPassword(password);
+  const valid = rate.allowed && verifyAdminPassword(password);
   const logDb = await openServerDatabase();
   try {
     logDb.operations.appendLog({ eventType: valid ? "admin_login_succeeded" : "admin_login_failed", level: valid ? "info" : "warning", message: null, details: { rateLimited: !rate.allowed }, occurredAt: new Date().toISOString() });

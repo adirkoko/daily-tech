@@ -3,8 +3,12 @@
 ## Login
 
 The login page is `/admin/login`. Authentication is by **password only**, with no
-username. Run `npm run admin:hash-password` and place the result in
-`ADMIN_PASSWORD_HASH`; the plaintext password is never stored in configuration.
+username. Set a unique password of at least 14 characters in the server-side
+`ADMIN_PASSWORD` environment variable.
+
+`ADMIN_PASSWORD` is intentionally a plaintext deployment secret. Keep `.env` out of
+source control, restrict filesystem access to the service account, and never place
+the password in command arguments, logs, screenshots, or client-side configuration.
 
 ## Content management
 
@@ -23,8 +27,9 @@ actions are recorded in the operational log.
 
 ## Security controls
 
-- Password verification uses scrypt with `N=131072`, `r=8`, `p=1`, a random salt,
-  and constant-time comparison.
+- Password verification hashes both the submitted and configured values to
+  fixed-length SHA-256 digests and compares those digests with a constant-time
+  primitive. The password is never written to logs or returned in an error.
 - Sessions use random opaque tokens stored only as SHA-256 digests in SQLite. The
   browser cookie is `HttpOnly`, `SameSite=Strict`, path-scoped to `/`, and `Secure`
   in production. Sessions expire after the configured TTL; logout revokes them.
@@ -38,11 +43,12 @@ actions are recorded in the operational log.
   matches the reverse-proxy chain; the default ignores forwarding headers.
 - Form fields and request bodies are bounded. The Node adapter rejects bodies above
   300 KiB.
-- The password hash, session secret, and other secrets remain server-side and are
+- The Admin password, session secret, and other secrets remain server-side and are
   never rendered to the browser.
 
 Production must terminate HTTPS before the service, keep
 `ADMIN_SECURE_COOKIES=true`, use a unique high-entropy
-`ADMIN_SESSION_SECRET` of at least 32 characters, and keep the content/SQLite path on
+`ADMIN_PASSWORD`, use a unique high-entropy `ADMIN_SESSION_SECRET` of at least 32
+characters, and keep the content/SQLite path on
 a private persistent volume. `npm run rate-limits:reset -- --scope=admin_login` clears login counters when
 the operator deliberately needs to recover access.

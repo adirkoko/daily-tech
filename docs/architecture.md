@@ -17,6 +17,7 @@ serve pages when AI services are unavailable.
 | `packages/pipeline` | The daily generation engine: cited model web research, deterministic validation, constrained writing, a narrow gap check, and final artifact creation. `NewsResearchProvider` owns the news domain while `AiWebResearchClient` isolates provider-specific web tools, citations, and structured output. |
 | `packages/core` | Framework-free TypeScript shared by everything: the metadata schema, its allowed values (`status`, `day_intensity`), and the deterministic validators run before a brief is accepted. |
 | `packages/db` | SQLite access: schema and typed read/write functions for day metadata, feedback tickets, logs, and rate-limit counters. |
+| `packages/demo-data` | Development-only CLI that destructively resets a configured content store and fills it with fake data through the real contracts, renderer, validators, and persistence APIs. It is never imported by production code. |
 | `packages/publisher` | Revalidates a ready artifact, coordinates local publication with a durable SQLite lease, and atomically marks it published. |
 | `apps/web` | One standalone Astro/Node service for public server-rendered pages, password-protected admin, feedback API/inbox, and system alerts. It reads Markdown and SQLite on demand and ships almost no client JavaScript. |
 | `scripts` | Operational scripts, e.g. resetting all login-attempt counters. |
@@ -26,6 +27,7 @@ Dependency direction:
 
 ```
 apps/web           -> core, db, pipeline, publisher
+packages/demo-data -> core, db, pipeline
 packages/pipeline  -> core, db
 packages/publisher -> core, db
 packages/db        -> core
@@ -33,7 +35,8 @@ packages/core      -> (nothing internal)
 ```
 
 `core` stays framework-free so the site, the DB layer, and the pipeline can all
-depend on it.
+depend on it. The demo-data dependency is intentionally one-way: no production app
+or package depends on `packages/demo-data`.
 
 ## Runtime boundary
 

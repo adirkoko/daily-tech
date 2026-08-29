@@ -22,12 +22,8 @@ build/
 .env.*
 !.env.example
 
-# --- SQLite metadata database (generated; not source of truth) ---
-tech_briefs/meta/*.db
-tech_briefs/meta/*.db-wal
-tech_briefs/meta/*.db-shm
-tech_briefs/meta/*.sqlite
-tech_briefs/meta/*.sqlite3
+# --- Local content store (runtime/demo generated) ---
+tech_briefs/
 
 # --- Runtime data ---
 logs/

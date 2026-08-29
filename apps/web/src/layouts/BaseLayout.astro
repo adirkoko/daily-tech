@@ -25,7 +25,7 @@ const canonical = Astro.site ? new URL(Astro.url.pathname, Astro.site) : Astro.u
     <meta name="viewport" content="width=device-width" />
     <meta name="generator" content={Astro.generator} />
     <meta name="description" content={description} />
-    <meta name="theme-color" content="#f5f3ed" />
+    <meta name="theme-color" content="#f4f5f7" data-theme-color />
     {noindex && <meta name="robots" content="noindex" />}
     <link rel="canonical" href={canonical} />
     <link rel="alternate" type="application/rss+xml" title="Daily Tech" href={new URL("/rss.xml", Astro.site ?? Astro.url)} />
@@ -39,7 +39,9 @@ const canonical = Astro.site ? new URL(Astro.url.pathname, Astro.site) : Astro.u
       (() => {
         const saved = localStorage.getItem("daily-tech-theme");
         const preferred = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-        document.documentElement.dataset.theme = saved || preferred;
+        const theme = saved === "light" || saved === "dark" ? saved : preferred;
+        document.documentElement.dataset.theme = theme;
+        document.querySelector("[data-theme-color]")?.setAttribute("content", theme === "dark" ? "#1b1c20" : "#f4f5f7");
       })();
     </script>
   </head>
@@ -49,11 +51,20 @@ const canonical = Astro.site ? new URL(Astro.url.pathname, Astro.site) : Astro.u
     <main id="main-content"><slot /></main>
     <SiteFooter />
     <script is:inline>
-      document.querySelector("[data-theme-toggle]")?.addEventListener("click", () => {
+      const toggle = document.querySelector("[data-theme-toggle]");
+      const syncThemeControl = () => {
+        const dark = document.documentElement.dataset.theme === "dark";
+        toggle?.setAttribute("aria-pressed", String(dark));
+        toggle?.setAttribute("aria-label", dark ? "מעבר למצב יום" : "מעבר למצב לילה");
+        document.querySelector("[data-theme-color]")?.setAttribute("content", dark ? "#1b1c20" : "#f4f5f7");
+      };
+      syncThemeControl();
+      toggle?.addEventListener("click", () => {
         const root = document.documentElement;
         const next = root.dataset.theme === "dark" ? "light" : "dark";
         root.dataset.theme = next;
         localStorage.setItem("daily-tech-theme", next);
+        syncThemeControl();
       });
     </script>
   </body>

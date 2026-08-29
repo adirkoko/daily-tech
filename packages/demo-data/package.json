@@ -1,0 +1,24 @@
+{
+  "name": "@daily-tech/demo-data",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Development-only destructive demo data utility for Daily Tech.",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "prebuild": "npm run build --workspace @daily-tech/pipeline",
+    "build": "tsc -p tsconfig.build.json",
+    "pretest": "npm run build --workspace @daily-tech/pipeline",
+    "test": "vitest run",
+    "pretypecheck": "npm run build --workspace @daily-tech/pipeline",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@daily-tech/core": "0.1.0",
+    "@daily-tech/db": "0.1.0",
+    "@daily-tech/pipeline": "0.1.0",
+    "better-sqlite3": "^13.0.3"
+  }
+}

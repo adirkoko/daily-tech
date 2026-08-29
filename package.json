@@ -14,9 +14,12 @@
     "generate": "node --env-file=.env packages/pipeline/dist/cli.js",
     "pregenerate:dry-run": "npm run build --workspace @daily-tech/pipeline",
     "generate:dry-run": "node --env-file=.env packages/pipeline/dist/cli.js --dry-run",
+    "predemo-data:generate": "npm run build --workspace @daily-tech/demo-data",
+    "demo-data:generate": "node --env-file-if-exists=.env packages/demo-data/dist/cli.js generate",
+    "predemo-data:clear": "npm run build --workspace @daily-tech/demo-data",
+    "demo-data:clear": "node --env-file-if-exists=.env packages/demo-data/dist/cli.js clear",
     "prepublish:brief": "npm run build --workspace @daily-tech/publisher",
     "publish:brief": "node --env-file=.env packages/publisher/dist/cli.js",
-    "admin:hash-password": "node scripts/hash-admin-password.mjs",
     "rate-limits:reset": "node --env-file-if-exists=.env scripts/reset-rate-limits.mjs",
     "test": "npm run test --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present"

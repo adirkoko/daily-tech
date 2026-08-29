@@ -36,7 +36,8 @@ releases and restarts.
 
 Required by the application:
 
-- `ADMIN_PASSWORD_HASH` — generated with `npm run admin:hash-password`.
+- `ADMIN_PASSWORD` — a unique password of at least 14 characters, stored only in the
+  server environment and never committed to source control.
 - `ADMIN_SESSION_SECRET` — unique random value of at least 32 characters.
 
 Set explicitly for production:
@@ -49,6 +50,11 @@ Set explicitly for production:
 
 Session TTL and login/feedback fixed-window durations have safe defaults documented
 in `.env.example`. The Node server caps request bodies at 300 KiB.
+
+`ALLOW_DESTRUCTIVE_DEMO_DATA_RESET` belongs only to the development CLI. It defaults
+to `false`, is not required by the application runtime, and must remain false or
+unset in production. Even when it is explicitly set to `true`, the demo-data
+commands still refuse to run without `--confirm-reset`.
 
 ## Embedded generation and publication schedule
 
@@ -90,7 +96,8 @@ uses the stronger `/ready` check.
 1. Terminate TLS and redirect HTTP to HTTPS.
 2. Use a non-root process account and expose only the web port.
 3. Mount one private persistent volume for `TECH_BRIEFS_ROOT`.
-4. Keep `.env` outside version control and rotate the session secret after exposure.
+4. Keep `.env` outside version control with access restricted to the service account;
+   rotate both the Admin password and session secret after exposure.
 5. Enable the embedded scheduler when automatic daily runs are wanted.
 6. Monitor process health and disk capacity; inspect application failures inside the
    Admin alert center.

@@ -1,14 +1,55 @@
 ---
 import "../styles/global.css";
+
+import ThemeToggle from "../components/ThemeToggle.astro";
+
 interface Props { title: string; }
 const { title } = Astro.props;
 const csrf = Astro.locals.adminSession?.csrfToken;
 ---
 <!doctype html>
 <html lang="he" dir="rtl">
-  <head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width" /><meta name="robots" content="noindex,nofollow" /><title>{title} — Daily Tech Admin</title></head>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="robots" content="noindex,nofollow" />
+    <meta name="theme-color" content="#f4f5f7" data-theme-color />
+    <title>{title} — Daily Tech Admin</title>
+    <script is:inline>
+      (() => {
+        const saved = localStorage.getItem("daily-tech-theme");
+        const preferred = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+        const theme = saved === "light" || saved === "dark" ? saved : preferred;
+        document.documentElement.dataset.theme = theme;
+        document.querySelector("[data-theme-color]")?.setAttribute("content", theme === "dark" ? "#1b1c20" : "#f4f5f7");
+      })();
+    </script>
+  </head>
   <body class="admin-body">
-    <header class="admin-header"><a class="brand" href="/admin"><span class="brand-mark">DT</span><span>ניהול</span></a>{csrf && <nav><a href="/admin">תדריכים</a><a href="/admin/feedback">פידבק</a><a href="/admin/alerts">התראות</a><form action="/api/admin/logout" method="post"><input type="hidden" name="csrf_token" value={csrf} /><button type="submit">יציאה</button></form></nav>}</header>
+    <header class="admin-header">
+      <a class="brand" href="/admin"><span class="brand-mark">DT</span><span>ניהול</span></a>
+      <div class="admin-header-actions">
+        {csrf && <nav><a href="/admin">תדריכים</a><a href="/admin/feedback">פידבק</a><a href="/admin/alerts">התראות</a><form action="/api/admin/logout" method="post"><input type="hidden" name="csrf_token" value={csrf} /><button type="submit">יציאה</button></form></nav>}
+        <ThemeToggle />
+      </div>
+    </header>
     <main class="admin-main"><slot /></main>
+    <script is:inline>
+      const toggle = document.querySelector("[data-theme-toggle]");
+      const syncThemeControl = () => {
+        const dark = document.documentElement.dataset.theme === "dark";
+        toggle?.setAttribute("aria-pressed", String(dark));
+        toggle?.setAttribute("aria-label", dark ? "מעבר למצב יום" : "מעבר למצב לילה");
+        document.querySelector("[data-theme-color]")?.setAttribute("content", dark ? "#1b1c20" : "#f4f5f7");
+      };
+      syncThemeControl();
+      toggle?.addEventListener("click", () => {
+        const root = document.documentElement;
+        const next = root.dataset.theme === "dark" ? "light" : "dark";
+        root.dataset.theme = next;
+        localStorage.setItem("daily-tech-theme", next);
+        syncThemeControl();
+      });
+    </script>
   </body>
 </html>

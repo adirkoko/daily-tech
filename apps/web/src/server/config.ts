@@ -4,7 +4,7 @@ export interface ServerConfig {
   readonly contentRoot: string;
   readonly databaseFile: string;
   readonly dailyStorageRoot: string;
-  readonly adminPasswordHash: string;
+  readonly adminPassword: string;
   readonly sessionSecret: string;
   readonly sessionTtlMs: number;
   readonly secureCookies: boolean;
@@ -23,7 +23,7 @@ export function getServerConfig(environment: NodeJS.ProcessEnv = process.env): S
     contentRoot,
     databaseFile: resolve(contentRoot, "meta", "tech_briefs.db"),
     dailyStorageRoot: resolve(contentRoot, "daily"),
-    adminPasswordHash: required(environment, "ADMIN_PASSWORD_HASH"),
+    adminPassword: requiredAdminPassword(environment),
     sessionSecret: minimumLength(required(environment, "ADMIN_SESSION_SECRET"), 32, "ADMIN_SESSION_SECRET"),
     sessionTtlMs: hours(environment.ADMIN_SESSION_TTL_HOURS ?? "12", "ADMIN_SESSION_TTL_HOURS", 1, 168),
     secureCookies: environment.ADMIN_SECURE_COOKIES === undefined
@@ -34,6 +34,23 @@ export function getServerConfig(environment: NodeJS.ProcessEnv = process.env): S
     trustedProxyHops: integer(environment.TRUSTED_PROXY_HOPS ?? "0", "TRUSTED_PROXY_HOPS", 0, 10),
   };
   return config;
+}
+
+function requiredAdminPassword(environment: NodeJS.ProcessEnv): string {
+  const value = environment.ADMIN_PASSWORD;
+  if (value === undefined || value.length === 0) {
+    throw new Error("Missing required environment variable: ADMIN_PASSWORD.");
+  }
+  if (Array.from(value).length < 14) {
+    throw new Error("ADMIN_PASSWORD must contain at least 14 characters.");
+  }
+  if (Buffer.byteLength(value, "utf8") > 1_024) {
+    throw new Error("ADMIN_PASSWORD must not exceed 1024 bytes.");
+  }
+  if (value.trim().length === 0) {
+    throw new Error("ADMIN_PASSWORD cannot contain only whitespace.");
+  }
+  return value;
 }
 
 function required(environment: NodeJS.ProcessEnv, name: string): string {

@@ -24,6 +24,7 @@ AI creates content  ->  code validates it  ->  SQLite + files store it  ->  the 
 | `apps/web/`         | Standalone Astro service: public site, secure admin, feedback, and alerts. |
 | `packages/core/`    | Shared TypeScript: metadata schema, enums, deterministic validators. |
 | `packages/db/`      | SQLite access layer and schema for the metadata database. |
+| `packages/demo-data/` | Destructive development-only utility for resetting and filling a local content store with valid fake data. |
 | `packages/pipeline/`| The daily generation engine (web research → evidence validation → writing → gap check → validation). |
 | `packages/publisher/` | Safe local publication transition with a durable SQLite lease. |
 | `scripts/`          | Operational scripts (e.g. reset login-attempt counters). |
@@ -46,11 +47,10 @@ npm run publish:brief
 npm start
 ```
 
-Generate an admin password hash, copy `.env.example` to `.env`, fill the secrets, and
-run the single production service:
+Copy `.env.example` to `.env`, set a unique `ADMIN_PASSWORD` of at least 14
+characters, fill the remaining secrets, and run the single production service:
 
 ```sh
-npm run admin:hash-password
 npm run build
 npm start
 ```
@@ -67,6 +67,25 @@ content store. Set `ADMIN_SECURE_COOKIES=false` only while using local HTTP, the
 ```sh
 npm run dev --workspace @daily-tech/web
 ```
+
+To preview a populated archive and Admin UI without AI or external APIs, the
+development-only demo-data utility can reset the configured content store and fill
+it with valid fake briefs, feedback, alerts, and operational logs. Enable it only in
+a local `.env` and always review the printed absolute paths before proceeding:
+
+```env
+ALLOW_DESTRUCTIVE_DEMO_DATA_RESET=true
+```
+
+```sh
+npm run demo-data:generate -- --months=6 --confirm-reset
+npm run demo-data:clear -- --confirm-reset
+```
+
+Both commands are destructive and require `--confirm-reset`; generation clears the
+existing dataset before writing anything. See
+[`packages/demo-data/README.md`](packages/demo-data/README.md) for flags, retained
+tables, and reset behavior.
 
 Public pages read SQLite and Markdown on demand, so a saved or published admin change
 is visible immediately without another deployment. A missing database produces a

@@ -52,10 +52,15 @@ Each day with a page gets a visual intensity from `day_intensity`
 (`minimal`, `low`, `medium`, `high`, `extreme`), so the calendar also works as a
 historical heatmap of industry activity.
 
-The current calendar uses color and a top marker for intensity. Desktop hover exposes
-the summary, development count, and main companies through the native tooltip. On
-mobile, tapping a published day opens its accessible daily page directly, so no
-content depends on hover.
+The calendar uses one Indigo scale: a deeper square means a more active day. It shows
+only dates in the selected month and keeps the weekday grid visible. Month and year
+have separate controls without a select menu; the year can also be typed directly, so
+navigation is not limited to the period that already contains data. The view always
+starts on the current Israel month after a fresh page load.
+
+On desktop, hover or keyboard focus opens a compact summary popover. On touch devices,
+the first tap selects the day and opens the same information below the grid, including
+an explicit link to the daily brief. No essential content depends on hover.
 
 ## Statistics page
 
@@ -91,9 +96,10 @@ together with the relevant development for each day.
 
 - Product name: **Daily Tech**. Logo: a geometric monogram based on D / T. Interface
   language: Hebrew. The domain is not decided yet.
-- Plenty of white space, strong typography, few colors, emphasis on text and content,
-  few cards and superfluous UI elements, subtle animations only, and a consistent
-  reminder that briefs are short.
+- Plenty of white space, strong typography, an Indigo-only accent family, emphasis on
+  text and content, few cards and superfluous UI elements, subtle animations only, and
+  a consistent reminder that briefs are short. Light and dark palettes use the same
+  Indigo identity with contrast tuned independently for each mode.
 
 ## Display mode
 

@@ -1,23 +1,4 @@
 ---
-import BaseLayout from "../../layouts/BaseLayout.astro";
-import CalendarMonth from "../../components/CalendarMonth.astro";
-import { loadSiteSnapshot } from "../../lib/content.js";
-import { formatHebrewMonth } from "../../lib/dates.js";
-
 export const prerender = false;
-const snapshot = await loadSiteSnapshot();
-const month = Astro.params.month ?? "";
-if (!/^\d{4}-\d{2}$/u.test(month)) return Astro.redirect("/404", 302);
-const months = [...new Set(snapshot.published.map((brief) => brief.metadata.date.slice(0, 7)))].sort();
-const index = months.indexOf(month);
-const previousMonth = index > 0 ? months[index - 1] : undefined;
-const nextMonth = index >= 0 ? months[index + 1] : undefined;
+return Astro.redirect("/calendar", 302);
 ---
-
-<BaseLayout title={`${formatHebrewMonth(month)} — Daily Tech`}>
-  <section class="shell calendar-shell">
-    <p class="eyebrow"><a href="/calendar">ארכיון</a> / חודש</p>
-    <h1 class="display-title">{formatHebrewMonth(month)}</h1>
-    <CalendarMonth month={month} briefs={snapshot.published} previousMonth={previousMonth} nextMonth={nextMonth} />
-  </section>
-</BaseLayout>

@@ -12,7 +12,6 @@ import { afterEach, describe, expect, it } from "vitest";
 const webRoot = fileURLToPath(new URL("../../", import.meta.url));
 const temporaryRoots: string[] = [];
 const adminPassword = "Daily-Tech-Test-Password-2026!";
-const adminPasswordHash = "scrypt$131072$8$1$VCny8iCknm6szLH47Fkr7Q$_wY48D9I4pFxDSA2m23MBDifYg1EpUANpvYxNTcZKSg";
 
 function runWebBuild(contentRoot: string): Promise<void> {
   const astroCli = join(webRoot, "..", "..", "node_modules", "astro", "bin", "astro.mjs");
@@ -115,7 +114,7 @@ describe("standalone site service", () => {
         HOST: "127.0.0.1",
         PORT: String(port),
         TECH_BRIEFS_ROOT: contentRoot,
-        ADMIN_PASSWORD_HASH: adminPasswordHash,
+        ADMIN_PASSWORD: adminPassword,
         ADMIN_SESSION_SECRET: "integration-session-secret-32-characters-minimum",
         ADMIN_SECURE_COOKIES: "false",
       },
@@ -134,12 +133,19 @@ describe("standalone site service", () => {
         scheduler: "disabled",
       });
       const dailyHtml = await (await fetchWhenReady(`${origin}/daily/${day.date}`)).text();
-      const monthHtml = await (await fetch(`${origin}/calendar/2026-08`)).text();
+      const monthHtml = await (await fetch(`${origin}/calendar`)).text();
       expect(dailyHtml).toContain("מהדורת אינטגרציה בטוחה");
       expect(dailyHtml).toContain("noopener noreferrer");
       expect(dailyHtml).not.toContain("alert('bad')");
       expect(monthHtml).toContain(`/daily/${day.date}`);
       expect(monthHtml).toContain('data-level="medium"');
+      expect(monthHtml).toContain('data-month-step="-1"');
+      expect(monthHtml).toContain('data-year-step="-1"');
+      expect(monthHtml).toContain('data-calendar-year');
+      expect(monthHtml).not.toContain('data-calendar-date="2026-07-31"');
+      const legacyMonth = await fetch(`${origin}/calendar/2026-08`, { redirect: "manual" });
+      expect(legacyMonth.status).toBe(302);
+      expect(legacyMonth.headers.get("location")).toBe("/calendar");
 
       const anonymousAdmin = await fetch(`${origin}/admin`, { redirect: "manual" });
       expect(anonymousAdmin.status).toBe(303);

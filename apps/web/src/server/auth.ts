@@ -1,4 +1,4 @@
-import { createHash, createHmac, randomBytes, scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 
 import { getServerConfig } from "./config.js";
 import { openServerDatabase } from "./database.js";
@@ -15,16 +15,10 @@ export interface NewAdminSession extends AuthenticatedAdminSession {
   readonly cookieValue: string;
 }
 
-export async function verifyAdminPassword(password: string): Promise<boolean> {
+export function verifyAdminPassword(password: string): boolean {
   if (Buffer.byteLength(password, "utf8") > 1_024) return false;
-  const parsed = parsePasswordHash(getServerConfig().adminPasswordHash);
-  const derived = await deriveScrypt(password, parsed.salt, parsed.hash.length, {
-    N: parsed.N,
-    r: parsed.r,
-    p: parsed.p,
-    maxmem: 256 * 1024 * 1024,
-  }) as Buffer;
-  return timingSafeEqual(derived, parsed.hash);
+  const configuredPassword = getServerConfig().adminPassword;
+  return timingSafeEqual(passwordDigest(password), passwordDigest(configuredPassword));
 }
 
 export async function createAdminSession(): Promise<NewAdminSession> {
@@ -87,6 +81,7 @@ export function cookieOptions() {
 }
 
 function sha256(value: string): string { return createHash("sha256").update(value).digest("hex"); }
+function passwordDigest(value: string): Buffer { return createHash("sha256").update(value, "utf8").digest(); }
 function safeEqual(left: string, right: string): boolean {
   const a = Buffer.from(left); const b = Buffer.from(right);
   return a.length === b.length && timingSafeEqual(a, b);
@@ -94,22 +89,4 @@ function safeEqual(left: string, right: string): boolean {
 function safeEqualHex(left: string, right: string): boolean {
   const a = Buffer.from(left, "hex"); const b = Buffer.from(right, "hex");
   return a.length === b.length && timingSafeEqual(a, b);
-}
-
-function parsePasswordHash(value: string): { N: number; r: number; p: number; salt: Buffer; hash: Buffer } {
-  const [algorithm, n, r, p, salt, hash, extra] = value.split("$");
-  if (algorithm !== "scrypt" || !n || !r || !p || !salt || !hash || extra !== undefined) {
-    throw new Error("ADMIN_PASSWORD_HASH must use the documented scrypt format.");
-  }
-  const parsed = { N: Number(n), r: Number(r), p: Number(p), salt: Buffer.from(salt, "base64url"), hash: Buffer.from(hash, "base64url") };
-  if (!Number.isInteger(parsed.N) || parsed.N < 131_072 || parsed.r < 8 || parsed.p < 1 || parsed.salt.length < 16 || parsed.hash.length < 32) {
-    throw new Error("ADMIN_PASSWORD_HASH uses insufficient scrypt parameters.");
-  }
-  return parsed;
-}
-
-function deriveScrypt(password: string, salt: Buffer, keyLength: number, options: { N: number; r: number; p: number; maxmem: number }): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
-    scryptCallback(password, salt, keyLength, options, (error, key) => error ? reject(error) : resolve(key));
-  });
 }

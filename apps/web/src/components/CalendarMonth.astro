@@ -1,49 +1,335 @@
 ---
+import type { DayIntensity } from "@daily-tech/core";
+
 import type { PublishedBrief } from "../lib/content.js";
-import { buildCalendar, formatHebrewMonth } from "../lib/dates.js";
+import { buildCalendar, formatHebrewDate, formatHebrewMonth } from "../lib/dates.js";
 
 interface Props {
   month: string;
+  currentDate: string;
   briefs: readonly PublishedBrief[];
-  previousMonth?: string | undefined;
-  nextMonth?: string | undefined;
 }
 
-const { month, briefs, previousMonth, nextMonth } = Astro.props;
-const cells = buildCalendar(month);
+const { month, currentDate, briefs } = Astro.props;
+const cells = buildCalendar(month).filter((cell) => cell.inMonth);
 const byDate = new Map(briefs.map((brief) => [brief.metadata.date, brief]));
-const weekdays = ["א׳", "ב׳", "ג׳", "ד׳", "ה׳", "ו׳", "ש׳"];
+const weekdays = ["א", "ב", "ג", "ד", "ה", "ו", "ש"];
+const intensityLabels: Record<DayIntensity, string> = {
+  minimal: "יום שקט",
+  low: "עוצמה נמוכה",
+  medium: "עוצמה בינונית",
+  high: "עוצמה גבוהה",
+  extreme: "יום חריג",
+};
+const firstColumn = new Date(`${month}-01T12:00:00Z`).getUTCDay() + 1;
+const initialYear = Number(month.slice(0, 4));
+const initialMonthName = new Intl.DateTimeFormat("he-IL", {
+  timeZone: "UTC",
+  month: "long",
+}).format(new Date(`${month}-15T12:00:00Z`));
+const clientData = {
+  currentDate,
+  initialMonth: month,
+  briefs: briefs.map(({ metadata }) => ({
+    date: metadata.date,
+    summary: metadata.summary,
+    intensity: metadata.day_intensity,
+    itemCount: metadata.significant_items + metadata.worth_watching_items,
+    companies: metadata.companies.slice(0, 3),
+  })),
+};
+const serializedData = JSON.stringify(clientData).replaceAll("<", "\\u003c");
 ---
 
-<div class="calendar-top">
-  <h2 class="section-title">{formatHebrewMonth(month)}</h2>
-  <nav class="calendar-nav" aria-label="מעבר בין חודשים">
-    <a class="icon-link" href={previousMonth ? `/calendar/${previousMonth}` : "#"} aria-disabled={!previousMonth} aria-label="החודש הקודם">→</a>
-    <a class="icon-link" href={nextMonth ? `/calendar/${nextMonth}` : "#"} aria-disabled={!nextMonth} aria-label="החודש הבא">←</a>
-  </nav>
-</div>
-<div class="calendar-weekdays" aria-hidden="true">
-  {weekdays.map((weekday) => <span>{weekday}</span>)}
-</div>
-<div class="calendar-grid" role="grid" aria-label={`לוח ${formatHebrewMonth(month)}`}>
-  {cells.map((cell) => {
-    const brief = byDate.get(cell.date);
-    const className = ["calendar-day", !cell.inMonth && "outside", brief && "has-brief"].filter(Boolean).join(" ");
-    return brief ? (
-      <a
-        class={className}
-        data-level={brief.metadata.day_intensity}
-        href={`/daily/${cell.date}`}
-        role="gridcell"
-        title={`${brief.metadata.summary} · ${brief.metadata.significant_items + brief.metadata.worth_watching_items} התפתחויות · ${brief.metadata.companies.join(", ")}`}
-      >
-        <span class="calendar-day-number">{cell.day}</span>
-        <span class="calendar-day-title">{brief.metadata.summary}</span>
-      </a>
-    ) : (
-      <span class={className} role="gridcell" aria-label={cell.date}>
-        <span class="calendar-day-number">{cell.day}</span>
-      </span>
-    );
-  })}
-</div>
+<section class="calendar-widget" data-calendar-root>
+  <h2 class="sr-only" data-calendar-title aria-live="polite">{formatHebrewMonth(month)}</h2>
+
+  <div class="calendar-toolbar">
+    <div class="calendar-period-control" aria-label="בחירת חודש">
+      <div class="calendar-period-stepper">
+        <button class="calendar-period-button" type="button" data-month-step="-1" aria-label="חודש קודם" title="חודש קודם">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 7 5 5-5 5" /></svg>
+        </button>
+        <strong class="calendar-period-value" data-calendar-month-name>{initialMonthName}</strong>
+        <button class="calendar-period-button" type="button" data-month-step="1" aria-label="החודש הבא" title="החודש הבא">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 7-5 5 5 5" /></svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="calendar-period-control" aria-label="בחירת שנה">
+      <div class="calendar-period-stepper">
+        <button class="calendar-period-button" type="button" data-year-step="-1" aria-label="שנה קודמת" title="שנה קודמת">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 7 5 5-5 5" /></svg>
+        </button>
+        <input class="calendar-year-input" data-calendar-year type="number" min="1000" max="9999" inputmode="numeric" value={initialYear} aria-label="השנה המוצגת" />
+        <button class="calendar-period-button" type="button" data-year-step="1" aria-label="השנה הבאה" title="השנה הבאה">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 7-5 5 5 5" /></svg>
+        </button>
+      </div>
+    </div>
+
+    <button class="calendar-today-button" type="button" data-calendar-today>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="7" /><circle cx="12" cy="12" r="2" /><path d="M12 2v3M12 19v3M2 12h3M19 12h3" /></svg>
+      <span>היום</span>
+    </button>
+  </div>
+
+  <div class="calendar-board">
+    <div class="calendar-weekdays" aria-hidden="true">
+      {weekdays.map((weekday) => <span>{weekday}</span>)}
+    </div>
+
+    <div class="calendar-grid" role="grid" aria-label={`לוח ${formatHebrewMonth(month)}`} data-calendar-grid>
+      {cells.map((cell, index) => {
+        const brief = byDate.get(cell.date);
+        const weekday = new Date(`${cell.date}T12:00:00Z`).getUTCDay();
+        const style = index === 0 ? `grid-column-start: ${firstColumn}` : undefined;
+        const dateLabel = formatHebrewDate(cell.date, { weekday: "long", day: "numeric", month: "long" });
+        const isToday = cell.date === currentDate;
+        return brief ? (
+          <a
+            class="calendar-day has-brief"
+            data-calendar-date={cell.date}
+            data-level={brief.metadata.day_intensity}
+            data-weekday={weekday}
+            href={`/daily/${cell.date}`}
+            role="gridcell"
+            style={style}
+            aria-current={isToday ? "date" : undefined}
+            aria-label={`${dateLabel}. ${intensityLabels[brief.metadata.day_intensity]}. ${brief.metadata.summary}`}
+          >
+            <span class="calendar-day-number">{cell.day}</span>
+            <span class="calendar-popover" role="tooltip">
+              <span class="calendar-popover-date">{dateLabel}</span>
+              <strong>{brief.metadata.summary}</strong>
+              <span>{brief.metadata.significant_items + brief.metadata.worth_watching_items} התפתחויות</span>
+            </span>
+          </a>
+        ) : (
+          <span
+            class="calendar-day"
+            data-calendar-date={cell.date}
+            data-level="none"
+            data-weekday={weekday}
+            role="gridcell"
+            style={style}
+            aria-current={isToday ? "date" : undefined}
+            aria-label={dateLabel}
+          >
+            <span class="calendar-day-number">{cell.day}</span>
+          </span>
+        );
+      })}
+    </div>
+  </div>
+
+  <div class="calendar-footer-row">
+    <div class="calendar-scale" aria-label="סולם עוצמת היום">
+      <span>שקט</span>
+      {(["minimal", "low", "medium", "high", "extreme"] as const).map((level) => (
+        <i data-level={level} title={intensityLabels[level]}></i>
+      ))}
+      <span>עמוס</span>
+    </div>
+    <span class="calendar-touch-instruction">נוגעים ביום כדי לראות תקציר</span>
+  </div>
+
+  <aside class="calendar-touch-detail" data-calendar-detail hidden aria-live="polite">
+    <div>
+      <span class="calendar-detail-date" data-calendar-detail-date></span>
+      <strong data-calendar-detail-summary></strong>
+      <span class="calendar-detail-meta" data-calendar-detail-meta></span>
+    </div>
+    <a class="button" data-calendar-detail-link href="/calendar">לקריאת המהדורה</a>
+  </aside>
+
+  <script is:inline type="application/json" data-calendar-data set:html={serializedData}></script>
+</section>
+
+<script is:inline>
+  (() => {
+    const root = document.querySelector("[data-calendar-root]");
+    if (!(root instanceof HTMLElement)) return;
+    const dataElement = root.querySelector("[data-calendar-data]");
+    const grid = root.querySelector("[data-calendar-grid]");
+    const title = root.querySelector("[data-calendar-title]");
+    const monthName = root.querySelector("[data-calendar-month-name]");
+    const yearInput = root.querySelector("[data-calendar-year]");
+    const detail = root.querySelector("[data-calendar-detail]");
+    if (
+      !(dataElement instanceof HTMLScriptElement)
+      || !(grid instanceof HTMLElement)
+      || !(title instanceof HTMLElement)
+      || !(monthName instanceof HTMLElement)
+      || !(yearInput instanceof HTMLInputElement)
+    ) return;
+
+    const data = JSON.parse(dataElement.textContent || "{}");
+    const briefs = new Map(data.briefs.map((brief) => [brief.date, brief]));
+    const intensityLabels = {
+      minimal: "יום שקט",
+      low: "עוצמה נמוכה",
+      medium: "עוצמה בינונית",
+      high: "עוצמה גבוהה",
+      extreme: "יום חריג",
+    };
+    const minimumYear = 1000;
+    const maximumYear = 9999;
+    const currentMonth = data.currentDate.slice(0, 7);
+    let visibleMonth = data.initialMonth;
+
+    const monthIndex = (value) => {
+      const [year, month] = value.split("-").map(Number);
+      return year * 12 + month - 1;
+    };
+    const fromMonthIndex = (value) => `${Math.floor(value / 12)}-${String(value % 12 + 1).padStart(2, "0")}`;
+    const minimumMonthIndex = minimumYear * 12;
+    const maximumMonthIndex = maximumYear * 12 + 11;
+    const clampMonthIndex = (value) => Math.min(maximumMonthIndex, Math.max(minimumMonthIndex, value));
+    const addMonths = (value, amount) => fromMonthIndex(clampMonthIndex(monthIndex(value) + amount));
+    const formatMonth = (value) => new Intl.DateTimeFormat("he-IL", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${value}-15T12:00:00Z`));
+    const formatMonthName = (value) => new Intl.DateTimeFormat("he-IL", { month: "long", timeZone: "UTC" }).format(new Date(`${value}-15T12:00:00Z`));
+    const formatDate = (value) => new Intl.DateTimeFormat("he-IL", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" }).format(new Date(`${value}T12:00:00Z`));
+
+    const appendPopover = (anchor, brief, dateLabel) => {
+      const popover = document.createElement("span");
+      popover.className = "calendar-popover";
+      popover.setAttribute("role", "tooltip");
+      const date = document.createElement("span");
+      date.className = "calendar-popover-date";
+      date.textContent = dateLabel;
+      const summary = document.createElement("strong");
+      summary.textContent = brief.summary;
+      const meta = document.createElement("span");
+      meta.textContent = `${brief.itemCount} התפתחויות`;
+      popover.append(date, summary, meta);
+      anchor.append(popover);
+    };
+
+    const resetDetail = () => {
+      if (detail instanceof HTMLElement) detail.hidden = true;
+      grid.querySelector(".is-selected")?.classList.remove("is-selected");
+    };
+
+    const updateControls = () => {
+      root.querySelectorAll("[data-month-step]").forEach((element) => {
+        if (!(element instanceof HTMLButtonElement)) return;
+        const step = Number(element.dataset.monthStep);
+        element.disabled = addMonths(visibleMonth, step) === visibleMonth;
+      });
+      root.querySelectorAll("[data-year-step]").forEach((element) => {
+        if (!(element instanceof HTMLButtonElement)) return;
+        const step = Number(element.dataset.yearStep);
+        const year = Number(visibleMonth.slice(0, 4));
+        element.disabled = year + step < minimumYear || year + step > maximumYear;
+      });
+      const today = root.querySelector("[data-calendar-today]");
+      if (today instanceof HTMLButtonElement) today.disabled = visibleMonth === currentMonth;
+    };
+
+    const render = () => {
+      const [year, month] = visibleMonth.split("-").map(Number);
+      const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+      const firstWeekday = new Date(Date.UTC(year, month - 1, 1, 12)).getUTCDay();
+      grid.replaceChildren();
+      grid.setAttribute("aria-label", `לוח ${formatMonth(visibleMonth)}`);
+      title.textContent = formatMonth(visibleMonth);
+      monthName.textContent = formatMonthName(visibleMonth);
+      yearInput.value = String(year);
+
+      for (let day = 1; day <= daysInMonth; day += 1) {
+        const date = `${visibleMonth}-${String(day).padStart(2, "0")}`;
+        const brief = briefs.get(date);
+        const cell = document.createElement(brief ? "a" : "span");
+        cell.className = `calendar-day${brief ? " has-brief" : ""}`;
+        cell.dataset.calendarDate = date;
+        cell.dataset.level = brief?.intensity ?? "none";
+        cell.dataset.weekday = String(new Date(`${date}T12:00:00Z`).getUTCDay());
+        cell.setAttribute("role", "gridcell");
+        if (day === 1) cell.style.gridColumnStart = String(firstWeekday + 1);
+        if (date === data.currentDate) cell.setAttribute("aria-current", "date");
+        const dateLabel = formatDate(date);
+        const number = document.createElement("span");
+        number.className = "calendar-day-number";
+        number.textContent = String(day);
+        cell.append(number);
+        if (brief && cell instanceof HTMLAnchorElement) {
+          cell.href = `/daily/${date}`;
+          cell.setAttribute("aria-label", `${dateLabel}. ${intensityLabels[brief.intensity]}. ${brief.summary}`);
+          appendPopover(cell, brief, dateLabel);
+        } else {
+          cell.setAttribute("aria-label", dateLabel);
+        }
+        grid.append(cell);
+      }
+      resetDetail();
+      updateControls();
+    };
+
+    root.querySelectorAll("[data-month-step]").forEach((element) => {
+      element.addEventListener("click", () => {
+        if (!(element instanceof HTMLButtonElement)) return;
+        visibleMonth = addMonths(visibleMonth, Number(element.dataset.monthStep));
+        render();
+      });
+    });
+    root.querySelectorAll("[data-year-step]").forEach((element) => {
+      element.addEventListener("click", () => {
+        if (!(element instanceof HTMLButtonElement)) return;
+        visibleMonth = addMonths(visibleMonth, Number(element.dataset.yearStep) * 12);
+        render();
+      });
+    });
+    const applyTypedYear = () => {
+      const nextYear = Number(yearInput.value);
+      if (!Number.isInteger(nextYear) || nextYear < minimumYear || nextYear > maximumYear) {
+        yearInput.value = visibleMonth.slice(0, 4);
+        yearInput.setAttribute("aria-invalid", "true");
+        return;
+      }
+      yearInput.removeAttribute("aria-invalid");
+      visibleMonth = `${nextYear}-${visibleMonth.slice(5, 7)}`;
+      render();
+    };
+    yearInput.addEventListener("change", applyTypedYear);
+    yearInput.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+      applyTypedYear();
+      yearInput.blur();
+    });
+    root.querySelector("[data-calendar-today]")?.addEventListener("click", () => {
+      visibleMonth = currentMonth;
+      render();
+    });
+
+    grid.addEventListener("click", (event) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      const anchor = target.closest("a[data-calendar-date]");
+      if (!(anchor instanceof HTMLAnchorElement) || matchMedia("(hover: hover) and (pointer: fine)").matches) return;
+      event.preventDefault();
+      const brief = briefs.get(anchor.dataset.calendarDate);
+      if (!brief || !(detail instanceof HTMLElement)) return;
+      grid.querySelector(".is-selected")?.classList.remove("is-selected");
+      anchor.classList.add("is-selected");
+      const date = detail.querySelector("[data-calendar-detail-date]");
+      const summary = detail.querySelector("[data-calendar-detail-summary]");
+      const meta = detail.querySelector("[data-calendar-detail-meta]");
+      const link = detail.querySelector("[data-calendar-detail-link]");
+      if (date) date.textContent = formatDate(brief.date);
+      if (summary) summary.textContent = brief.summary;
+      if (meta) meta.textContent = [
+        `${brief.itemCount} התפתחויות`,
+        intensityLabels[brief.intensity],
+        brief.companies.join(" · "),
+      ].filter(Boolean).join(" · ");
+      if (link instanceof HTMLAnchorElement) link.href = anchor.href;
+      detail.hidden = false;
+      detail.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    });
+
+    updateControls();
+  })();
+</script>

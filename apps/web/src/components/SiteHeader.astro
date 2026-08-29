@@ -1,4 +1,6 @@
 ---
+import ThemeToggle from "./ThemeToggle.astro";
+
 interface Props { activePath: string; }
 const { activePath } = Astro.props;
 const links = [
@@ -19,8 +21,6 @@ const links = [
         <a class="nav-link" href={link.href} aria-current={link.active ? "page" : undefined}>{link.label}</a>
       ))}
     </nav>
-    <button class="theme-toggle" type="button" data-theme-toggle aria-label="החלפת ערכת צבעים" title="ערכת צבעים">
-      <span aria-hidden="true">◐</span>
-    </button>
+    <ThemeToggle />
   </div>
 </header>

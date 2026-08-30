@@ -35,7 +35,6 @@ const clientData = {
     summary: metadata.summary,
     intensity: metadata.day_intensity,
     itemCount: metadata.significant_items + metadata.worth_watching_items,
-    companies: metadata.companies.slice(0, 3),
   })),
 };
 const serializedData = JSON.stringify(clientData).replaceAll("<", "\\u003c");
@@ -101,9 +100,9 @@ const serializedData = JSON.stringify(clientData).replaceAll("<", "\\u003c");
           >
             <span class="calendar-day-number">{cell.day}</span>
             <span class="calendar-popover" role="tooltip">
-              <span class="calendar-popover-date">{dateLabel}</span>
-              <strong>{brief.metadata.summary}</strong>
-              <span>{brief.metadata.significant_items + brief.metadata.worth_watching_items} התפתחויות</span>
+            <span class="calendar-popover-date">{dateLabel}</span>
+            <strong>{brief.metadata.summary}</strong>
+            <span>{brief.metadata.significant_items + brief.metadata.worth_watching_items} התפתחויות · {intensityLabels[brief.metadata.day_intensity]}</span>
             </span>
           </a>
         ) : (
@@ -132,7 +131,6 @@ const serializedData = JSON.stringify(clientData).replaceAll("<", "\\u003c");
       ))}
       <span>עמוס</span>
     </div>
-    <span class="calendar-touch-instruction">נוגעים ביום כדי לראות תקציר</span>
   </div>
 
   <aside class="calendar-touch-detail" data-calendar-detail hidden aria-live="polite">
@@ -202,7 +200,7 @@ const serializedData = JSON.stringify(clientData).replaceAll("<", "\\u003c");
       const summary = document.createElement("strong");
       summary.textContent = brief.summary;
       const meta = document.createElement("span");
-      meta.textContent = `${brief.itemCount} התפתחויות`;
+      meta.textContent = `${brief.itemCount} התפתחויות · ${intensityLabels[brief.intensity]}`;
       popover.append(date, summary, meta);
       anchor.append(popover);
     };
@@ -323,7 +321,6 @@ const serializedData = JSON.stringify(clientData).replaceAll("<", "\\u003c");
       if (meta) meta.textContent = [
         `${brief.itemCount} התפתחויות`,
         intensityLabels[brief.intensity],
-        brief.companies.join(" · "),
       ].filter(Boolean).join(" · ");
       if (link instanceof HTMLAnchorElement) link.href = anchor.href;
       detail.hidden = false;

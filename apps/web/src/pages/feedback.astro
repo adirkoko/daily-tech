@@ -1,6 +1,96 @@
 ---
-export const prerender = false;
 import BaseLayout from "../layouts/BaseLayout.astro";
-const success=Astro.url.searchParams.get("success"); const error=Astro.url.searchParams.get("error");
+import { FEEDBACK_FORM_LIMITS } from "../server/feedback.js";
+
+export const prerender = false;
+
+const success = Astro.url.searchParams.get("success");
+const error = Astro.url.searchParams.get("error");
+const formattedBodyLimit = FEEDBACK_FORM_LIMITS.bodyCharacters.toLocaleString("he-IL");
 ---
-<BaseLayout title="יצירת קשר — Daily Tech"><section class="shell page-section"><p class="eyebrow">יצירת קשר</p><h1 class="display-title">משהו שכדאי שנדע?</h1><p class="lede">תיקון, הצעה או פידבק כללי מגיעים ישירות לתיבת הניהול.</p>{success&&<p class="form-success">{success}</p>}{error&&<p class="form-error">{error}</p>}<form class="feedback-form" action="/api/feedback" method="post"><label>כותרת<input name="title" required maxlength="120" /></label><label>שם <small>(אופציונלי)</small><input name="name" maxlength="80" /></label><label>קטגוריה<select name="category"><option value="general">כללי</option><option value="correction">תיקון</option><option value="suggestion">הצעה</option></select></label><label>הודעה<textarea name="body" required maxlength="4000" rows="8"></textarea></label><button class="button" type="submit">שליחה</button></form></section></BaseLayout>
+
+<BaseLayout>
+  <section class="shell page-section">
+    <p class="eyebrow">יצירת קשר</p>
+    <h1 class="display-title">משהו שכדאי שנדע?</h1>
+    <p class="lede">תיקון, הצעה או פידבק כללי מגיעים ישירות לתיבת הניהול.</p>
+    {success && <p class="form-success">{success}</p>}
+    {error && <p class="form-error">{error}</p>}
+
+    <form class="feedback-form" action="/api/feedback" method="post">
+      <label>
+        <span class="form-label-row">כותרת <small id="feedback-title-hint">עד {FEEDBACK_FORM_LIMITS.titleCharacters} תווים, בשורה אחת</small></span>
+        <input name="title" type="text" required maxlength={FEEDBACK_FORM_LIMITS.titleCharacters} aria-describedby="feedback-title-hint" />
+      </label>
+      <label>
+        <span class="form-label-row">שם <small id="feedback-name-hint">אופציונלי · עד {FEEDBACK_FORM_LIMITS.nameCharacters} תווים, בשורה אחת</small></span>
+        <input name="name" type="text" maxlength={FEEDBACK_FORM_LIMITS.nameCharacters} autocomplete="name" aria-describedby="feedback-name-hint" />
+      </label>
+      <label>
+        קטגוריה
+        <select name="category">
+          <option value="general">כללי</option>
+          <option value="correction">תיקון</option>
+          <option value="suggestion">הצעה</option>
+        </select>
+      </label>
+      <label>
+        <span class="form-label-row">
+          הודעה
+          <small id="feedback-body-hint" data-feedback-body-count aria-live="polite">0/{formattedBodyLimit} תווים · 0/{FEEDBACK_FORM_LIMITS.bodyLines} שורות</small>
+        </span>
+        <textarea
+          name="body"
+          required
+          maxlength={FEEDBACK_FORM_LIMITS.bodyCharacters}
+          rows="7"
+          data-max-lines={FEEDBACK_FORM_LIMITS.bodyLines}
+          aria-describedby="feedback-body-hint"
+        ></textarea>
+      </label>
+      <button class="button" type="submit">שליחה</button>
+    </form>
+  </section>
+</BaseLayout>
+
+<script is:inline>
+  const feedbackBody = document.querySelector(".feedback-form textarea[name='body']");
+  const feedbackBodyCount = document.querySelector("[data-feedback-body-count]");
+  if (feedbackBody instanceof HTMLTextAreaElement) {
+    const maximumLines = Number(feedbackBody.dataset.maxLines);
+    const maximumCharacters = feedbackBody.maxLength;
+    const countLines = (value) => {
+      const normalized = value.trim();
+      return normalized.length === 0 ? 0 : normalized.split(/\r\n|[\r\n\u0085\u2028\u2029]/u).length;
+    };
+    const updateCounter = () => {
+      if (!(feedbackBodyCount instanceof HTMLElement)) return;
+      feedbackBodyCount.textContent = `${feedbackBody.value.length.toLocaleString("he-IL")}/${maximumCharacters.toLocaleString("he-IL")} תווים · ${countLines(feedbackBody.value)}/${maximumLines} שורות`;
+    };
+    let acceptedValue = feedbackBody.value;
+    let acceptedSelectionStart = feedbackBody.selectionStart ?? acceptedValue.length;
+    let acceptedSelectionEnd = feedbackBody.selectionEnd ?? acceptedValue.length;
+    feedbackBody.addEventListener("input", () => {
+      if (countLines(feedbackBody.value) > maximumLines) {
+        feedbackBody.value = acceptedValue;
+        feedbackBody.setSelectionRange(acceptedSelectionStart, acceptedSelectionEnd);
+      } else {
+        acceptedValue = feedbackBody.value;
+        acceptedSelectionStart = feedbackBody.selectionStart ?? acceptedValue.length;
+        acceptedSelectionEnd = feedbackBody.selectionEnd ?? acceptedValue.length;
+      }
+      feedbackBody.setCustomValidity("");
+      updateCounter();
+    });
+    feedbackBody.form?.addEventListener("submit", (event) => {
+      const exceedsLineLimit = countLines(feedbackBody.value) > maximumLines;
+      feedbackBody.setCustomValidity(
+        exceedsLineLimit ? `ההודעה יכולה להכיל עד ${maximumLines} שורות.` : "",
+      );
+      if (feedbackBody.checkValidity()) return;
+      event.preventDefault();
+      feedbackBody.reportValidity();
+    });
+    updateCounter();
+  }
+</script>

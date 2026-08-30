@@ -1,5 +1,6 @@
 ---
 import ThemeToggle from "./ThemeToggle.astro";
+import LogoMark from "./LogoMark.astro";
 
 interface Props { activePath: string; }
 const { activePath } = Astro.props;
@@ -13,7 +14,7 @@ const links = [
 <header class="site-header">
   <div class="shell header-inner">
     <a class="brand" href="/" aria-label="Daily Tech — דף הבית">
-      <span class="brand-mark" aria-hidden="true">DT</span>
+      <span class="brand-mark" aria-hidden="true"><LogoMark /></span>
       <span class="brand-name">Daily Tech</span>
     </a>
     <nav class="main-nav" aria-label="ניווט ראשי">

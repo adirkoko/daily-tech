@@ -13,10 +13,9 @@ const newer = snapshot.published[briefIndex - 1] ?? null;
 const older = snapshot.published[briefIndex + 1] ?? null;
 const day = brief.metadata;
 const html = await renderBrief(brief);
-const title = `${formatHebrewDate(day.date)} — Daily Tech`;
 ---
 
-<BaseLayout title={title} description={day.summary}>
+<BaseLayout description={day.summary}>
   <article class="shell">
     <header class="article-header">
       <p class="eyebrow">תדריך יומי</p>

@@ -4,10 +4,10 @@
 
 The public feedback form accepts:
 
-- A required, length-limited title.
-- An optional name.
+- A required title limited to 50 characters and exactly one line.
+- An optional name limited to 24 characters and exactly one line.
 - A category.
-- A body limited by characters and lines.
+- A body limited to 1,500 characters and 20 lines.
 
 Submissions are limited to three per caller within a 12-hour fixed window. The window
 duration is configurable. Rate-limit keys use a one-way caller hash; raw IP addresses

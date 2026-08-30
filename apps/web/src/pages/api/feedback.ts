@@ -2,7 +2,8 @@ import type { APIRoute } from "astro";
 import { callerHash, fixedWindowStart } from "../../server/auth.js";
 import { getServerConfig } from "../../server/config.js";
 import { openServerDatabase } from "../../server/database.js";
-import { callerAddress, field, redirectWith, sameOrigin } from "../../server/http.js";
+import { parsePublicFeedback } from "../../server/feedback.js";
+import { callerAddress, redirectWith, sameOrigin } from "../../server/http.js";
 
 export const prerender = false;
 
@@ -10,14 +11,7 @@ export const POST: APIRoute = async (context) => {
   if (!sameOrigin(context)) return new Response("Forbidden", { status: 403 });
   try {
     const form = await context.request.formData();
-    const title = field(form, "title", 120).trim();
-    const name = field(form, "name", 80).trim();
-    const body = field(form, "body", 4_000).trim();
-    const category = field(form, "category", 20);
-    if (!title || !body || !["general", "correction", "suggestion"].includes(category)) {
-      throw new TypeError("יש למלא את כל שדות החובה.");
-    }
-    if (body.split(/\r?\n/u).length > 80) throw new TypeError("ההודעה ארוכה מדי.");
+    const submission = parsePublicFeedback(form);
 
     const now = new Date();
     const occurredAt = now.toISOString();
@@ -35,17 +29,17 @@ export const POST: APIRoute = async (context) => {
         return redirectWith("/feedback", "error", "הגעת למגבלת השליחות. אפשר לנסות שוב מאוחר יותר.");
       }
       db.operations.createTicket({
-        title,
-        submitterName: name || null,
-        category: category as "general" | "correction" | "suggestion",
-        body,
+        title: submission.title,
+        submitterName: submission.name,
+        category: submission.category,
+        body: submission.body,
         createdAt: occurredAt,
       });
       db.operations.appendLog({
         eventType: "feedback_submitted",
         level: "info",
         message: null,
-        details: { category },
+        details: { category: submission.category },
         occurredAt,
       });
     } finally { db.close(); }

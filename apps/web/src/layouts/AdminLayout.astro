@@ -1,10 +1,10 @@
 ---
 import "../styles/global.css";
 
+import LogoMark from "../components/LogoMark.astro";
 import ThemeToggle from "../components/ThemeToggle.astro";
 
-interface Props { title: string; }
-const { title } = Astro.props;
+interface Props { title?: string; }
 const csrf = Astro.locals.adminSession?.csrfToken;
 ---
 <!doctype html>
@@ -14,7 +14,8 @@ const csrf = Astro.locals.adminSession?.csrfToken;
     <meta name="viewport" content="width=device-width" />
     <meta name="robots" content="noindex,nofollow" />
     <meta name="theme-color" content="#f4f5f7" data-theme-color />
-    <title>{title} — Daily Tech Admin</title>
+    <link rel="icon" type="image/svg+xml" sizes="any" href="/favicon.svg?v=4" />
+    <title>Daily Tech Admin</title>
     <script is:inline>
       (() => {
         const saved = localStorage.getItem("daily-tech-theme");
@@ -27,7 +28,7 @@ const csrf = Astro.locals.adminSession?.csrfToken;
   </head>
   <body class="admin-body">
     <header class="admin-header">
-      <a class="brand" href="/admin"><span class="brand-mark">DT</span><span>ניהול</span></a>
+      <a class="brand" href="/admin"><span class="brand-mark" aria-hidden="true"><LogoMark /></span><span>ניהול</span></a>
       <div class="admin-header-actions">
         {csrf && <nav><a href="/admin">תדריכים</a><a href="/admin/feedback">פידבק</a><a href="/admin/alerts">התראות</a><form action="/api/admin/logout" method="post"><input type="hidden" name="csrf_token" value={csrf} /><button type="submit">יציאה</button></form></nav>}
         <ThemeToggle />

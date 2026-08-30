@@ -5,13 +5,11 @@ import SiteFooter from "../components/SiteFooter.astro";
 import SiteHeader from "../components/SiteHeader.astro";
 
 interface Props {
-  title?: string;
   description?: string;
   noindex?: boolean;
 }
 
 const {
-  title = "Daily Tech — מה באמת קרה בטכנולוגיה",
   description = "ארכיון עברי נקי ואמין של ההתפתחויות הטכנולוגיות החשובות בכל יום.",
   noindex = false,
 } = Astro.props;
@@ -27,14 +25,16 @@ const canonical = Astro.site ? new URL(Astro.url.pathname, Astro.site) : Astro.u
     <meta name="description" content={description} />
     <meta name="theme-color" content="#f4f5f7" data-theme-color />
     {noindex && <meta name="robots" content="noindex" />}
+    <link rel="icon" type="image/svg+xml" sizes="any" href="/favicon.svg?v=4" />
+    <link rel="mask-icon" href="/favicon.svg?v=4" color="#4f46e5" />
     <link rel="canonical" href={canonical} />
     <link rel="alternate" type="application/rss+xml" title="Daily Tech" href={new URL("/rss.xml", Astro.site ?? Astro.url)} />
     <meta property="og:type" content="website" />
     <meta property="og:locale" content="he_IL" />
-    <meta property="og:title" content={title} />
+    <meta property="og:title" content="Daily Tech" />
     <meta property="og:description" content={description} />
     <meta property="og:url" content={canonical} />
-    <title>{title}</title>
+    <title>Daily Tech</title>
     <script is:inline>
       (() => {
         const saved = localStorage.getItem("daily-tech-theme");

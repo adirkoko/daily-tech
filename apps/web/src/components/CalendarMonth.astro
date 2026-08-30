@@ -1,18 +1,27 @@
 ---
-import type { DayIntensity } from "@daily-tech/core";
+import type { DayIntensity, DayMetadata } from "@daily-tech/core";
 
-import type { PublishedBrief } from "../lib/content.js";
 import { buildCalendar, formatHebrewDate, formatHebrewMonth } from "../lib/dates.js";
 
 interface Props {
   month: string;
   currentDate: string;
-  briefs: readonly PublishedBrief[];
+  days: readonly DayMetadata[];
+  /** Path prefix for a day link; the date is appended as `${hrefBase}/${date}`. */
+  hrefBase?: string;
+  /** Label for the touch-detail action link. */
+  dayActionLabel?: string;
 }
 
-const { month, currentDate, briefs } = Astro.props;
+const {
+  month,
+  currentDate,
+  days,
+  hrefBase = "/daily",
+  dayActionLabel = "לקריאת המהדורה",
+} = Astro.props;
 const cells = buildCalendar(month).filter((cell) => cell.inMonth);
-const byDate = new Map(briefs.map((brief) => [brief.metadata.date, brief]));
+const byDate = new Map(days.map((day) => [day.date, day]));
 const weekdays = ["א", "ב", "ג", "ד", "ה", "ו", "ש"];
 const intensityLabels: Record<DayIntensity, string> = {
   minimal: "יום שקט",
@@ -30,11 +39,12 @@ const initialMonthName = new Intl.DateTimeFormat("he-IL", {
 const clientData = {
   currentDate,
   initialMonth: month,
-  briefs: briefs.map(({ metadata }) => ({
-    date: metadata.date,
-    summary: metadata.summary,
-    intensity: metadata.day_intensity,
-    itemCount: metadata.significant_items + metadata.worth_watching_items,
+  hrefBase,
+  briefs: days.map((day) => ({
+    date: day.date,
+    summary: day.summary,
+    intensity: day.day_intensity,
+    itemCount: day.significant_items + day.worth_watching_items,
   })),
 };
 const serializedData = JSON.stringify(clientData).replaceAll("<", "\\u003c");
@@ -81,28 +91,28 @@ const serializedData = JSON.stringify(clientData).replaceAll("<", "\\u003c");
 
     <div class="calendar-grid" role="grid" aria-label={`לוח ${formatHebrewMonth(month)}`} data-calendar-grid>
       {cells.map((cell, index) => {
-        const brief = byDate.get(cell.date);
+        const day = byDate.get(cell.date);
         const weekday = new Date(`${cell.date}T12:00:00Z`).getUTCDay();
         const style = index === 0 ? `grid-column-start: ${firstColumn}` : undefined;
         const dateLabel = formatHebrewDate(cell.date, { weekday: "long", day: "numeric", month: "long" });
         const isToday = cell.date === currentDate;
-        return brief ? (
+        return day ? (
           <a
             class="calendar-day has-brief"
             data-calendar-date={cell.date}
-            data-level={brief.metadata.day_intensity}
+            data-level={day.day_intensity}
             data-weekday={weekday}
-            href={`/daily/${cell.date}`}
+            href={`${hrefBase}/${cell.date}`}
             role="gridcell"
             style={style}
             aria-current={isToday ? "date" : undefined}
-            aria-label={`${dateLabel}. ${intensityLabels[brief.metadata.day_intensity]}. ${brief.metadata.summary}`}
+            aria-label={`${dateLabel}. ${intensityLabels[day.day_intensity]}. ${day.summary}`}
           >
             <span class="calendar-day-number">{cell.day}</span>
             <span class="calendar-popover" role="tooltip">
             <span class="calendar-popover-date">{dateLabel}</span>
-            <strong>{brief.metadata.summary}</strong>
-            <span>{brief.metadata.significant_items + brief.metadata.worth_watching_items} התפתחויות · {intensityLabels[brief.metadata.day_intensity]}</span>
+            <strong>{day.summary}</strong>
+            <span>{day.significant_items + day.worth_watching_items} התפתחויות · {intensityLabels[day.day_intensity]}</span>
             </span>
           </a>
         ) : (
@@ -139,7 +149,7 @@ const serializedData = JSON.stringify(clientData).replaceAll("<", "\\u003c");
       <strong data-calendar-detail-summary></strong>
       <span class="calendar-detail-meta" data-calendar-detail-meta></span>
     </div>
-    <a class="button" data-calendar-detail-link href="/calendar">לקריאת המהדורה</a>
+    <a class="button" data-calendar-detail-link href={hrefBase}>{dayActionLabel}</a>
   </aside>
 
   <script is:inline type="application/json" data-calendar-data set:html={serializedData}></script>
@@ -253,7 +263,7 @@ const serializedData = JSON.stringify(clientData).replaceAll("<", "\\u003c");
         number.textContent = String(day);
         cell.append(number);
         if (brief && cell instanceof HTMLAnchorElement) {
-          cell.href = `/daily/${date}`;
+          cell.href = `${data.hrefBase}/${date}`;
           cell.setAttribute("aria-label", `${dateLabel}. ${intensityLabels[brief.intensity]}. ${brief.summary}`);
           appendPopover(cell, brief, dateLabel);
         } else {

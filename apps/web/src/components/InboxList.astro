@@ -1,0 +1,241 @@
+---
+import { formatIsraelDateTime } from "../lib/dates.js";
+
+export interface InboxTag {
+  label: string;
+  tone?: "neutral" | "accent" | "ok" | "warn" | "danger";
+}
+export interface InboxItem {
+  id: string;
+  title: string;
+  timestamp: string;
+  tags: InboxTag[];
+  meta?: { label: string; value: string }[];
+  body?: string | null;
+  /** When set, a "mark resolved" button is shown once the row is expanded. */
+  resolveAction?: string | null;
+  /** Filter dimensions, e.g. { status: "open", category: "general" }. */
+  filters?: Record<string, string>;
+}
+export interface InboxFilterGroup {
+  key: string;
+  label: string;
+  options: { value: string; label: string }[];
+}
+
+interface Props {
+  items: InboxItem[];
+  filterGroups?: InboxFilterGroup[];
+  csrf: string;
+  emptyText?: string;
+}
+
+const { items, filterGroups = [], csrf, emptyText = "אין פריטים שתואמים לסינון." } = Astro.props;
+---
+<section class="inbox" data-inbox>
+  <div class="inbox-controls">
+    <label class="inbox-search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+      <input type="search" data-inbox-search placeholder="חיפוש בכותרת…" aria-label="חיפוש בכותרת" />
+    </label>
+
+    {filterGroups.map((group) => (
+      <div class="inbox-filter" data-filter-group={group.key} role="group" aria-label={group.label}>
+        <button type="button" class="inbox-chip is-active" data-filter-value="">{group.label}: הכול</button>
+        {group.options.map((option) => (
+          <button type="button" class="inbox-chip" data-filter-value={option.value}>{option.label}</button>
+        ))}
+      </div>
+    ))}
+
+    <div class="inbox-sort" role="group" aria-label="מיון">
+      <button type="button" class="inbox-chip is-active" data-sort="desc">חדשים</button>
+      <button type="button" class="inbox-chip" data-sort="asc">ישנים</button>
+    </div>
+
+    <p class="inbox-count" data-inbox-count aria-live="polite"></p>
+  </div>
+
+  <ul class="inbox-list" data-inbox-list>
+    {items.map((item, index) => (
+      <li
+        class="inbox-row"
+        data-inbox-row
+        data-timestamp={item.timestamp}
+        data-title={item.title.toLocaleLowerCase("he")}
+        {...Object.fromEntries(
+          Object.entries(item.filters ?? {}).map(([key, value]) => [`data-filter-${key}`, value]),
+        )}
+      >
+        <button
+          class="inbox-row-head"
+          type="button"
+          aria-expanded="false"
+          aria-controls={`inbox-body-${index}`}
+          data-inbox-toggle
+        >
+          <span class="inbox-row-title">{item.title}</span>
+          <span class="inbox-row-tags">
+            {item.tags.map((tag) => (
+              <span class={`inbox-tag tone-${tag.tone ?? "neutral"}`}>{tag.label}</span>
+            ))}
+          </span>
+          <time class="inbox-row-time" datetime={item.timestamp}>{formatIsraelDateTime(item.timestamp)}</time>
+          <svg class="inbox-row-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+        </button>
+
+        <div class="inbox-row-body" id={`inbox-body-${index}`} hidden>
+          {item.meta && item.meta.length > 0 && (
+            <div class="inbox-meta">
+              {item.meta.map((entry) => (
+                <div class="inbox-meta-row"><span>{entry.label}</span><span>{entry.value}</span></div>
+              ))}
+            </div>
+          )}
+          {item.body && <pre class="inbox-body-text">{item.body}</pre>}
+          {item.resolveAction && (
+            <form class="inbox-resolve" action={item.resolveAction} method="post">
+              <input type="hidden" name="csrf_token" value={csrf} />
+              <button class="button secondary" type="submit">סימון כטופל</button>
+            </form>
+          )}
+        </div>
+      </li>
+    ))}
+  </ul>
+
+  <p class="inbox-empty" data-inbox-empty hidden>{emptyText}</p>
+
+  <nav class="inbox-pager" data-inbox-pager hidden aria-label="ניווט עמודים">
+    <button type="button" class="inbox-pager-button" data-pager-prev aria-label="עמוד קודם">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>
+    </button>
+    <span class="inbox-pager-label" data-pager-label></span>
+    <button type="button" class="inbox-pager-button" data-pager-next aria-label="עמוד הבא">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 6-6 6 6 6" /></svg>
+    </button>
+  </nav>
+</section>
+
+<script is:inline>
+  (() => {
+    const inbox = document.querySelector("[data-inbox]");
+    if (!inbox) return;
+    const list = inbox.querySelector("[data-inbox-list]");
+    const rows = Array.from(inbox.querySelectorAll("[data-inbox-row]"));
+    const search = inbox.querySelector("[data-inbox-search]");
+    const countEl = inbox.querySelector("[data-inbox-count]");
+    const emptyEl = inbox.querySelector("[data-inbox-empty]");
+    const pager = inbox.querySelector("[data-inbox-pager]");
+    const pagerPrev = inbox.querySelector("[data-pager-prev]");
+    const pagerNext = inbox.querySelector("[data-pager-next]");
+    const pagerLabel = inbox.querySelector("[data-pager-label]");
+    const PAGE_SIZE = 15;
+    const total = rows.length;
+    const selected = {};
+    let sortDir = "desc";
+    let query = "";
+    let page = 0;
+
+    const matches = (row) => {
+      if (query && !(row.dataset.title || "").includes(query)) return false;
+      for (const key in selected) {
+        const want = selected[key];
+        if (!want) continue;
+        const have = row.getAttribute("data-filter-" + key);
+        if (have !== null && have !== want) return false;
+      }
+      return true;
+    };
+
+    const apply = () => {
+      const matched = rows
+        .filter(matches)
+        .sort((a, b) => {
+          const cmp = a.dataset.timestamp.localeCompare(b.dataset.timestamp);
+          return sortDir === "asc" ? cmp : -cmp;
+        });
+      const pages = Math.max(1, Math.ceil(matched.length / PAGE_SIZE));
+      page = Math.min(Math.max(page, 0), pages - 1);
+      const start = page * PAGE_SIZE;
+
+      for (const row of rows) row.hidden = true;
+      matched.slice(start, start + PAGE_SIZE).forEach((row) => {
+        row.hidden = false;
+        list.append(row);
+      });
+
+      if (countEl) {
+        countEl.textContent = matched.length === total
+          ? total + " פריטים"
+          : matched.length + " מתוך " + total;
+      }
+      if (emptyEl) emptyEl.hidden = matched.length !== 0;
+      if (pager) {
+        pager.hidden = matched.length <= PAGE_SIZE;
+        if (pagerLabel) pagerLabel.textContent = "עמוד " + (page + 1) + " מתוך " + pages;
+        if (pagerPrev) pagerPrev.disabled = page === 0;
+        if (pagerNext) pagerNext.disabled = page >= pages - 1;
+      }
+    };
+
+    const resetToFirstPage = () => {
+      page = 0;
+      apply();
+    };
+
+    inbox.querySelectorAll("[data-inbox-toggle]").forEach((toggle) => {
+      toggle.addEventListener("click", () => {
+        const row = toggle.closest(".inbox-row");
+        const body = row.querySelector(".inbox-row-body");
+        const open = toggle.getAttribute("aria-expanded") === "true";
+        toggle.setAttribute("aria-expanded", String(!open));
+        row.classList.toggle("is-open", !open);
+        if (body) body.hidden = open;
+      });
+    });
+
+    inbox.querySelectorAll("[data-filter-group]").forEach((group) => {
+      const key = group.dataset.filterGroup;
+      selected[key] = "";
+      group.querySelectorAll("[data-filter-value]").forEach((button) => {
+        button.addEventListener("click", () => {
+          selected[key] = button.dataset.filterValue;
+          group.querySelectorAll("[data-filter-value]").forEach((other) => {
+            other.classList.toggle("is-active", other === button);
+          });
+          resetToFirstPage();
+        });
+      });
+    });
+
+    inbox.querySelectorAll("[data-sort]").forEach((button) => {
+      button.addEventListener("click", () => {
+        sortDir = button.dataset.sort;
+        inbox.querySelectorAll("[data-sort]").forEach((other) => {
+          other.classList.toggle("is-active", other === button);
+        });
+        resetToFirstPage();
+      });
+    });
+
+    search?.addEventListener("input", () => {
+      query = search.value.trim().toLowerCase();
+      resetToFirstPage();
+    });
+
+    pagerPrev?.addEventListener("click", () => {
+      if (page === 0) return;
+      page -= 1;
+      apply();
+      list.scrollIntoView({ block: "start", behavior: "smooth" });
+    });
+    pagerNext?.addEventListener("click", () => {
+      page += 1;
+      apply();
+      list.scrollIntoView({ block: "start", behavior: "smooth" });
+    });
+
+    apply();
+  })();
+</script>

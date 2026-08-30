@@ -1,11 +1,11 @@
 ---
 import BaseLayout from "../layouts/BaseLayout.astro";
 import IntensityBadge from "../components/IntensityBadge.astro";
-import { loadSiteSnapshot } from "../lib/content.js";
+import { getSiteSnapshot } from "../lib/content.js";
 import { formatHebrewDate } from "../lib/dates.js";
 
 export const prerender = false;
-const snapshot = await loadSiteSnapshot();
+const snapshot = await getSiteSnapshot();
 const latest = snapshot.latestPublished;
 const pending = snapshot.targetDay === null || snapshot.targetDay.status === "draft" || snapshot.targetDay.status === "ready";
 const failed = snapshot.targetDay?.status === "failed";

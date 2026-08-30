@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 
 import { expectedBriefRelativePath, validateBriefArtifact, type BriefStatus, type DayIntensity, type DayMetadata, type ValidationIssue } from "@daily-tech/core";
 
+import { invalidateSiteSnapshot } from "../lib/content.js";
 import { getServerConfig } from "./config.js";
 import { openServerDatabase } from "./database.js";
 
@@ -74,6 +75,7 @@ export async function saveAdminBrief(input: AdminBriefInput): Promise<DayMetadat
     await rename(temporary, path);
     const saved = database.saveDay(metadata);
     committed = true;
+    invalidateSiteSnapshot();
     try {
       database.operations.appendLog({ briefDate: input.date, eventType: "admin_brief_saved", level: "info", message: null, details: { status: saved.status }, occurredAt: now });
     } catch { /* The content commit remains authoritative if audit logging fails. */ }
@@ -102,6 +104,7 @@ export async function deleteAdminBrief(date: string): Promise<boolean> {
     try {
       if (!database.deleteDay(date)) throw new Error(`Brief ${date} disappeared during deletion.`);
       committed = true;
+      invalidateSiteSnapshot();
       try {
         database.operations.appendLog({ briefDate: date, eventType: "admin_brief_deleted", level: "warning", message: null, occurredAt: new Date().toISOString() });
       } catch { /* Deletion remains authoritative if audit logging fails. */ }

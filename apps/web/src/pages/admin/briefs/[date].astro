@@ -2,11 +2,273 @@
 export const prerender = false;
 import AdminLayout from "../../../layouts/AdminLayout.astro";
 import { loadAdminBrief } from "../../../server/admin-content.js";
+
 const date = Astro.params.date ?? "";
 const brief = await loadAdminBrief(date);
 if (!brief) return Astro.redirect("/admin?error=brief-not-found", 303);
 const { metadata, markdown } = brief;
 const csrf = Astro.locals.adminSession!.csrfToken;
-const error = Astro.url.searchParams.get("error"); const success = Astro.url.searchParams.get("success");
+const error = Astro.url.searchParams.get("error");
+const success = Astro.url.searchParams.get("success");
+
+const STATUS_OPTIONS = [
+  { value: "draft", label: "טיוטה" },
+  { value: "ready", label: "מוכן" },
+  { value: "published", label: "פורסם" },
+  { value: "failed", label: "נכשל" },
+] as const;
+const INTENSITY_OPTIONS = [
+  { value: "minimal", label: "מינימלי" },
+  { value: "low", label: "נמוך" },
+  { value: "medium", label: "בינוני" },
+  { value: "high", label: "גבוה" },
+  { value: "extreme", label: "קיצוני" },
+] as const;
+const COUNT_FIELDS = [
+  { name: "significant_items", label: "משמעותיים", value: metadata.significant_items },
+  { name: "worth_watching_items", label: "שווה לעקוב", value: metadata.worth_watching_items },
+  { name: "source_count", label: "מקורות", value: metadata.source_count },
+] as const;
+const CHIP_GROUPS = [
+  { name: "companies", label: "חברות", addLabel: "הוספת חברה", items: metadata.companies, wide: false },
+  { name: "topics", label: "נושאים", addLabel: "הוספת נושא", items: metadata.topics, wide: false },
+  { name: "developments", label: "תקצירי התפתחויות", addLabel: "הוספת תקציר", items: metadata.developments, wide: true },
+] as const;
+
+const statusIndex = Math.max(0, STATUS_OPTIONS.findIndex((option) => option.value === metadata.status));
+const intensityIndex = Math.max(0, INTENSITY_OPTIONS.findIndex((option) => option.value === metadata.day_intensity));
 ---
-<AdminLayout title={`עריכת ${date}`}><div class="admin-title"><div><p class="eyebrow">עריכת תדריך</p><h1>{date}</h1></div><button class="button secondary" type="button" data-copy>העתקת Markdown</button></div>{error && <p class="form-error" role="alert">{error}</p>}{success && <p class="form-success" role="status">{success}</p>}<form class="brief-editor" action={`/api/admin/briefs/${date}`} method="post"><input type="hidden" name="csrf_token" value={csrf} /><label class="wide">Markdown<textarea id="markdown" name="markdown" rows="28" required>{markdown}</textarea></label><label class="wide">תקציר<textarea name="summary" rows="3" required maxlength="2000">{metadata.summary}</textarea></label><label>משמעותיים<input name="significant_items" type="number" min="0" value={metadata.significant_items} required /></label><label>שווה לעקוב<input name="worth_watching_items" type="number" min="0" value={metadata.worth_watching_items} required /></label><label>מקורות<input name="source_count" type="number" min="0" value={metadata.source_count} required /></label><label>עצימות<select name="day_intensity">{["minimal","low","medium","high","extreme"].map((value) => <option value={value} selected={metadata.day_intensity === value}>{value}</option>)}</select></label><label>סטטוס<select name="status">{["draft","ready","published","failed"].map((value) => <option value={value} selected={metadata.status === value}>{value}</option>)}</select></label><label class="wide">חברות — אחת בשורה<textarea name="companies" rows="4">{metadata.companies.join("\n")}</textarea></label><label class="wide">נושאים — אחד בשורה<textarea name="topics" rows="4">{metadata.topics.join("\n")}</textarea></label><label class="wide">תקצירי התפתחויות — אחד בשורה<textarea name="developments" rows="7">{metadata.developments.join("\n")}</textarea></label><div class="admin-actions wide"><button class="button" name="action" value="save" type="submit">שמירה</button><button class="danger-button" name="action" value="delete" type="submit" formnovalidate data-delete>מחיקה</button></div></form><script is:inline>document.querySelector('[data-copy]')?.addEventListener('click',async()=>{const value=document.querySelector('#markdown')?.value;if(typeof value==='string')await navigator.clipboard.writeText(value);});document.querySelector('[data-delete]')?.addEventListener('click',(event)=>{if(!confirm('למחוק את התדריך לצמיתות?'))event.preventDefault();});</script></AdminLayout>
+<AdminLayout title={`עריכת ${date}`}>
+  <section class="editor" data-editor>
+    <header class="editor-topbar">
+      <div class="editor-topbar-title">
+        <p class="eyebrow">תדריך</p>
+        <h1>{date}</h1>
+      </div>
+      <div class="editor-topbar-tools">
+        <div class="segmented segmented-sm" data-segmented data-editor-mode aria-label="מצב תצוגה" style="--count:2;--index:0">
+          <span class="segmented-thumb" aria-hidden="true"></span>
+          <label class="is-active"><input type="radio" name="__mode" value="edit" checked /><span>עריכה</span></label>
+          <label><input type="radio" name="__mode" value="preview" /><span>תצוגה</span></label>
+        </div>
+        <button type="button" class="icon-button editor-copy" data-copy aria-label="העתקת ה־Markdown" title="העתקת ה־Markdown">
+          <svg class="icon-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V6a2 2 0 0 1 2-2h9" /></svg>
+          <svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 13 4 4 10-11" /></svg>
+        </button>
+      </div>
+    </header>
+
+    {error && <p class="form-error" role="alert">{error}</p>}
+    {success && <p class="form-success" role="status">{success}</p>}
+
+    <form class="editor-body" data-editor-form action={`/api/admin/briefs/${date}`} method="post">
+      <input type="hidden" name="csrf_token" value={csrf} />
+
+      <div class="editor-canvas">
+        <div class="editor-canvas-head">
+          <span>Markdown</span>
+          <span class="editor-canvas-hint" data-md-count></span>
+        </div>
+        <textarea id="markdown" name="markdown" rows="20" spellcheck="false" required>{markdown}</textarea>
+        <div class="editor-canvas-preview" data-editor-preview>
+          <div class="article-body" data-preview-body></div>
+        </div>
+      </div>
+
+      <div class="editor-meta" data-editor-meta>
+        <div class="meta-card meta-card-wide">
+          <h2 class="meta-card-title">תקציר</h2>
+          <textarea name="summary" rows="3" maxlength="2000" required>{metadata.summary}</textarea>
+        </div>
+
+        <div class="meta-card meta-card-wide">
+          <h2 class="meta-card-title">מדדים</h2>
+          <div class="meta-counts">
+            {COUNT_FIELDS.map((count) => (
+              <label>
+                <input name={count.name} type="number" min="0" inputmode="numeric" value={count.value} required />
+                <span>{count.label}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <div class="meta-card">
+          <h2 class="meta-card-title">סטטוס</h2>
+          <div class="segmented" data-segmented aria-label="סטטוס" style={`--count:${STATUS_OPTIONS.length};--index:${statusIndex}`}>
+            <span class="segmented-thumb" aria-hidden="true"></span>
+            {STATUS_OPTIONS.map((option) => (
+              <label class={metadata.status === option.value ? "is-active" : undefined}>
+                <input type="radio" name="status" value={option.value} checked={metadata.status === option.value} required />
+                <span>{option.label}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <div class="meta-card">
+          <h2 class="meta-card-title">עצימות</h2>
+          <div class="segmented" data-segmented aria-label="עצימות" style={`--count:${INTENSITY_OPTIONS.length};--index:${intensityIndex}`}>
+            <span class="segmented-thumb" aria-hidden="true"></span>
+            {INTENSITY_OPTIONS.map((option) => (
+              <label class={metadata.day_intensity === option.value ? "is-active" : undefined}>
+                <input type="radio" name="day_intensity" value={option.value} checked={metadata.day_intensity === option.value} required />
+                <span>{option.label}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        {CHIP_GROUPS.map((group) => (
+          <div class={group.wide ? "meta-card meta-card-wide" : "meta-card"} data-chip-field>
+            <h2 class="meta-card-title">{group.label}</h2>
+            <div class="chip-list" data-chip-list data-chip-name={group.name}>
+              {(group.items.length ? group.items : [""]).map((value) => (
+                <div class="chip-row">
+                  <input class="chip-input" name={group.name} value={value} maxlength="200" />
+                  <button type="button" class="chip-remove" data-chip-remove aria-label="הסרה">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 12h12" /></svg>
+                  </button>
+                </div>
+              ))}
+            </div>
+            <button type="button" class="chip-add" data-chip-add>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 6v12M6 12h12" /></svg>
+              {group.addLabel}
+            </button>
+          </div>
+        ))}
+      </div>
+
+      <div class="editor-footer">
+        <button class="button" name="action" value="save" type="submit">שמירת שינויים</button>
+        <button class="danger-button" name="action" value="delete" type="submit" formnovalidate data-delete>מחיקת התדריך</button>
+      </div>
+    </form>
+  </section>
+
+  <dialog class="confirm-dialog" data-delete-dialog>
+    <form method="dialog" class="confirm-dialog-body">
+      <h2>מחיקת התדריך</h2>
+      <p>הפעולה תמחק לצמיתות את קובץ ה־Markdown ואת רשומת המטא־דאטה של {date}. אין דרך לשחזר.</p>
+      <div class="confirm-dialog-actions">
+        <button type="submit" value="cancel" class="button secondary">ביטול</button>
+        <button type="submit" value="confirm" class="danger-button">מחיקה לצמיתות</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script is:inline>
+    (() => {
+      const editor = document.querySelector("[data-editor]");
+      if (!editor) return;
+      const form = editor.querySelector("[data-editor-form]");
+      const markdownEl = editor.querySelector("#markdown");
+      const csrf = form.querySelector('[name="csrf_token"]').value;
+
+      // Enter inside a single-line input must not implicitly submit (save) the form.
+      form.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" && event.target instanceof HTMLInputElement) {
+          event.preventDefault();
+        }
+      });
+
+      editor.querySelectorAll("[data-segmented]").forEach((seg) => {
+        const inputs = Array.from(seg.querySelectorAll("input"));
+        seg.style.setProperty("--count", String(inputs.length));
+        const sync = () => {
+          const index = Math.max(0, inputs.findIndex((input) => input.checked));
+          seg.style.setProperty("--index", String(index));
+          inputs.forEach((input) => input.closest("label").classList.toggle("is-active", input.checked));
+        };
+        seg.addEventListener("change", sync);
+        sync();
+      });
+
+      const copyButton = editor.querySelector("[data-copy]");
+      copyButton?.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(markdownEl.value);
+          copyButton.classList.add("is-copied");
+          setTimeout(() => copyButton.classList.remove("is-copied"), 1600);
+        } catch (_error) { /* clipboard unavailable */ }
+      });
+
+      const mdCount = editor.querySelector("[data-md-count]");
+      const updateCount = () => {
+        if (mdCount) mdCount.textContent = markdownEl.value.length.toLocaleString("he-IL") + " תווים";
+      };
+      updateCount();
+
+      editor.querySelectorAll("[data-chip-list]").forEach((list) => {
+        const name = list.dataset.chipName;
+        const field = list.closest("[data-chip-field]");
+        const addRow = (value) => {
+          const row = document.createElement("div");
+          row.className = "chip-row";
+          const input = document.createElement("input");
+          input.className = "chip-input";
+          input.name = name;
+          input.maxLength = 200;
+          input.value = value || "";
+          const remove = document.createElement("button");
+          remove.type = "button";
+          remove.className = "chip-remove";
+          remove.dataset.chipRemove = "";
+          remove.setAttribute("aria-label", "הסרה");
+          remove.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 12h12" /></svg>';
+          row.append(input, remove);
+          list.append(row);
+          return input;
+        };
+        field.querySelector("[data-chip-add]")?.addEventListener("click", () => addRow().focus());
+        list.addEventListener("click", (event) => {
+          const button = event.target.closest("[data-chip-remove]");
+          if (!button) return;
+          const rows = list.querySelectorAll(".chip-row");
+          if (rows.length > 1) button.closest(".chip-row").remove();
+          else button.closest(".chip-row").querySelector(".chip-input").value = "";
+        });
+      });
+
+      const previewBody = editor.querySelector("[data-preview-body]");
+      let previewTimer;
+      const refreshPreview = () => {
+        fetch("/api/admin/brief-preview", {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({ csrf_token: csrf, markdown: markdownEl.value }),
+        })
+          .then((response) => (response.ok ? response.text() : Promise.reject(new Error(String(response.status)))))
+          .then((html) => { previewBody.innerHTML = html; })
+          .catch(() => { previewBody.textContent = "לא ניתן להציג תצוגה מקדימה כרגע."; });
+      };
+      editor.querySelectorAll("[data-editor-mode] input").forEach((input) => {
+        input.addEventListener("change", () => {
+          const preview = input.value === "preview" && input.checked;
+          editor.classList.toggle("mode-preview", preview);
+          if (preview) refreshPreview();
+        });
+      });
+      markdownEl.addEventListener("input", () => {
+        updateCount();
+        if (!editor.classList.contains("mode-preview")) return;
+        clearTimeout(previewTimer);
+        previewTimer = setTimeout(refreshPreview, 350);
+      });
+
+      const dialog = document.querySelector("[data-delete-dialog]");
+      const deleteButton = editor.querySelector("[data-delete]");
+      if (dialog && deleteButton && typeof dialog.showModal === "function") {
+        deleteButton.addEventListener("click", (event) => {
+          event.preventDefault();
+          dialog.returnValue = "";
+          dialog.showModal();
+        });
+        dialog.addEventListener("close", () => {
+          if (dialog.returnValue === "confirm") form.requestSubmit(deleteButton);
+        });
+      }
+    })();
+  </script>
+</AdminLayout>

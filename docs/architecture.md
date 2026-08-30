@@ -19,7 +19,7 @@ serve pages when AI services are unavailable.
 | `packages/db` | SQLite access: schema and typed read/write functions for day metadata, feedback tickets, logs, and rate-limit counters. |
 | `packages/demo-data` | Development-only CLI that destructively resets a configured content store and fills it with fake data through the real contracts, renderer, validators, and persistence APIs. It is never imported by production code. |
 | `packages/publisher` | Revalidates a ready artifact, coordinates local publication with a durable SQLite lease, and atomically marks it published. |
-| `apps/web` | One standalone Astro/Node service for public server-rendered pages, password-protected admin, feedback API/inbox, and system alerts. It reads Markdown and SQLite on demand and ships almost no client JavaScript. |
+| `apps/web` | One standalone Astro/Node service for public server-rendered pages, password-protected admin, feedback API/inbox, and system alerts. It caches SQLite metadata briefly, reads Markdown only for a requested brief or preview, and keeps reader-side JavaScript small. |
 | `scripts` | Operational scripts, e.g. resetting all login-attempt counters. |
 | `tech_briefs/` | The content store. `daily/` holds the Markdown briefs (source of truth); `meta/` holds the SQLite database. The path is configurable; this is the default. |
 
@@ -47,9 +47,12 @@ share one persistent content root. The existing generation/publication commands 
 available for manual recovery, but no separate scheduler or network service is
 required.
 
-Because public content is rendered on demand, an admin save or local publication
-transition becomes visible immediately. The AI pipeline remains completely outside
-the reader request path.
+Public metadata is held in a short-lived, process-local snapshot to avoid reopening
+and scanning SQLite on every request. Admin writes and embedded scheduler completion
+invalidate that snapshot immediately. The TTL covers Israel-date rollover and writes
+performed by another process. Markdown is deliberately absent from the snapshot and
+is read only for the requested daily page or an authenticated Admin preview. The AI
+pipeline remains completely outside the reader request path.
 
 The scheduler claims one durable SQLite job per action and target date. Active leases
 prevent overlap, while terminal success/failure states prevent repeated AI cost after

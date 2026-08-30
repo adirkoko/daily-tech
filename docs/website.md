@@ -12,9 +12,11 @@ navigation.
 
 ## Home page
 
-The center of the page shows the site name and logo, the current date, a short
-sentence summarizing the character of the day, a primary button ("Read today's
-update"), and a short, prominent note that this is a short daily brief.
+The home page is centred on the latest published edition: the current Israel date,
+the product headline, the latest brief's short metadata summary, its publication
+date, and direct actions for reading it or opening the calendar. Two compact metrics
+show the number of significant developments and the day's intensity. Earlier
+editions are deliberately left to the calendar instead of repeated as a card feed.
 
 - **Today's brief not published yet** — when generation has not finished or the brief
   is waiting to publish, the page does not link to a broken target. It shows a state
@@ -32,19 +34,18 @@ Fixed address per day:
 /daily/YYYY-MM-DD
 ```
 
-Renders that day's Markdown file in a readable layout, marked clearly as a short daily
-brief. Structure of the brief is in [`data-model.md`](data-model.md). Source links are
-clickable, open in a new tab, and show the source name rather than a long URL where
-possible. Navigation to the previous and next day appears when those days exist.
-Metadata is not shown on the page.
+Reads and renders that day's Markdown file in a readable layout. Structure of the
+brief is in [`data-model.md`](data-model.md). Raw HTML is sanitized; source links are
+hardened, open in a new tab, and show the source name rather than a long URL where
+possible. Compact navigation to the previous and next published editions appears
+when they exist. Metadata is not shown on the page.
 
 ## Calendar and archive
 
 The Calendar opens a monthly view with two states per day:
 
-- **Day with a page** — a day inside the system's active period with a valid record.
-  A quiet day is still a day with a page; its page shows a short "the day was quiet"
-  note instead of being empty.
+- **Day with a page** — a day with published metadata. A quiet day is still a day
+  with a page; its page shows a short "the day was quiet" note instead of being empty.
 - **Day without a page** — not usable, not linked. Covers days before the system was
   set up, future days, and days deleted through the admin.
 
@@ -64,27 +65,21 @@ an explicit link to the daily brief. No essential content depends on hover.
 
 ## Statistics page
 
-Built directly from the SQLite metadata, with no AI at page-load time.
+Built directly from published SQLite metadata, with no AI at page-load time. One
+global range controls the whole page:
 
-Implemented in the basic statistics page:
+- **Last month** — the 30 complete Israel calendar dates before today; this is the
+  default.
+- **Last year** — the equivalent rolling 365-day window, not a named calendar year.
 
-- Total briefs and developments.
-- Average source count.
-- Count of high/extreme days.
-- Top companies and topics.
-- Distribution by day intensity.
+The page shows total editions and developments, a daily intensity trend, the ten most
+frequent companies and topics by number of distinct days, and the distribution of
+days across the five intensity levels. The trend spans the data actually available
+inside the selected window, so a partial archive is not compressed into the end of an
+otherwise empty year. Rankings use at most one count per value per day.
 
-Planned extensions after the basic page:
-
-- Activity per company — number of developments each company appeared in.
-- Activity over time — developments per day, or day intensity.
-- Most active company — by week, month, year, or all time.
-- Most significant days — days marked `high` or `extreme`.
-- This week vs. last week — comparison of development counts.
-
-Planned time ranges for those extended charts: 7 days, 30 days, 90 days, 1 year, all
-time.
-AI-generated weekly or monthly summaries are not part of the MVP.
+Comparative periods, arbitrary ranges, and AI-generated weekly or monthly summaries
+remain outside the current scope.
 
 ## Search
 
@@ -95,7 +90,10 @@ together with the relevant development for each day.
 ## Branding and visual language
 
 - Product name: **Daily Tech**. Logo: a geometric monogram based on D / T. Interface
-  language: Hebrew. The domain is not decided yet.
+  language: Hebrew. The two-tone Indigo SVG uses a transparent background, a defined
+  black outline, and separate light/dark colours; the same mark is used in public/Admin
+  headers and as the browser favicon. Browser titles are intentionally limited to
+  `Daily Tech` and `Daily Tech Admin`. The domain is not decided yet.
 - Plenty of white space, strong typography, an Indigo-only accent family, emphasis on
   text and content, few cards and superfluous UI elements, subtle animations only, and
   a consistent reminder that briefs are short. Light and dark palettes use the same
@@ -113,7 +111,11 @@ without hover, responsive charts, and simple, uncrowded navigation.
 
 ## Performance
 
-Pages are rendered on demand from local SQLite and Markdown with minimal browser
-JavaScript. This keeps admin changes immediately visible while retaining fast loads,
-SEO-friendly HTML, and resilience when AI providers are down. No AI or external
-API runs on a reader's request path.
+Pages are rendered on demand with no AI or external API on a reader's request path.
+A short process-local snapshot caches SQLite metadata and derived page data; Admin
+writes and the embedded scheduler invalidate it immediately, while its configurable
+TTL covers date rollover and out-of-process changes. Markdown is not scanned for
+index pages and is read only when a specific daily edition is requested. A missing
+file therefore fails that request without taking down the home, calendar, or
+statistics pages. Public pages retain minimal browser JavaScript, SEO-friendly HTML,
+and resilience when AI providers are down.

@@ -1,10 +1,10 @@
 ---
 import BaseLayout from "../../layouts/BaseLayout.astro";
 import { formatHebrewDate } from "../../lib/dates.js";
-import { loadSiteSnapshot, renderBrief } from "../../lib/content.js";
+import { getSiteSnapshot, renderBrief } from "../../lib/content.js";
 
 export const prerender = false;
-const snapshot = await loadSiteSnapshot();
+const snapshot = await getSiteSnapshot();
 const date = Astro.params.date ?? "";
 const briefIndex = snapshot.published.findIndex((item) => item.metadata.date === date);
 if (briefIndex < 0) return Astro.redirect("/404", 302);
@@ -13,26 +13,56 @@ const newer = snapshot.published[briefIndex - 1] ?? null;
 const older = snapshot.published[briefIndex + 1] ?? null;
 const day = brief.metadata;
 const html = await renderBrief(brief);
+
+const dayMonth = (value: string): string =>
+  new Intl.DateTimeFormat("he-IL", { timeZone: "UTC", day: "numeric", month: "long" }).format(
+    new Date(`${value}T12:00:00Z`),
+  );
 ---
 
 <BaseLayout description={day.summary}>
-  <article class="shell">
-    <header class="article-header">
-      <p class="eyebrow">תדריך יומי</p>
-      <h1 class="display-title">{formatHebrewDate(day.date, { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</h1>
-      <p class="article-summary">{day.summary}</p>
-    </header>
-    <div class="article-layout">
-      <div>
-        {day.day_intensity === "minimal" && <div class="status-note"><span class="status-dot"></span><span>זה היה יום שקט יחסית בטכנולוגיה — התדריך קצר בהתאם.</span></div>}
-        <div class="article-body" set:html={html}></div>
+  <article class="shell article-layout">
+    {day.day_intensity === "minimal" && (
+      <div class="status-note">
+        <span class="status-dot"></span>
+        <span>זה היה יום שקט יחסית בטכנולוגיה — התדריך קצר בהתאם.</span>
       </div>
-    </div>
+    )}
+    <div class="article-body" set:html={html}></div>
   </article>
+
   {(older || newer) && (
     <nav class="shell article-nav" aria-label="מעבר בין מהדורות">
-      {older ? <a href={`/daily/${older.metadata.date}`}><small>מהדורה קודמת</small><br /><strong>{formatHebrewDate(older.metadata.date)}</strong></a> : <span></span>}
-      {newer && <a href={`/daily/${newer.metadata.date}`}><small>מהדורה חדשה יותר</small><br /><strong>{formatHebrewDate(newer.metadata.date)}</strong></a>}
+      {older ? (
+        <a
+          class="article-nav-link is-older"
+          href={`/daily/${older.metadata.date}`}
+          rel="prev"
+          aria-label={`למהדורה הקודמת מ־${formatHebrewDate(older.metadata.date)}`}
+        >
+          <span class="article-nav-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
+          </span>
+          <span class="article-nav-date">{dayMonth(older.metadata.date)}</span>
+        </a>
+      ) : (
+        <span aria-hidden="true"></span>
+      )}
+      {newer ? (
+        <a
+          class="article-nav-link is-newer"
+          href={`/daily/${newer.metadata.date}`}
+          rel="next"
+          aria-label={`למהדורה מ־${formatHebrewDate(newer.metadata.date)}`}
+        >
+          <span class="article-nav-date">{dayMonth(newer.metadata.date)}</span>
+          <span class="article-nav-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6" /></svg>
+          </span>
+        </a>
+      ) : (
+        <span aria-hidden="true"></span>
+      )}
     </nav>
   )}
 </BaseLayout>

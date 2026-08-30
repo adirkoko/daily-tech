@@ -28,7 +28,13 @@ export interface LoadSiteSnapshotOptions {
   readonly now?: Date;
 }
 
-let cachedSnapshot: Promise<SiteSnapshot> | undefined;
+interface SnapshotCacheEntry {
+  readonly promise: Promise<SiteSnapshot>;
+  readonly storedAt: number;
+}
+
+const DEFAULT_SNAPSHOT_CACHE_TTL_SECONDS = 10;
+let snapshotCache: SnapshotCacheEntry | undefined;
 
 function defaultContentRoot(): string {
   const cwd = process.cwd();
@@ -100,19 +106,15 @@ export async function loadSiteSnapshot(
     database.close();
   }
 
-  const published = await Promise.all(
-    days
-      .filter((day) => day.status === "published")
-      .map(async (metadata): Promise<PublishedBrief> => {
-        const filePath = briefFilePath(contentRoot, metadata.date);
-        if (!(await pathExists(filePath))) {
-          throw new Error(
-            `Published brief ${metadata.date} is missing its Markdown file: ${filePath}`,
-          );
-        }
-        return { metadata, filePath };
-      }),
-  );
+  // Only the daily brief page reads Markdown, and it does so on demand. The other
+  // pages (home, calendar, statistics) use metadata only, so the snapshot no longer
+  // stats every published file on every request.
+  const published: readonly PublishedBrief[] = days
+    .filter((day) => day.status === "published")
+    .map((metadata) => ({
+      metadata,
+      filePath: briefFilePath(contentRoot, metadata.date),
+    }));
 
   return {
     contentRoot,
@@ -125,13 +127,45 @@ export async function loadSiteSnapshot(
   };
 }
 
+function snapshotCacheTtlMs(): number {
+  const raw = process.env.SITE_SNAPSHOT_CACHE_TTL_SECONDS;
+  const parsed = Number(raw);
+  const seconds =
+    raw !== undefined && raw.trim() !== "" && Number.isInteger(parsed) && parsed > 0
+      ? parsed
+      : DEFAULT_SNAPSHOT_CACHE_TTL_SECONDS;
+  return seconds * 1_000;
+}
+
+/**
+ * Process-wide site snapshot, rebuilt at most once per
+ * SITE_SNAPSHOT_CACHE_TTL_SECONDS (default 10). Real content changes call
+ * invalidateSiteSnapshot() so they appear immediately; the TTL only bounds
+ * repeated work under load and covers the daily date rollover.
+ */
 export function getSiteSnapshot(): Promise<SiteSnapshot> {
-  cachedSnapshot ??= loadSiteSnapshot();
-  return cachedSnapshot;
+  const now = Date.now();
+  if (snapshotCache !== undefined && now - snapshotCache.storedAt < snapshotCacheTtlMs()) {
+    return snapshotCache.promise;
+  }
+  const entry: SnapshotCacheEntry = { promise: loadSiteSnapshot(), storedAt: now };
+  snapshotCache = entry;
+  entry.promise.catch(() => {
+    if (snapshotCache === entry) snapshotCache = undefined;
+  });
+  return entry.promise;
+}
+
+export function invalidateSiteSnapshot(): void {
+  snapshotCache = undefined;
 }
 
 export async function renderBrief(brief: PublishedBrief): Promise<string> {
-  const markdown = await readFile(brief.filePath, "utf8");
+  return renderMarkdown(await readFile(brief.filePath, "utf8"));
+}
+
+/** Parses Markdown and returns sanitized HTML with hardened links. */
+export async function renderMarkdown(markdown: string): Promise<string> {
   const rendered = await marked.parse(markdown, {
     gfm: true,
     breaks: false,

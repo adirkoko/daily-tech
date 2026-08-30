@@ -1,7 +1,76 @@
 ---
 export const prerender = false;
 import AdminLayout from "../../layouts/AdminLayout.astro";
+import InboxList, { type InboxItem } from "../../components/InboxList.astro";
+import { formatIsraelDateTime } from "../../lib/dates.js";
 import { openServerDatabase } from "../../server/database.js";
-const db = await openServerDatabase(); const alerts = db.operations.listTickets({ category:"system", limit:500 }); const logs=db.operations.listLogs({level:"error",limit:50}); db.close(); const csrf=Astro.locals.adminSession!.csrfToken;
+
+const LEVEL_LABELS: Record<string, string> = { error: "שגיאה", warning: "אזהרה", info: "מידע" };
+
+const db = await openServerDatabase();
+const alerts = db.operations.listTickets({ category: "system", limit: 500 });
+const logs = db.operations.listLogs({ level: "error", limit: 100 });
+db.close();
+const csrf = Astro.locals.adminSession!.csrfToken;
+
+const ticketItems: InboxItem[] = alerts.map((alert) => ({
+  id: `alert-${alert.id}`,
+  title: alert.title,
+  timestamp: alert.createdAt,
+  tags: [
+    { label: "התראה", tone: "danger" },
+    { label: alert.status === "open" ? "פתוח" : "טופל", tone: alert.status === "open" ? "warn" : "ok" },
+  ],
+  meta: [
+    { label: "נרשם", value: formatIsraelDateTime(alert.createdAt) },
+    ...(alert.resolvedAt ? [{ label: "טופל", value: formatIsraelDateTime(alert.resolvedAt) }] : []),
+  ],
+  body: alert.body,
+  resolveAction: alert.status === "open" ? `/api/admin/feedback/${alert.id}` : null,
+  filters: { type: "alert", status: alert.status },
+}));
+
+const logItems: InboxItem[] = logs.map((log) => ({
+  id: `log-${log.id}`,
+  title: log.eventType,
+  timestamp: log.occurredAt,
+  tags: [
+    { label: "לוג", tone: "neutral" },
+    { label: LEVEL_LABELS[log.level] ?? log.level, tone: log.level === "error" ? "danger" : "warn" },
+  ],
+  meta: [
+    { label: "מתי", value: formatIsraelDateTime(log.occurredAt) },
+    ...(log.briefDate ? [{ label: "תדריך", value: log.briefDate }] : []),
+    ...(log.runId ? [{ label: "מזהה ריצה", value: log.runId }] : []),
+  ],
+  body:
+    [log.message, Object.keys(log.details).length > 0 ? JSON.stringify(log.details, null, 2) : null]
+      .filter(Boolean)
+      .join("\n\n") || null,
+  filters: { type: "log" },
+}));
+
+const items = [...ticketItems, ...logItems];
+const filterGroups = [
+  {
+    key: "type",
+    label: "סוג",
+    options: [
+      { value: "alert", label: "התראות" },
+      { value: "log", label: "לוגים" },
+    ],
+  },
+  {
+    key: "status",
+    label: "סטטוס",
+    options: [
+      { value: "open", label: "פתוח" },
+      { value: "resolved", label: "טופל" },
+    ],
+  },
+];
 ---
-<AdminLayout title="התראות"><div class="admin-title"><div><p class="eyebrow">System</p><h1>התראות מערכת</h1></div><span>{alerts.filter((a)=>a.status==="open").length} פתוחות</span></div><div class="ticket-list">{alerts.map((alert)=><article class={`ticket system ${alert.status}`}><header><span class="status-pill failed">{alert.status}</span><time>{alert.createdAt}</time></header><h2>{alert.title}</h2><pre>{alert.body}</pre>{alert.status==="open"&&<form action={`/api/admin/feedback/${alert.id}`} method="post"><input type="hidden" name="csrf_token" value={csrf}/><button class="button secondary">סימון כטופל</button></form>}</article>)}</div><section class="page-section"><h2>לוג שגיאות אחרון</h2><div class="admin-table-wrap"><table class="admin-table"><tbody>{logs.map((log)=><tr><td>{log.occurredAt}</td><td>{log.eventType}</td><td>{log.message}</td></tr>)}</tbody></table></div></section></AdminLayout>
+<AdminLayout title="התראות">
+  <div class="admin-title"><div><p class="eyebrow">System</p><h1>התראות מערכת</h1></div></div>
+  <InboxList items={items} filterGroups={filterGroups} csrf={csrf} emptyText="אין התראות שתואמות לסינון." />
+</AdminLayout>

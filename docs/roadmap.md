@@ -6,7 +6,7 @@
 | ---- | ------ |
 | Core validation, SQLite schema, and lifecycle | Implemented and tested |
 | Cited AI web research, writing, narrow gap check, and persistence | Implemented; production credentials still required |
-| Hebrew website, archive, heatmap, and basic statistics | Implemented and tested |
+| Hebrew website, archive, heatmap, rolling statistics, and intensity trend | Implemented and tested |
 | Safe local publication with a durable lease | Implemented and tested |
 | Single standalone Node service | Implemented and integration-tested |
 | Secure admin authentication and editing UI | Implemented and integration-tested |
@@ -48,7 +48,7 @@ deployment-specific.
 - Search.
 - Weekly summaries.
 - Monthly summaries.
-- Advanced trend and historical analysis.
+- Comparative periods and additional long-range analytics.
 
 ## Development priority
 
@@ -59,8 +59,8 @@ deployment-specific.
 4. **Simple operations** — admin, logs, feedback, and the ability to fix problems
    without changing the architecture.
 
-Search, advanced trends, and periodic summaries come only after the system runs
-stably.
+Search, additional comparative analytics, and periodic summaries come only after the
+system runs stably.
 
 ## Success metrics
 

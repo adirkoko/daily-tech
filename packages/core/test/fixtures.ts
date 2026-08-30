@@ -16,7 +16,7 @@ export const validMetadata: DayMetadata = {
   updated_at: null,
 };
 
-export const validMarkdown = `# עדכון טכנולוגי יומי — 27 באוגוסט 2026
+export const validMarkdown = `# עדכון טכנולוגי יומי: 27 באוגוסט 2026
 
 ## תמצית היום
 

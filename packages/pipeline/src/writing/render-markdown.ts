@@ -9,7 +9,7 @@ import type { BriefDraft, DraftSourceCitation } from "./contracts.js";
 export function renderBriefMarkdown(date: string, draft: BriefDraft): string {
   const lines: string[] = [];
 
-  lines.push(`# עדכון טכנולוגי יומי — ${formatHebrewDate(date)}`, "");
+  lines.push(`# עדכון טכנולוגי יומי: ${formatHebrewDate(date)}`, "");
   lines.push("## תמצית היום", "", draft.dayOverview, "");
 
   draft.developments.forEach((development, index) => {

@@ -1,10 +1,10 @@
 ---
 import BaseLayout from "../../layouts/BaseLayout.astro";
 import CalendarMonth from "../../components/CalendarMonth.astro";
-import { loadSiteSnapshot } from "../../lib/content.js";
+import { getSiteSnapshot } from "../../lib/content.js";
 
 export const prerender = false;
-const snapshot = await loadSiteSnapshot();
+const snapshot = await getSiteSnapshot();
 const month = snapshot.currentDate.slice(0, 7);
 ---
 
@@ -13,6 +13,10 @@ const month = snapshot.currentDate.slice(0, 7);
     <div class="calendar-page-heading">
       <h1 class="section-title">לוח המהדורות</h1>
     </div>
-    <CalendarMonth month={month} currentDate={snapshot.currentDate} briefs={snapshot.published} />
+    <CalendarMonth
+      month={month}
+      currentDate={snapshot.currentDate}
+      days={snapshot.published.map((brief) => brief.metadata)}
+    />
   </section>
 </BaseLayout>

@@ -12,18 +12,40 @@ the password in command arguments, logs, screenshots, or client-side configurati
 
 ## Content management
 
-The dashboard lists the latest briefs and their status, intensity, and item count.
-An editor can change the Markdown and all editable metadata. Every brief page offers:
+The dashboard shows the same month calendar as the public site, coloured by day
+intensity, but each day links to its editor (`/admin/briefs/<date>`) instead of the
+public brief and it covers every brief regardless of status. An editor can change the
+Markdown and all editable metadata.
 
-1. **Delete** — remove the Markdown and metadata record together. The day becomes an
-   unavailable calendar day.
-2. **Copy** — copy the complete Markdown source.
-3. **Save** — validate and persist Markdown plus metadata and update `updated_at`.
+The editor provides:
+
+- **Edit / preview** — switch between the Markdown source and a server-rendered
+  preview. Preview uses the same Markdown parser, sanitizer, and hardened-link rules
+  as the public daily page; it does not save or publish the draft.
+- **Structured metadata controls** — counts, lifecycle status, intensity, and
+  add/remove fields for companies, topics, and development summaries.
+- **Copy** — copy the complete Markdown source, with visible success feedback.
+- **Save** — validate and persist Markdown plus metadata and update `updated_at`.
+- **Delete** — after an explicit confirmation, remove the Markdown and metadata
+  record together. The day becomes unavailable in both calendars.
+
+Preview and every state-changing editor request remain protected by the Admin
+session, same-origin checks, and the session CSRF token. Repeated metadata inputs are
+bounded and normalized on the server rather than trusted as client-side arrays.
 
 Save runs the same deterministic artifact validation used by the pipeline. Filesystem
 changes use a temporary file and short-lived rollback copy so a database failure does not leave
 half-written content. Administrative save, delete, login, and feedback-resolution
 actions are recorded in the operational log.
+
+## Feedback and alert inboxes
+
+`/admin/feedback` and `/admin/alerts` share a compact inbox interface. It supports
+title search, domain-specific filters, chronological sorting, pagination, expandable
+details, and resolving open tickets. The feedback inbox filters by status and
+category. The alert center combines System tickets with recent error-level
+operational logs and can filter by item type and ticket status. Timestamps are shown
+in Israel time while remaining stored as UTC.
 
 ## Security controls
 

@@ -8,6 +8,7 @@ import {
 } from "@daily-tech/publisher";
 import type { DailyTechDatabase, ScheduledJobName } from "@daily-tech/db";
 
+import { invalidateSiteSnapshot } from "../lib/content.js";
 import { openServerDatabase } from "./database.js";
 
 export interface SchedulerConfig {
@@ -179,6 +180,7 @@ export class ServiceScheduler {
           `--run-at=${runAt.toISOString()}`,
         ]);
       }
+      invalidateSiteSnapshot();
       const completedAt = new Date().toISOString();
       const completionDatabase = await this.#openDatabase();
       try {

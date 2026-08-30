@@ -30,11 +30,37 @@ const csrf = Astro.locals.adminSession?.csrfToken;
     <header class="admin-header">
       <a class="brand" href="/admin"><span class="brand-mark" aria-hidden="true"><LogoMark /></span><span>ניהול</span></a>
       <div class="admin-header-actions">
-        {csrf && <nav><a href="/admin">תדריכים</a><a href="/admin/feedback">פידבק</a><a href="/admin/alerts">התראות</a><form action="/api/admin/logout" method="post"><input type="hidden" name="csrf_token" value={csrf} /><button type="submit">יציאה</button></form></nav>}
+        {csrf && (
+          <nav>
+            <a href="/admin">תדריכים</a>
+            <a href="/admin/feedback">פידבק</a>
+            <a href="/admin/alerts">התראות</a>
+            <form action="/api/admin/logout" method="post" data-logout-form>
+              <input type="hidden" name="csrf_token" value={csrf} />
+              <button type="submit" class="admin-logout" data-logout>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" /></svg>
+                יציאה
+              </button>
+            </form>
+          </nav>
+        )}
         <ThemeToggle />
       </div>
     </header>
     <main class="admin-main"><slot /></main>
+
+    {csrf && (
+      <dialog class="confirm-dialog" data-logout-dialog>
+        <form method="dialog" class="confirm-dialog-body">
+          <h2>יציאה מאזור הניהול</h2>
+          <p>הפעולה תסיים את החיבור הנוכחי ותצטרך להזין את הסיסמה שוב כדי לחזור.</p>
+          <div class="confirm-dialog-actions">
+            <button type="submit" value="cancel" class="button secondary">ביטול</button>
+            <button type="submit" value="confirm" class="button">יציאה</button>
+          </div>
+        </form>
+      </dialog>
+    )}
     <script is:inline>
       const toggle = document.querySelector("[data-theme-toggle]");
       const syncThemeControl = () => {
@@ -51,6 +77,20 @@ const csrf = Astro.locals.adminSession?.csrfToken;
         localStorage.setItem("daily-tech-theme", next);
         syncThemeControl();
       });
+
+      const logoutForm = document.querySelector("[data-logout-form]");
+      const logoutButton = document.querySelector("[data-logout]");
+      const logoutDialog = document.querySelector("[data-logout-dialog]");
+      if (logoutForm && logoutButton && logoutDialog && typeof logoutDialog.showModal === "function") {
+        logoutButton.addEventListener("click", (event) => {
+          event.preventDefault();
+          logoutDialog.returnValue = "";
+          logoutDialog.showModal();
+        });
+        logoutDialog.addEventListener("close", () => {
+          if (logoutDialog.returnValue === "confirm") logoutForm.submit();
+        });
+      }
     </script>
   </body>
 </html>

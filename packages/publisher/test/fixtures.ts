@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 
 import { expectedBriefRelativePath, type DayMetadata } from "@daily-tech/core";
 
-export const validMarkdown = `# עדכון טכנולוגי יומי — 27 באוגוסט 2026
+export const validMarkdown = `# עדכון טכנולוגי יומי: 27 באוגוסט 2026
 
 ## תמצית היום
 

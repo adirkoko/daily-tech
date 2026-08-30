@@ -1,7 +1,62 @@
 ---
 export const prerender = false;
 import AdminLayout from "../../layouts/AdminLayout.astro";
+import InboxList, { type InboxItem } from "../../components/InboxList.astro";
+import { formatIsraelDateTime } from "../../lib/dates.js";
 import { openServerDatabase } from "../../server/database.js";
-const db = await openServerDatabase(); const tickets = db.operations.listTickets({ limit: 500 }); db.close(); const csrf = Astro.locals.adminSession!.csrfToken;
+
+const CATEGORY_LABELS: Record<string, string> = {
+  general: "כללי",
+  correction: "תיקון",
+  suggestion: "הצעה",
+};
+
+const db = await openServerDatabase();
+const tickets = db.operations.listTickets({ limit: 500 });
+db.close();
+const csrf = Astro.locals.adminSession!.csrfToken;
+
+const items: InboxItem[] = tickets
+  .filter((ticket) => ticket.category !== "system")
+  .map((ticket) => ({
+    id: `feedback-${ticket.id}`,
+    title: ticket.title,
+    timestamp: ticket.createdAt,
+    tags: [
+      { label: CATEGORY_LABELS[ticket.category] ?? ticket.category, tone: "accent" },
+      { label: ticket.status === "open" ? "פתוח" : "טופל", tone: ticket.status === "open" ? "warn" : "ok" },
+    ],
+    meta: [
+      ...(ticket.submitterName ? [{ label: "מאת", value: ticket.submitterName }] : []),
+      { label: "התקבל", value: formatIsraelDateTime(ticket.createdAt) },
+      ...(ticket.resolvedAt ? [{ label: "טופל", value: formatIsraelDateTime(ticket.resolvedAt) }] : []),
+    ],
+    body: ticket.body,
+    resolveAction: ticket.status === "open" ? `/api/admin/feedback/${ticket.id}` : null,
+    filters: { status: ticket.status, category: ticket.category },
+  }));
+
+const filterGroups = [
+  {
+    key: "status",
+    label: "סטטוס",
+    options: [
+      { value: "open", label: "פתוח" },
+      { value: "resolved", label: "טופל" },
+    ],
+  },
+  {
+    key: "category",
+    label: "קטגוריה",
+    options: [
+      { value: "general", label: "כללי" },
+      { value: "correction", label: "תיקון" },
+      { value: "suggestion", label: "הצעה" },
+    ],
+  },
+];
 ---
-<AdminLayout title="פידבק"><div class="admin-title"><div><p class="eyebrow">Inbox</p><h1>פידבק</h1></div></div><div class="ticket-list">{tickets.filter((t)=>t.category!=="system").map((ticket)=><article class={`ticket ${ticket.status}`}><header><span class="status-pill">{ticket.category}</span><time>{ticket.createdAt}</time></header><h2>{ticket.title}</h2>{ticket.submitterName && <p>מאת {ticket.submitterName}</p>}<p>{ticket.body}</p>{ticket.status==="open" && <form action={`/api/admin/feedback/${ticket.id}`} method="post"><input type="hidden" name="csrf_token" value={csrf}/><button class="button secondary" type="submit">סימון כטופל</button></form>}</article>)}</div></AdminLayout>
+<AdminLayout title="פניות">
+  <div class="admin-title"><div><p class="eyebrow">Inbox</p><h1>פניות משתמשים</h1></div></div>
+  <InboxList items={items} filterGroups={filterGroups} csrf={csrf} emptyText="אין פניות שתואמות לסינון." />
+</AdminLayout>

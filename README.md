@@ -87,10 +87,14 @@ existing dataset before writing anything. See
 [`packages/demo-data/README.md`](packages/demo-data/README.md) for flags, retained
 tables, and reset behavior.
 
-Public pages read SQLite and Markdown on demand, so a saved or published admin change
-is visible immediately without another deployment. A missing database produces a
-valid first-run state; an inconsistent published artifact fails closed instead of
-rendering partial content. Set `SITE_URL` to the production origin for canonical URLs.
+Public index pages use a short-lived in-process snapshot of SQLite metadata, while a
+daily page reads its Markdown only when requested. Writes made by Admin or the
+embedded scheduler invalidate the snapshot immediately; changes made by a separate
+process appear after `SITE_SNAPSHOT_CACHE_TTL_SECONDS` (10 seconds by default). A
+missing database produces a valid first-run state. Markdown written through the
+pipeline or Admin is validated before persistence; if a published file is later
+missing, only its requested daily page fails rather than every metadata-driven page.
+Set `SITE_URL` to the production origin for canonical URLs.
 
 ## Status
 

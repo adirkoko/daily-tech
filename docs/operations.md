@@ -13,15 +13,17 @@ Submissions are limited to three per caller within a 12-hour fixed window. The w
 duration is configurable. Rate-limit keys use a one-way caller hash; raw IP addresses
 are not stored.
 
-`/admin/feedback` lists submissions and lets the operator resolve open tickets.
-Ticket categories are `general`, `correction`, `suggestion`, and `system`; statuses
-are `open` and `resolved`.
+`/admin/feedback` presents submissions in a searchable, filterable, sortable inbox
+with expandable details and lets the operator resolve open tickets. Ticket categories
+are `general`, `correction`, `suggestion`, and `system`; statuses are `open` and
+`resolved`.
 
 ## System alerts
 
 Material generation, publication, scheduler, or provider failures create a `system`
 ticket. `/admin/alerts` combines those tickets with recent error-level operational
-logs.
+logs in the same inbox interface. Operators can separate tickets from logs, filter
+ticket status, inspect structured details, and resolve open System tickets.
 
 Admin is the only incident-notification channel. The application has no email,
 Telegram, Slack, webhook, or other outbound alert integration.

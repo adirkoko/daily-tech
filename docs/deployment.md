@@ -48,6 +48,13 @@ Set explicitly for production:
 - `TRUSTED_PROXY_HOPS` — `0` without a proxy; otherwise the exact number of trusted
   reverse proxies in front of Node. Forwarding headers are ignored when it is `0`.
 
+Optional performance setting:
+
+- `SITE_SNAPSHOT_CACHE_TTL_SECONDS` — positive integer lifetime for the process-local
+  SQLite metadata snapshot; defaults to `10`. Writes performed inside the running
+  service invalidate it immediately. Keep the TTL short when manual CLI tools or
+  another process can modify the same content store.
+
 Session TTL and login/feedback fixed-window durations have safe defaults documented
 in `.env.example`. The Node server caps request bodies at 300 KiB.
 
@@ -76,8 +83,10 @@ completions for writing and a Responses-compatible live web-research endpoint th
 returns machine-readable source citations.
 The publisher targets the previous Israel calendar day unless `--date=YYYY-MM-DD` is
 provided. It acquires a SQLite lease, revalidates the ready artifact, atomically moves
-it to `published`, and finalizes the publication job locally. The running site sees
-the change immediately; publication has no external deployment trigger.
+it to `published`, and finalizes the publication job locally. Embedded publication
+invalidates the site's metadata snapshot immediately; a manual command running in a
+separate process becomes visible within the configured snapshot TTL. Publication has
+no external deployment trigger.
 
 Failures are written to structured logs and create a `system` ticket visible at
 `/admin/alerts`. There are deliberately no email, Telegram, or Slack dependencies.

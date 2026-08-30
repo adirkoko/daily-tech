@@ -6,9 +6,20 @@ import { expectedBriefRelativePath, type DayMetadata } from "@daily-tech/core";
 import { DailyTechDatabase } from "@daily-tech/db";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { loadSiteSnapshot, renderBrief, type PublishedBrief } from "./content.js";
+import {
+  getSiteSnapshot,
+  invalidateSiteSnapshot,
+  loadSiteSnapshot,
+  renderBrief,
+  type PublishedBrief,
+} from "./content.js";
 
 const temporaryRoots: string[] = [];
+
+function restoreEnv(key: string, value: string | undefined): void {
+  if (value === undefined) delete process.env[key];
+  else process.env[key] = value;
+}
 
 async function temporaryRoot(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), "daily-tech-web-"));
@@ -75,7 +86,7 @@ describe("site content loading", () => {
     expect(snapshot.targetDay?.status).toBe("published");
   });
 
-  it("fails the build contract when published metadata has no Markdown artifact", async () => {
+  it("includes published metadata without eagerly reading its Markdown file", async () => {
     const root = await temporaryRoot();
     const databasePath = join(root, "meta", "tech_briefs.db");
     await mkdir(join(root, "meta"), { recursive: true });
@@ -83,7 +94,55 @@ describe("site content loading", () => {
     database.saveDay(metadata());
     database.close();
 
-    await expect(loadSiteSnapshot({ contentRoot: root })).rejects.toThrow("missing its Markdown file");
+    const snapshot = await loadSiteSnapshot({ contentRoot: root });
+    expect(snapshot.published.map((brief) => brief.metadata.date)).toEqual(["2026-08-26"]);
+    expect(snapshot.published[0]?.filePath).toContain("2026-08-26-tech_briefs.md");
+  });
+
+  it("caches the snapshot within the TTL and reloads after invalidation", async () => {
+    const root = await temporaryRoot();
+    await mkdir(join(root, "meta"), { recursive: true });
+    const database = DailyTechDatabase.open({ filename: join(root, "meta", "tech_briefs.db") });
+    database.saveDay(metadata());
+    database.close();
+
+    const previousRoot = process.env.TECH_BRIEFS_ROOT;
+    const previousTtl = process.env.SITE_SNAPSHOT_CACHE_TTL_SECONDS;
+    process.env.TECH_BRIEFS_ROOT = root;
+    process.env.SITE_SNAPSHOT_CACHE_TTL_SECONDS = "60";
+    invalidateSiteSnapshot();
+    try {
+      const first = await getSiteSnapshot();
+      expect(await getSiteSnapshot()).toBe(first);
+
+      invalidateSiteSnapshot();
+      const reloaded = await getSiteSnapshot();
+      expect(reloaded).not.toBe(first);
+      expect(reloaded.published.map((brief) => brief.metadata.date)).toEqual(
+        first.published.map((brief) => brief.metadata.date),
+      );
+    } finally {
+      invalidateSiteSnapshot();
+      restoreEnv("TECH_BRIEFS_ROOT", previousRoot);
+      restoreEnv("SITE_SNAPSHOT_CACHE_TTL_SECONDS", previousTtl);
+    }
+  });
+
+  it("falls back to the default TTL when the env value is invalid", async () => {
+    const root = await temporaryRoot();
+    const previousRoot = process.env.TECH_BRIEFS_ROOT;
+    const previousTtl = process.env.SITE_SNAPSHOT_CACHE_TTL_SECONDS;
+    process.env.TECH_BRIEFS_ROOT = root;
+    process.env.SITE_SNAPSHOT_CACHE_TTL_SECONDS = "not-a-number";
+    invalidateSiteSnapshot();
+    try {
+      const first = await getSiteSnapshot();
+      expect(await getSiteSnapshot()).toBe(first);
+    } finally {
+      invalidateSiteSnapshot();
+      restoreEnv("TECH_BRIEFS_ROOT", previousRoot);
+      restoreEnv("SITE_SNAPSHOT_CACHE_TTL_SECONDS", previousTtl);
+    }
   });
 
   it("sanitizes raw HTML and hardens source links", async () => {

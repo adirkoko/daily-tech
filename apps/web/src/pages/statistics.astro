@@ -1,6 +1,6 @@
 ---
 import BaseLayout from "../layouts/BaseLayout.astro";
-import { loadSiteSnapshot } from "../lib/content.js";
+import { getSiteSnapshot } from "../lib/content.js";
 import { addCalendarDays, formatHebrewDate } from "../lib/dates.js";
 import {
   calculateStatistics,
@@ -10,7 +10,7 @@ import {
 } from "../lib/statistics.js";
 
 export const prerender = false;
-const snapshot = await loadSiteSnapshot();
+const snapshot = await getSiteSnapshot();
 const selectedRange = parseStatisticsRange(Astro.url.searchParams.get("range"));
 const rangeDays = STATISTICS_RANGE_DAYS[selectedRange];
 const rangeStart = addCalendarDays(snapshot.currentDate, -rangeDays);

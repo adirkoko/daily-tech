@@ -42,6 +42,17 @@ export function formatHebrewDate(date: string, options: Intl.DateTimeFormatOptio
   }).format(new Date(`${date}T12:00:00Z`));
 }
 
+export function formatIsraelDateTime(iso: string): string {
+  return new Intl.DateTimeFormat("he-IL", {
+    timeZone: ISRAEL_TIME_ZONE,
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(iso));
+}
+
 export function formatHebrewMonth(month: string): string {
   return new Intl.DateTimeFormat("he-IL", {
     timeZone: "UTC",

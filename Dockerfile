@@ -33,6 +33,7 @@ COPY --chown=node:node --from=build /app/node_modules ./node_modules
 COPY --chown=node:node --from=build /app/apps/web/package.json ./apps/web/package.json
 COPY --chown=node:node --from=build /app/apps/web/dist ./apps/web/dist
 COPY --chown=node:node --from=build /app/packages ./packages
+COPY --chown=node:node --from=build /app/scripts ./scripts
 
 RUN mkdir -p /data && chown node:node /data
 

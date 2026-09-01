@@ -166,6 +166,16 @@ body {
 @keyframes mesh-facet-d {
   to { opacity: .085; }
 }
+@keyframes tech-mesh-mobile-drift {
+  0% { transform: translate3d(-1.5%, -1%, 0) rotate(-.08deg) scale(1.045); }
+  48% { transform: translate3d(1.2%, 1.4%, 0) rotate(.11deg) scale(1.065); }
+  100% { transform: translate3d(-.4%, 2.2%, 0) rotate(-.03deg) scale(1.055); }
+}
+@keyframes ambient-mobile-light {
+  0% { transform: translate3d(-8%, -4%, 0) scale(1.02); opacity: .3; }
+  52% { transform: translate3d(7%, 5%, 0) scale(1.08); opacity: .42; }
+  100% { transform: translate3d(-2%, 10%, 0) scale(1.04); opacity: .34; }
+}
 a { color: inherit; }
 button { font: inherit; }
 ::selection { background: var(--accent); color: #fff; }
@@ -2260,6 +2270,92 @@ label { display: grid; gap: .4rem; font-weight: 700; }
 @media (hover: none), (pointer: coarse) {
   .calendar-popover { display: none; }
   .calendar-touch-detail:not([hidden]) { display: flex; }
+}
+
+/* Mobile ambient rendering: keep the mesh, but avoid per-frame SVG tessellation
+   and live backdrop sampling while the browser chrome changes the viewport. */
+@media (max-width: 820px), (hover: none) and (pointer: coarse) {
+  :root {
+    --public-surface: color-mix(in srgb, var(--paper-raised) 88%, transparent);
+    --public-surface-muted: color-mix(in srgb, var(--paper-raised) 80%, transparent);
+    --admin-surface: color-mix(in srgb, var(--paper-raised) 91%, transparent);
+    --admin-surface-strong: color-mix(in srgb, var(--paper-raised) 96%, transparent);
+    --admin-surface-muted: color-mix(in srgb, var(--paper-raised) 84%, transparent);
+  }
+  .site-ambient {
+    inset: auto -6vw auto;
+    inset-block-start: -8vh;
+    height: 116vh;
+    inset-block-start: -8lvh;
+    width: 112vw;
+    height: 116lvh;
+    contain: paint;
+    isolation: isolate;
+    transform: translateZ(0);
+  }
+  .site-ambient::after {
+    content: "";
+    position: absolute;
+    inset: -18%;
+    z-index: 1;
+    background:
+      radial-gradient(circle at 28% 25%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 34%),
+      radial-gradient(circle at 72% 68%, color-mix(in srgb, var(--contrast) 9%, transparent), transparent 30%);
+    pointer-events: none;
+    will-change: transform, opacity;
+    animation: ambient-mobile-light 15s ease-in-out infinite alternate;
+  }
+  .site-ambient-geometry {
+    will-change: transform;
+  }
+  .tech-mesh {
+    will-change: transform;
+    animation: tech-mesh-mobile-drift 19s ease-in-out infinite alternate;
+  }
+  .mesh-facet,
+  .mesh-facet.mesh-facet-deep,
+  :root[data-theme="dark"] .mesh-facet,
+  :root[data-theme="dark"] .mesh-facet.mesh-facet-deep {
+    animation: none;
+    filter: none;
+    mix-blend-mode: normal;
+  }
+  .mesh-facet { opacity: .105; }
+  .mesh-facet.mesh-facet-deep { opacity: .155; }
+  :root[data-theme="dark"] .mesh-facet { opacity: .12; }
+  :root[data-theme="dark"] .mesh-facet.mesh-facet-deep { opacity: .18; }
+
+  .has-site-ambient :where(
+    .site-header,
+    .home-hero-content,
+    .home-metric,
+    .home-freshness,
+    .article-body,
+    .article-nav-link,
+    .calendar-widget,
+    .statistics-range,
+    .stat-card,
+    .statistics-panel,
+    .admin-header,
+    .admin-login,
+    .briefs-admin-hero,
+    .briefs-attention,
+    .briefs-calendar-panel,
+    .inbox-hero,
+    .inbox-controls,
+    .inbox-row,
+    .editor-topbar,
+    .editor-canvas,
+    .editor-footer,
+    .meta-card,
+    .settings-hero,
+    .settings-panel,
+    .settings-savebar,
+    .confirm-dialog
+  ) {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

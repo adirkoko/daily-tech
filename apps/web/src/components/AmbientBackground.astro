@@ -140,11 +140,18 @@ for (let rowIndex = 0; rowIndex < ambientRows.length - 1; rowIndex += 1) {
 <script is:inline>
   const ambientSvg = document.querySelector(".site-ambient-geometry");
   const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
+  const lightweightMotion = matchMedia("(max-width: 820px), (hover: none) and (pointer: coarse)");
   const syncAmbientMotion = () => {
     if (!(ambientSvg instanceof SVGSVGElement)) return;
-    if (reducedMotion.matches) ambientSvg.pauseAnimations();
-    else ambientSvg.unpauseAnimations();
+    const mode = reducedMotion.matches ? "off" : lightweightMotion.matches ? "lite" : "full";
+    document.documentElement.dataset.ambientMotion = mode;
+
+    // Geometry and gradient SMIL animations are intentionally desktop-only.
+    // The lightweight mode keeps motion on compositor-friendly CSS layers.
+    if (mode === "full") ambientSvg.unpauseAnimations();
+    else ambientSvg.pauseAnimations();
   };
   syncAmbientMotion();
   reducedMotion.addEventListener("change", syncAmbientMotion);
+  lightweightMotion.addEventListener("change", syncAmbientMotion);
 </script>

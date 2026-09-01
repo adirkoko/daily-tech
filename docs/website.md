@@ -94,10 +94,11 @@ together with the relevant development for each day.
   black outline, and separate light/dark colours; the same mark is used in public/Admin
   headers and as the browser favicon. Browser titles are intentionally limited to
   `Daily Tech` and `Daily Tech Admin`. The domain is not decided yet.
-- Plenty of white space, strong typography, an Indigo-only accent family, emphasis on
-  text and content, few cards and superfluous UI elements, subtle animations only, and
-  a consistent reminder that briefs are short. Light and dark palettes use the same
-  Indigo identity with contrast tuned independently for each mode.
+- Plenty of white space, strong typography, an Indigo primary accent, emphasis on
+  text and content, few superfluous UI elements, and subtle animations only.
+  Semantic status colours are reserved for success, warning, and failure states.
+  Light and dark palettes use the same Indigo identity with contrast tuned
+  independently for each mode.
 
 ## Display mode
 

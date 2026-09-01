@@ -94,3 +94,23 @@ text. Expired rows are purged during session creation.
 is the job name (`generate` or `publish`) plus target date. State, attempt count, lease
 owner/expiry, timestamps, and the last error make daily execution restart-safe and
 prevent overlapping service instances from duplicating work.
+
+## Pipeline settings
+
+`pipeline_settings` is a migration-seeded, single-row table containing the
+operator-tunable generation settings:
+
+```yaml
+admin_keywords: [...]              # JSON array; max 50 values, 60 characters each
+maximum_stories: 8                 # 1-20; Deep Research response ceiling
+gap_discovery_enabled: 1           # 0/1
+admin_keywords_research_enabled: 1 # 0/1
+editorial_instructions: ""         # up to 4,000 characters
+generate_time: "01:00"             # HH:MM, Asia/Jerusalem
+publish_time: "07:00"              # HH:MM, Asia/Jerusalem
+updated_at: ...
+```
+
+The row always exists with valid defaults. Generation reads it once per run; the
+embedded scheduler reads the two time fields on every tick. See
+[`admin.md`](admin.md#pipeline-settings) for the operator interface.

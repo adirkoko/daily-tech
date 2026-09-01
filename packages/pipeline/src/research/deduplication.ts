@@ -1,10 +1,10 @@
 import { canonicalizeUrl } from "./citation-validation.js";
-import type { ResearchedStory, ResearchSource, ResearchStoryInput } from "./contracts.js";
+import type { CandidateStory, CandidateStoryInput, ResearchSource } from "./contracts.js";
 
 export function deduplicateStoryInputs(
-  stories: readonly ResearchStoryInput[],
-): readonly ResearchStoryInput[] {
-  const result: ResearchStoryInput[] = [];
+  stories: readonly CandidateStoryInput[],
+): readonly CandidateStoryInput[] {
+  const result: CandidateStoryInput[] = [];
   for (const story of stories) {
     const duplicateIndex = result.findIndex((existing) => sameHighConfidenceEvent(existing, story));
     if (duplicateIndex === -1) result.push(story);
@@ -14,8 +14,8 @@ export function deduplicateStoryInputs(
 }
 
 export function representedByExistingStory(
-  candidate: ResearchStoryInput,
-  existingStories: readonly ResearchedStory[],
+  candidate: CandidateStoryInput,
+  existingStories: readonly CandidateStory[],
 ): boolean {
   return existingStories.some((existing) => sameHighConfidenceEvent(existing, candidate));
 }
@@ -23,39 +23,38 @@ export function representedByExistingStory(
 /**
  * Deliberately the only "clear duplicate" code can prove without judgment: the
  * same cited source. Matching by title/company/category similarity is semantic
- * deduplication, which the research prompt already asks the model to do.
+ * deduplication, which the research prompts already ask the model to do.
  */
 export function sameHighConfidenceEvent(
-  first: ResearchStoryInput,
-  second: ResearchStoryInput,
+  first: CandidateStoryInput,
+  second: CandidateStoryInput,
 ): boolean {
   const firstUrls = new Set(first.sources.map(({ url }) => canonicalizeUrl(url)));
   return second.sources.some(({ url }) => firstUrls.has(canonicalizeUrl(url)));
 }
 
 function mergeStories(
-  first: ResearchStoryInput,
-  second: ResearchStoryInput,
-): ResearchStoryInput {
+  first: CandidateStoryInput,
+  second: CandidateStoryInput,
+): CandidateStoryInput {
   const primary = selectPrimary(first, second);
   return {
     ...primary,
-    importance: Math.max(first.importance, second.importance) as ResearchStoryInput["importance"],
-    keyFacts: uniqueStrings([...first.keyFacts, ...second.keyFacts]),
+    importance: Math.max(first.importance, second.importance) as CandidateStoryInput["importance"],
     companies: uniqueStrings([...first.companies, ...second.companies]),
     topics: uniqueStrings([...first.topics, ...second.topics]),
     sources: uniqueSources([...first.sources, ...second.sources]),
   };
 }
 
-function selectPrimary(first: ResearchStoryInput, second: ResearchStoryInput): ResearchStoryInput {
+function selectPrimary(first: CandidateStoryInput, second: CandidateStoryInput): CandidateStoryInput {
   if (first.importance !== second.importance) {
     return first.importance > second.importance ? first : second;
   }
   if (first.sources.length !== second.sources.length) {
     return first.sources.length > second.sources.length ? first : second;
   }
-  return first.factualSummary.length >= second.factualSummary.length ? first : second;
+  return first.shortSummary.length >= second.shortSummary.length ? first : second;
 }
 
 function uniqueSources(sources: readonly ResearchSource[]): readonly ResearchSource[] {

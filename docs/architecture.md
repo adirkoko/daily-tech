@@ -14,9 +14,9 @@ serve pages when AI services are unavailable.
 
 | Component | Responsibility |
 | --------- | -------------- |
-| `packages/pipeline` | The daily generation engine: cited model web research, deterministic validation, constrained writing, a narrow gap check, and final artifact creation. `NewsResearchProvider` owns the news domain while `AiWebResearchClient` isolates provider-specific web tools, citations, and structured output. |
-| `packages/core` | Framework-free TypeScript shared by everything: the metadata schema, its allowed values (`status`, `day_intensity`), and the deterministic validators run before a brief is accepted. |
-| `packages/db` | SQLite access: schema and typed read/write functions for day metadata, feedback tickets, logs, and rate-limit counters. |
+| `packages/pipeline` | Staged cited research, deterministic research validation, constrained writing, artifact validation, and persistence. Provider-specific web tools and citations remain behind `AiWebResearchClient`. See [`pipeline.md`](pipeline.md). |
+| `packages/core` | Framework-free TypeScript shared by everything: the metadata schema, its allowed values (`status`, `day_intensity`), operator-tunable pipeline settings, and the deterministic validators run before a brief is accepted. |
+| `packages/db` | SQLite access: schema and typed read/write functions for day metadata, pipeline settings, feedback tickets, logs, and rate-limit counters. |
 | `packages/demo-data` | Development-only CLI that destructively resets a configured content store and fills it with fake data through the real contracts, renderer, validators, and persistence APIs. It is never imported by production code. |
 | `packages/publisher` | Revalidates a ready artifact, coordinates local publication with a durable SQLite lease, and atomically marks it published. |
 | `apps/web` | One standalone Astro/Node service for public server-rendered pages, password-protected admin, feedback API/inbox, and system alerts. It caches SQLite metadata briefly, reads Markdown only for a requested brief or preview, and keeps reader-side JavaScript small. |
@@ -41,7 +41,7 @@ or package depends on `packages/demo-data`.
 ## Runtime boundary
 
 `npm start` launches a single long-running Node process. That process owns every HTTP
-route—public pages, `/feedback`, `/admin`, health endpoints, and their APIs—and an
+route — public pages, `/feedback`, `/admin`, health endpoints, and their APIs — and an
 in-process Israel-time scheduler for generation and publication. SQLite and Markdown
 share one persistent content root. The existing generation/publication commands stay
 available for manual recovery, but no separate scheduler or network service is

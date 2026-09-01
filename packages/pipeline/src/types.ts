@@ -18,12 +18,12 @@ export interface ArtifactSink {
 
 export type PipelineStage =
   | "initialize"
-  | "research"
-  | "research_validation"
+  | "light_discovery"
+  | "gap_discovery"
+  | "keyword_discovery"
+  | "deep_research"
   | "draft"
   | "draft_validation"
-  | "gap_check"
-  | "revision"
   | "validate"
   | "persist";
 

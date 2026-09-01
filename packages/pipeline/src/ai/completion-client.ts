@@ -5,6 +5,7 @@ import {
   type AiCompletionClient,
   type AiCompletionRequest,
 } from "./contracts.js";
+import { withAiRetry, type AiRetryOptions } from "./retry.js";
 
 export interface OpenAiCompatibleCompletionClientOptions {
   readonly apiKey: string;
@@ -13,6 +14,9 @@ export interface OpenAiCompatibleCompletionClientOptions {
   readonly timeoutMs?: number;
   readonly headers?: Readonly<Record<string, string>>;
   readonly fetch?: typeof globalThis.fetch;
+  /** Retry behavior for a transient failure (429/5xx, or a malformed-but-200
+   *  envelope) — see ./retry.js. Defaults apply when omitted. */
+  readonly retry?: AiRetryOptions;
 }
 
 export class OpenAiCompatibleCompletionClient implements AiCompletionClient {
@@ -22,6 +26,7 @@ export class OpenAiCompatibleCompletionClient implements AiCompletionClient {
   readonly #timeoutMs: number;
   readonly #headers: Readonly<Record<string, string>>;
   readonly #fetch: typeof globalThis.fetch;
+  readonly #retry: Omit<AiRetryOptions, "signal">;
 
   constructor(options: OpenAiCompatibleCompletionClientOptions) {
     if (options.apiKey.trim().length === 0) throw new TypeError("apiKey cannot be empty.");
@@ -41,6 +46,7 @@ export class OpenAiCompatibleCompletionClient implements AiCompletionClient {
     this.#timeoutMs = timeoutMs;
     this.#headers = options.headers ?? {};
     this.#fetch = options.fetch ?? globalThis.fetch;
+    this.#retry = options.retry ?? {};
   }
 
   async complete(request: AiCompletionRequest): Promise<AiCompletion> {
@@ -58,6 +64,13 @@ export class OpenAiCompatibleCompletionClient implements AiCompletionClient {
       throw new RangeError("temperature must be between 0 and 2.");
     }
 
+    return withAiRetry(
+      () => this.#performRequest(request),
+      { ...this.#retry, ...(request.signal === undefined ? {} : { signal: request.signal }) },
+    );
+  }
+
+  async #performRequest(request: AiCompletionRequest): Promise<AiCompletion> {
     const abortController = new AbortController();
     const onAbort = (): void => abortController.abort(request.signal?.reason);
     if (request.signal?.aborted === true) onAbort();
@@ -85,6 +98,8 @@ export class OpenAiCompatibleCompletionClient implements AiCompletionClient {
         throw new AiProviderError(
           `AI provider returned HTTP ${response.status}${body ? `: ${body}` : "."}`,
           response.status,
+          undefined,
+          parseRetryAfterMs(response),
         );
       }
       const payload = await readJsonResponse(response);
@@ -103,6 +118,15 @@ export class OpenAiCompatibleCompletionClient implements AiCompletionClient {
       request.signal?.removeEventListener("abort", onAbort);
     }
   }
+}
+
+function parseRetryAfterMs(response: Response): number | null {
+  const header = response.headers.get("retry-after");
+  if (header === null) return null;
+  const seconds = Number(header);
+  if (Number.isFinite(seconds) && seconds >= 0) return Math.round(seconds * 1_000);
+  const untilMs = Date.parse(header);
+  return Number.isNaN(untilMs) ? null : Math.max(0, untilMs - Date.now());
 }
 
 function responseFormatPayload(

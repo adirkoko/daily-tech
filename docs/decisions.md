@@ -52,8 +52,9 @@ repeating AI requests.
 
 Publication does not trigger an external deployment. The publisher leases the target
 date, revalidates the artifact, and atomically changes its state from `ready` to
-`published`. Because the site reads the local store on demand, the result is visible
-immediately.
+`published`. Embedded publication invalidates the site's metadata snapshot
+immediately; publication from another process becomes visible when the short cache
+TTL expires.
 
 ## Password-only Admin authentication
 
@@ -104,26 +105,46 @@ It retains editorial control over selection, grouping, order, wording, and which
 verified sources to cite. Code verifies story/source boundaries and renders the final
 Markdown structure consistently; it does not make editorial decisions.
 
-## Research gathers; the writer curates
+## Discovery precedes deep research and writing
 
-Research returns every story that meets the configured scope and importance threshold,
-up to the current limit. It does not preselect the final edition. The writer decides
-which accepted stories become full developments, forward-looking mentions, or are
-omitted.
+A broad discovery pass finds candidate developments. Optional general-gap and
+Admin-keyword passes expand that set before one Deep Research request builds the
+full dossiers. The writer then makes one editorial pass over accepted dossiers.
+
+Running omission checks before Deep Research gives every candidate the same research
+depth and avoids patching an already-written draft through a revision loop.
 
 ## Only confirmed developments are eligible
 
-Research and Gap Check exclude claims supported only by unconfirmed third-party
-reporting. Forward-looking items are eligible only when an authoritative party has
-announced them. `worthWatching` is reserved for genuinely pending developments, not
-as a lower tier for events that already happened.
+Discovery stages exclude claims supported only by unconfirmed third-party reporting.
+Forward-looking items are eligible only when an authoritative party has announced
+them. `worthWatching` is reserved for genuinely pending developments, not as a lower
+tier for events that already happened.
 
-## One Gap Check and at most one Revision
+## Models make editorial selections within bounded requests
 
-Each run performs one narrow Gap Check. Significant missing stories trigger one
-Revision followed by deterministic validation; the pipeline does not search again.
-Live search has no natural "nothing else exists" convergence point, so a bounded,
-predictable flow is preferable to a revision loop.
+Deep Research chooses which candidates justify a dossier, up to the operator's
+`maximumStories` ceiling. The writer separately decides which accepted dossiers
+belong in the edition. Code enforces response bounds but does not replace either
+editorial choice with ranking heuristics. A larger internal candidate cap exists only
+to bound pathological request sizes.
+
+## Pipeline settings live in SQLite
+
+Operator-facing settings — focus keywords, story ceiling, discovery toggles,
+editorial guidance, and the daily schedule — are stored as one validated SQLite row
+and edited as a unit in Admin. The row is seeded with defaults, generation reads it
+once per run, and the scheduler reads its times on every tick. Secrets and
+infrastructure tuning remain outside Admin. See
+[`data-model.md`](data-model.md#pipeline-settings).
+
+## Retry only transient AI client failures
+
+The AI client retries rate limits, server failures, and malformed provider envelopes
+with bounded backoff. It does not retry downstream schema, citation-boundary, or
+story-validation failures: those are deterministic results that require diagnosis,
+not another paid request. Exhausted retries still leave the scheduler job terminal
+for operator review.
 
 ## Minimal pipeline logging
 

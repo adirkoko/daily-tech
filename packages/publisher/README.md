@@ -13,8 +13,9 @@ The publisher:
 5. Finalizes the durable publication job locally.
 6. Records completion, structured logs, and any failure as a System ticket.
 
-The standalone site reads SQLite and Markdown on demand, so the status transition is
-visible immediately and requires no external deployment trigger. A successfully
+Publication requires no external deployment trigger. The embedded scheduler
+invalidates the site's metadata snapshot immediately; a separate manual publisher
+process becomes visible when the short snapshot TTL expires. A successfully
 published date is a no-op on later runs.
 
 ## Command

@@ -21,3 +21,23 @@ export class DatabaseIntegrityError extends Error {
     this.issues = issues;
   }
 }
+
+export class PipelineSettingsValidationError extends Error {
+  readonly issues: readonly ValidationIssue[];
+
+  constructor(issues: readonly ValidationIssue[]) {
+    super(`Invalid pipeline settings (${issues.length} issue${issues.length === 1 ? "" : "s"}).`);
+    this.name = "PipelineSettingsValidationError";
+    this.issues = issues;
+  }
+}
+
+export class PipelineSettingsIntegrityError extends Error {
+  readonly issues: readonly ValidationIssue[];
+
+  constructor(issues: readonly ValidationIssue[]) {
+    super("Stored pipeline settings failed validation.");
+    this.name = "PipelineSettingsIntegrityError";
+    this.issues = issues;
+  }
+}

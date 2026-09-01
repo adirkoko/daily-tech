@@ -48,7 +48,7 @@ describe("database operations adapters", () => {
     await reporter.report({
       runId: "run-1",
       date: "2026-08-27",
-      stage: "research",
+      stage: "light_discovery",
       occurredAt: "2026-08-28T01:05:00.000Z",
       message: "Research provider unavailable",
     });
@@ -72,7 +72,7 @@ describe("database operations adapters", () => {
     await reporter.report({
       runId: "rerun-1",
       date: "2026-08-27",
-      stage: "research",
+      stage: "light_discovery",
       occurredAt: "2026-08-28T02:00:00.000Z",
       message: "Rerun failed",
     });

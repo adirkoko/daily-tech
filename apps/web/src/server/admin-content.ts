@@ -126,3 +126,15 @@ function filePath(date: string): string {
 export function stringList(value: string): readonly string[] {
   return [...new Set(value.split(/\r?\n|,/u).map((item) => item.trim()).filter(Boolean))];
 }
+
+/** Joins repeated form entries (one per chip input, e.g. companies, topics, admin
+ *  keywords) into the newline-delimited form `stringList` expects. A single value
+ *  still works unchanged. */
+export function listField(form: FormData, name: string, maximum: number): readonly string[] {
+  const joined = form
+    .getAll(name)
+    .map((entry) => (typeof entry === "string" ? entry : ""))
+    .join("\n");
+  if (joined.length > maximum) throw new TypeError(`${name} is invalid.`);
+  return stringList(joined);
+}

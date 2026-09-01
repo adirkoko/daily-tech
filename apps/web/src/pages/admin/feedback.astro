@@ -36,6 +36,10 @@ const items: InboxItem[] = tickets
     filters: { status: ticket.status, category: ticket.category },
   }));
 
+const feedbackTickets = tickets.filter((ticket) => ticket.category !== "system");
+const openCount = feedbackTickets.filter((ticket) => ticket.status === "open").length;
+const resolvedCount = feedbackTickets.length - openCount;
+
 const filterGroups = [
   {
     key: "status",
@@ -57,6 +61,25 @@ const filterGroups = [
 ];
 ---
 <AdminLayout title="פניות">
-  <div class="admin-title"><div><p class="eyebrow">Inbox</p><h1>פניות משתמשים</h1></div></div>
-  <InboxList items={items} filterGroups={filterGroups} csrf={csrf} emptyText="אין פניות שתואמות לסינון." />
+  <section class="inbox-page inbox-page-feedback">
+    <header class="inbox-hero">
+      <div class="inbox-hero-copy">
+        <span class="inbox-hero-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4Z" /><path d="M8 9h8M8 13h5" /></svg></span>
+        <div><p class="inbox-eyebrow">Feedback inbox</p><h1>פניות משתמשים</h1><p>מרכז אחד להצעות, תיקונים ופניות כלליות שהתקבלו מהאתר.</p></div>
+      </div>
+      <dl class="inbox-overview" aria-label="סיכום פניות">
+        <div class="is-primary"><dt>ממתינות לטיפול</dt><dd>{openCount}</dd></div>
+        <div><dt>טופלו</dt><dd>{resolvedCount}</dd></div>
+        <div><dt>סך הכול</dt><dd>{feedbackTickets.length}</dd></div>
+      </dl>
+    </header>
+    <InboxList
+      items={items}
+      filterGroups={filterGroups}
+      csrf={csrf}
+      variant="feedback"
+      searchPlaceholder="חיפוש בפניות…"
+      emptyText="אין פניות שתואמות לחיפוש או לסינון שבחרת."
+    />
+  </section>
 </AdminLayout>

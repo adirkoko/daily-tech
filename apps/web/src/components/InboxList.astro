@@ -28,32 +28,50 @@ interface Props {
   filterGroups?: InboxFilterGroup[];
   csrf: string;
   emptyText?: string;
+  variant?: "feedback" | "alerts";
+  searchPlaceholder?: string;
 }
 
-const { items, filterGroups = [], csrf, emptyText = "אין פריטים שתואמים לסינון." } = Astro.props;
+const {
+  items,
+  filterGroups = [],
+  csrf,
+  emptyText = "אין פריטים שתואמים לסינון.",
+  variant = "feedback",
+  searchPlaceholder = "חיפוש בכותרת…",
+} = Astro.props;
 ---
-<section class="inbox" data-inbox>
+<section class={`inbox inbox-${variant}`} data-inbox>
   <div class="inbox-controls">
-    <label class="inbox-search">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
-      <input type="search" data-inbox-search placeholder="חיפוש בכותרת…" aria-label="חיפוש בכותרת" />
-    </label>
-
-    {filterGroups.map((group) => (
-      <div class="inbox-filter" data-filter-group={group.key} role="group" aria-label={group.label}>
-        <button type="button" class="inbox-chip is-active" data-filter-value="">{group.label}: הכול</button>
-        {group.options.map((option) => (
-          <button type="button" class="inbox-chip" data-filter-value={option.value}>{option.label}</button>
-        ))}
-      </div>
-    ))}
-
-    <div class="inbox-sort" role="group" aria-label="מיון">
-      <button type="button" class="inbox-chip is-active" data-sort="desc">חדשים</button>
-      <button type="button" class="inbox-chip" data-sort="asc">ישנים</button>
+    <div class="inbox-toolbar-main">
+      <label class="inbox-search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+        <input type="search" data-inbox-search placeholder={searchPlaceholder} aria-label="חיפוש בפריטים" />
+      </label>
+      <p class="inbox-count" data-inbox-count aria-live="polite"></p>
     </div>
 
-    <p class="inbox-count" data-inbox-count aria-live="polite"></p>
+    <div class="inbox-filterbar">
+      {filterGroups.map((group) => (
+        <div class="inbox-filter-set">
+          <span class="inbox-filter-label">{group.label}</span>
+          <div class="inbox-filter" data-filter-group={group.key} role="group" aria-label={group.label}>
+            <button type="button" class="inbox-chip is-active" data-filter-value="">הכול</button>
+            {group.options.map((option) => (
+              <button type="button" class="inbox-chip" data-filter-value={option.value}>{option.label}</button>
+            ))}
+          </div>
+        </div>
+      ))}
+
+      <div class="inbox-filter-set inbox-sort-set">
+        <span class="inbox-filter-label">סדר</span>
+        <div class="inbox-sort" role="group" aria-label="מיון">
+          <button type="button" class="inbox-chip is-active" data-sort="desc">חדשים</button>
+          <button type="button" class="inbox-chip" data-sort="asc">ישנים</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <ul class="inbox-list" data-inbox-list>
@@ -62,7 +80,7 @@ const { items, filterGroups = [], csrf, emptyText = "אין פריטים שתו�
         class="inbox-row"
         data-inbox-row
         data-timestamp={item.timestamp}
-        data-title={item.title.toLocaleLowerCase("he")}
+        data-search={[item.title, item.body, ...(item.meta ?? []).map((entry) => entry.value)].filter(Boolean).join(" ").toLocaleLowerCase("he")}
         {...Object.fromEntries(
           Object.entries(item.filters ?? {}).map(([key, value]) => [`data-filter-${key}`, value]),
         )}
@@ -74,11 +92,24 @@ const { items, filterGroups = [], csrf, emptyText = "אין פריטים שתו�
           aria-controls={`inbox-body-${index}`}
           data-inbox-toggle
         >
-          <span class="inbox-row-title">{item.title}</span>
-          <span class="inbox-row-tags">
-            {item.tags.map((tag) => (
-              <span class={`inbox-tag tone-${tag.tone ?? "neutral"}`}>{tag.label}</span>
-            ))}
+          <span class="inbox-row-signal" aria-hidden="true">
+            {variant === "alerts" && item.filters?.type === "log" ? (
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="m7 9 2 2-2 2M12 14h5" /></svg>
+            ) : variant === "alerts" && item.filters?.status === "resolved" ? (
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9" /><path d="m8 12 2.7 2.7L16.5 9" /></svg>
+            ) : variant === "alerts" ? (
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /><path d="M12 7v4M12 14h.01" /></svg>
+            ) : (
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4Z" /><path d="M8 9h8M8 13h5" /></svg>
+            )}
+          </span>
+          <span class="inbox-row-main">
+            <span class="inbox-row-title">{item.title}</span>
+            <span class="inbox-row-tags">
+              {item.tags.map((tag) => (
+                <span class={`inbox-tag tone-${tag.tone ?? "neutral"}`}>{tag.label}</span>
+              ))}
+            </span>
           </span>
           <time class="inbox-row-time" datetime={item.timestamp}>{formatIsraelDateTime(item.timestamp)}</time>
           <svg class="inbox-row-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
@@ -96,7 +127,10 @@ const { items, filterGroups = [], csrf, emptyText = "אין פריטים שתו�
           {item.resolveAction && (
             <form class="inbox-resolve" action={item.resolveAction} method="post">
               <input type="hidden" name="csrf_token" value={csrf} />
-              <button class="button secondary" type="submit">סימון כטופל</button>
+              <button class="button secondary" type="submit">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6" /></svg>
+                סימון כטופל
+              </button>
             </form>
           )}
         </div>
@@ -104,7 +138,11 @@ const { items, filterGroups = [], csrf, emptyText = "אין פריטים שתו�
     ))}
   </ul>
 
-  <p class="inbox-empty" data-inbox-empty hidden>{emptyText}</p>
+  <div class="inbox-empty" data-inbox-empty hidden>
+    <span aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v12H4zM4 7l3-4h10l3 4M8 12h8" /></svg></span>
+    <strong>אין כאן פריטים כרגע</strong>
+    <p>{emptyText}</p>
+  </div>
 
   <nav class="inbox-pager" data-inbox-pager hidden aria-label="ניווט עמודים">
     <button type="button" class="inbox-pager-button" data-pager-prev aria-label="עמוד קודם">
@@ -138,7 +176,7 @@ const { items, filterGroups = [], csrf, emptyText = "אין פריטים שתו�
     let page = 0;
 
     const matches = (row) => {
-      if (query && !(row.dataset.title || "").includes(query)) return false;
+      if (query && !(row.dataset.search || "").includes(query)) return false;
       for (const key in selected) {
         const want = selected[key];
         if (!want) continue;

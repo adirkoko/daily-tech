@@ -153,6 +153,38 @@ const migrations: readonly Migration[] = [
         ON scheduled_jobs (state, updated_at DESC);
     `,
   },
+  {
+    version: 6,
+    name: "create_pipeline_settings",
+    sql: `
+      CREATE TABLE pipeline_settings (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        admin_keywords TEXT NOT NULL DEFAULT '[]'
+          CHECK (json_valid(admin_keywords) AND json_type(admin_keywords) = 'array'),
+        maximum_stories INTEGER NOT NULL DEFAULT 8
+          CHECK (maximum_stories BETWEEN 1 AND 20),
+        gap_discovery_enabled INTEGER NOT NULL DEFAULT 1
+          CHECK (gap_discovery_enabled IN (0, 1)),
+        admin_keywords_research_enabled INTEGER NOT NULL DEFAULT 1
+          CHECK (admin_keywords_research_enabled IN (0, 1)),
+        editorial_instructions TEXT NOT NULL DEFAULT '',
+        generate_time TEXT NOT NULL DEFAULT '01:00'
+          CHECK (
+            generate_time GLOB '[0-2][0-9]:[0-5][0-9]'
+            AND CAST(substr(generate_time, 1, 2) AS INTEGER) <= 23
+          ),
+        publish_time TEXT NOT NULL DEFAULT '07:00'
+          CHECK (
+            publish_time GLOB '[0-2][0-9]:[0-5][0-9]'
+            AND CAST(substr(publish_time, 1, 2) AS INTEGER) <= 23
+          ),
+        updated_at TEXT NOT NULL
+      ) STRICT;
+
+      INSERT INTO pipeline_settings (id, updated_at)
+        VALUES (1, '1970-01-01T00:00:00.000Z');
+    `,
+  },
 ];
 
 export const LATEST_SCHEMA_VERSION = migrations.at(-1)?.version ?? 0;

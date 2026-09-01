@@ -66,9 +66,11 @@ commands still refuse to run without `--confirm-reset`.
 ## Embedded generation and publication schedule
 
 Set `SCHEDULER_ENABLED=true` to run generation and publication inside the same Node
-process. Defaults are `01:00` and `07:00` Israel time. A durable SQLite job lease
-prevents duplicate work after restarts or overlapping instances. A failed daily job
-is recorded once and stays visible in Admin rather than retrying AI calls repeatedly.
+process. Generate and publish times are managed in `/admin/settings`, defaulting to
+`01:00` and `07:00` in `Asia/Jerusalem`; changes take effect without restarting the
+service. A durable SQLite job lease prevents duplicate work after restarts or
+overlapping instances. A failed daily job is recorded once and remains visible in
+Admin rather than being retried on every scheduler tick.
 
 The same operations remain available as manual recovery commands:
 

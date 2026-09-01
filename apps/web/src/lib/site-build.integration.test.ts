@@ -137,12 +137,16 @@ describe("standalone site service", () => {
       expect(dailyHtml).toContain("מהדורת אינטגרציה בטוחה");
       expect(dailyHtml).toContain("noopener noreferrer");
       expect(dailyHtml).not.toContain("alert('bad')");
-      expect(monthHtml).toContain(`/daily/${day.date}`);
-      expect(monthHtml).toContain('data-level="medium"');
+      // The calendar always server-renders the *current* Israel month, and the fixture
+      // day (2026-08-26) will not generally fall inside it — the client reads every
+      // published day from this embedded data blob to render any month on demand, so
+      // that is the month-independent invariant to assert here.
+      expect(monthHtml).toContain(`"date":"${day.date}"`);
+      expect(monthHtml).toContain('"intensity":"medium"');
+      expect(monthHtml).toContain('"hrefBase":"/daily"');
       expect(monthHtml).toContain('data-month-step="-1"');
       expect(monthHtml).toContain('data-year-step="-1"');
       expect(monthHtml).toContain('data-calendar-year');
-      expect(monthHtml).not.toContain('data-calendar-date="2026-07-31"');
       const legacyMonth = await fetch(`${origin}/calendar/2026-08`, { redirect: "manual" });
       expect(legacyMonth.status).toBe(302);
       expect(legacyMonth.headers.get("location")).toBe("/calendar");
@@ -182,12 +186,59 @@ describe("standalone site service", () => {
       const dashboardHtml = await dashboard.text();
       expect(dashboard.status).toBe(200);
       expect(dashboard.headers.get("cache-control")).toBe("no-store");
-      expect(dashboardHtml).toContain(`/admin/briefs/${day.date}`);
+      // Same month-independence as the public calendar (see above): the admin
+      // dashboard also only server-renders the current Israel month.
+      expect(dashboardHtml).toContain(`"date":"${day.date}"`);
+      expect(dashboardHtml).toContain('"hrefBase":"/admin/briefs"');
 
       const feedbackHtml = await (await fetch(`${origin}/admin/feedback`, { headers: adminHeaders })).text();
       expect(feedbackHtml).toContain("Integration feedback");
       const alertsHtml = await (await fetch(`${origin}/admin/alerts`, { headers: adminHeaders })).text();
       expect(alertsHtml).toContain("Fixture system failure");
+
+      const settingsHtml = await (await fetch(`${origin}/admin/settings`, { headers: adminHeaders })).text();
+      const settingsCsrf = /name="csrf_token" value="([^"]+)"/u.exec(settingsHtml)?.[1];
+      expect(settingsCsrf).toBeTruthy();
+      expect(settingsHtml).toMatch(/name="generate_hour" value="01"[^>]*data-time-hour/u);
+      expect(settingsHtml).toMatch(/name="generate_minute" value="00"[^>]*data-time-minute/u);
+      expect(settingsHtml).toMatch(/name="publish_hour" value="07"[^>]*data-time-hour/u);
+      expect(settingsHtml).toMatch(/name="publish_minute" value="00"[^>]*data-time-minute/u);
+      expect(settingsHtml).not.toContain('<input type="time"');
+      const rejectedSettings = await fetch(`${origin}/api/admin/settings`, {
+        method: "POST",
+        redirect: "manual",
+        headers: { ...adminHeaders, Origin: origin },
+        body: new URLSearchParams({ csrf_token: "invalid" }),
+      });
+      expect(rejectedSettings.status).toBe(403);
+
+      const savedSettings = await fetch(`${origin}/api/admin/settings`, {
+        method: "POST",
+        redirect: "manual",
+        headers: { ...adminHeaders, Origin: origin },
+        body: new URLSearchParams({
+          csrf_token: settingsCsrf ?? "",
+          admin_keywords: "קוונטים",
+          maximum_stories: "5",
+          gap_discovery_enabled: "false",
+          admin_keywords_research_enabled: "true",
+          editorial_instructions: "התמקדו בישראל השבוע.",
+          generate_hour: "02",
+          generate_minute: "30",
+          publish_hour: "08",
+          publish_minute: "15",
+        }),
+      });
+      expect(savedSettings.status).toBe(303);
+      expect(savedSettings.headers.get("location")).toMatch(/^\/admin\/settings\?success=/u);
+      const updatedSettingsHtml = await (await fetch(`${origin}/admin/settings`, { headers: adminHeaders })).text();
+      expect(updatedSettingsHtml).toContain('value="קוונטים"');
+      expect(updatedSettingsHtml).toContain('value="5"');
+      expect(updatedSettingsHtml).toMatch(/name="generate_hour" value="02"/u);
+      expect(updatedSettingsHtml).toMatch(/name="generate_minute" value="30"/u);
+      expect(updatedSettingsHtml).toMatch(/name="publish_hour" value="08"/u);
+      expect(updatedSettingsHtml).toMatch(/name="publish_minute" value="15"/u);
+      expect(updatedSettingsHtml).toContain("התמקדו בישראל השבוע.");
 
       const editorHtml = await (await fetch(`${origin}/admin/briefs/${day.date}`, { headers: adminHeaders })).text();
       const csrf = /name="csrf_token" value="([^"]+)"/u.exec(editorHtml)?.[1];

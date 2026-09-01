@@ -13,32 +13,31 @@ afterEach(async () => {
   await Promise.all(temporaryRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
 
+async function temporaryDatabaseFile(): Promise<string> {
+  const root = await mkdtemp(join(tmpdir(), "daily-tech-scheduler-"));
+  temporaryRoots.push(root);
+  return join(root, "scheduler.db");
+}
+
 describe("service scheduler configuration", () => {
   it("loads safe disabled defaults", () => {
     expect(loadSchedulerConfig({})).toEqual({
       enabled: false,
-      generateAtMinute: 60,
-      publishAtMinute: 420,
       pollIntervalMs: 30_000,
       leaseDurationMs: 21_600_000,
     });
   });
 
-  it("parses configured daily times and bounds numeric settings", () => {
+  it("bounds numeric settings from the environment", () => {
     expect(loadSchedulerConfig({
       SCHEDULER_ENABLED: "true",
-      SCHEDULER_GENERATE_TIME: "02:15",
-      SCHEDULER_PUBLISH_TIME: "08:45",
       SCHEDULER_POLL_SECONDS: "60",
       SCHEDULER_LEASE_HOURS: "8",
     })).toMatchObject({
       enabled: true,
-      generateAtMinute: 135,
-      publishAtMinute: 525,
       pollIntervalMs: 60_000,
       leaseDurationMs: 28_800_000,
     });
-    expect(() => loadSchedulerConfig({ SCHEDULER_GENERATE_TIME: "25:00" })).toThrow(TypeError);
     expect(() => loadSchedulerConfig({ SCHEDULER_POLL_SECONDS: "1" })).toThrow(RangeError);
   });
 
@@ -53,20 +52,12 @@ describe("service scheduler configuration", () => {
     });
   });
 
-  it("runs each due daily action only once through the durable ledger", async () => {
-    const root = await mkdtemp(join(tmpdir(), "daily-tech-scheduler-"));
-    temporaryRoots.push(root);
-    const databaseFile = join(root, "scheduler.db");
+  it("reads the generate/publish times from pipeline_settings, not fixed config", async () => {
+    const databaseFile = await temporaryDatabaseFile();
     const runGeneration = vi.fn(async () => undefined);
     const runPublication = vi.fn(async () => undefined);
     const scheduler = new ServiceScheduler(
-      {
-        enabled: true,
-        generateAtMinute: 60,
-        publishAtMinute: 420,
-        pollIntervalMs: 30_000,
-        leaseDurationMs: 21_600_000,
-      },
+      { enabled: true, pollIntervalMs: 30_000, leaseDurationMs: 21_600_000 },
       {},
       {
         openDatabase: async () => DailyTechDatabase.open({ filename: databaseFile }),
@@ -75,6 +66,47 @@ describe("service scheduler configuration", () => {
       },
     );
 
+    const database = DailyTechDatabase.open({ filename: databaseFile });
+    database.pipelineSettings.save({
+      adminKeywords: [],
+      maximumStories: 8,
+      gapDiscoveryEnabled: true,
+      adminKeywordsResearchEnabled: true,
+      editorialInstructions: "",
+      generateTime: "03:00",
+      publishTime: "09:00",
+      updatedAt: "2026-08-28T00:00:00.000Z",
+    });
+    database.close();
+
+    // 03:00 Israel — below the saved 03:00/09:00 times is not reached yet at 02:00.
+    await scheduler.tick(new Date("2026-08-27T23:00:00.000Z")); // 02:00 Israel
+    expect(runGeneration).not.toHaveBeenCalled();
+
+    await scheduler.tick(new Date("2026-08-28T00:00:00.000Z")); // 03:00 Israel
+    expect(runGeneration).toHaveBeenCalledOnce();
+    expect(runPublication).not.toHaveBeenCalled();
+
+    await scheduler.tick(new Date("2026-08-28T06:00:00.000Z")); // 09:00 Israel
+    expect(runPublication).toHaveBeenCalledOnce();
+  });
+
+  it("runs each due daily action only once through the durable ledger", async () => {
+    const databaseFile = await temporaryDatabaseFile();
+    const runGeneration = vi.fn(async () => undefined);
+    const runPublication = vi.fn(async () => undefined);
+    const scheduler = new ServiceScheduler(
+      { enabled: true, pollIntervalMs: 30_000, leaseDurationMs: 21_600_000 },
+      {},
+      {
+        openDatabase: async () => DailyTechDatabase.open({ filename: databaseFile }),
+        runGeneration,
+        runPublication,
+      },
+    );
+
+    // The default pipeline_settings row (seeded by migration) generates at 01:00 and
+    // publishes at 07:00 Israel time — no explicit save needed for this test.
     const generationTime = new Date("2026-08-28T01:00:00.000Z"); // 04:00 Israel
     await scheduler.tick(generationTime);
     await scheduler.tick(generationTime);

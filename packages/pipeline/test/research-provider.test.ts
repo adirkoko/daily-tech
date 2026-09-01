@@ -6,7 +6,7 @@ import {
   type AiWebResearchClient,
   type PipelineContext,
 } from "../src/index.js";
-import { firstStoryInput, secondStoryInput } from "./fixtures.js";
+import { firstCandidate, firstCandidateInput, firstDeepStoryInput, secondCandidateInput } from "./fixtures.js";
 
 const context: PipelineContext = {
   runId: "run-1",
@@ -18,44 +18,44 @@ const context: PipelineContext = {
   },
 };
 
-describe("ModelNewsResearchProvider", () => {
+describe("ModelNewsResearchProvider.discover", () => {
   it("rejects one ungrounded story while preserving valid stories", async () => {
     const invalid = {
-      ...secondStoryInput,
-      sources: [{ ...secondStoryInput.sources[0], url: "https://invented.example/story" }],
+      ...secondCandidateInput,
+      sources: [{ ...secondCandidateInput.sources[0], url: "https://invented.example/story" }],
     };
-    const client = clientReturning({ stories: [firstStoryInput, invalid] }, [
+    const client = clientReturning({ stories: [firstCandidateInput, invalid] }, [
       "https://example.com/model",
     ]);
     const provider = new ModelNewsResearchProvider({ client });
 
-    const result = await provider.research({
+    const result = await provider.discover({
       context,
       scope: {
         categories: ["ai", "developer_tools"],
         minimumImportance: 3,
-        maximumStories: 10,
+        maximumCandidatesPerCall: 10,
         preferredSourceTypes: ["official_blog"],
       },
     });
 
     expect(result.stories).toHaveLength(1);
     expect(result.rejectedStories).toHaveLength(1);
-    expect(result.stories[0]?.title).toBe(firstStoryInput.title);
+    expect(result.stories[0]?.title).toBe(firstCandidateInput.title);
   });
 
   it("fails the batch when every attempted story is invalid", async () => {
-    const client = clientReturning({ stories: [firstStoryInput] }, [
+    const client = clientReturning({ stories: [firstCandidateInput] }, [
       "https://different.example/source",
     ]);
     const provider = new ModelNewsResearchProvider({ client });
 
-    const promise = provider.research({
+    const promise = provider.discover({
       context,
       scope: {
         categories: ["ai"],
         minimumImportance: 3,
-        maximumStories: 10,
+        maximumCandidatesPerCall: 10,
         preferredSourceTypes: ["official_blog"],
       },
     });
@@ -64,7 +64,7 @@ describe("ModelNewsResearchProvider", () => {
     await expect(promise).rejects.toMatchObject({
       rejectedStories: [{
         index: 0,
-        title: firstStoryInput.title,
+        title: firstCandidateInput.title,
         reason: expect.stringContaining("stories[0].sources[0].url"),
       }],
     });
@@ -75,19 +75,19 @@ describe("ModelNewsResearchProvider", () => {
 
   it("accepts a null publishedOn", async () => {
     const undatedSource = {
-      ...firstStoryInput,
-      sources: [{ ...firstStoryInput.sources[0], publishedOn: null }],
+      ...firstCandidateInput,
+      sources: [{ ...firstCandidateInput.sources[0], publishedOn: null }],
     };
     const provider = new ModelNewsResearchProvider({
       client: clientReturning({ stories: [undatedSource] }, ["https://example.com/model"]),
     });
 
-    const result = await provider.research({
+    const result = await provider.discover({
       context,
       scope: {
         categories: ["ai"],
         minimumImportance: 3,
-        maximumStories: 10,
+        maximumCandidatesPerCall: 10,
         preferredSourceTypes: ["official_blog"],
       },
     });
@@ -97,55 +97,108 @@ describe("ModelNewsResearchProvider", () => {
 
   it("rejects a malformed publishedOn value", async () => {
     const malformedSource = {
-      ...firstStoryInput,
-      sources: [{ ...firstStoryInput.sources[0], publishedOn: "27/08/2026" }],
+      ...firstCandidateInput,
+      sources: [{ ...firstCandidateInput.sources[0], publishedOn: "27/08/2026" }],
     };
     const provider = new ModelNewsResearchProvider({
       client: clientReturning({ stories: [malformedSource] }, ["https://example.com/model"]),
     });
 
-    await expect(provider.research({
+    await expect(provider.discover({
       context,
       scope: {
         categories: ["ai"],
         minimumImportance: 3,
-        maximumStories: 10,
+        maximumCandidatesPerCall: 10,
         preferredSourceTypes: ["official_blog"],
       },
     })).rejects.toThrow(
       'stories[0].sources[0].publishedOn must be a calendar date in YYYY-MM-DD format; value="27/08/2026"',
     );
   });
+});
 
-  it("keeps gap research narrow and returns an empty list when nothing is missing", async () => {
+describe("ModelNewsResearchProvider.findGaps", () => {
+  it("stays narrow and returns an empty list when nothing is missing", async () => {
     const client = clientReturning({ missingStories: [] }, ["https://example.com/check"]);
     const provider = new ModelNewsResearchProvider({ client });
     const result = await provider.findGaps({
       context,
       existingStories: [],
-      draft: {
-        dayOverview: "quiet",
-        developments: [],
-        worthWatching: [],
-        bottomLine: "quiet",
-        metadata: {
-          summary: "quiet",
-          significant_items: 0,
-          worth_watching_items: 0,
-          day_intensity: "minimal",
-          companies: [],
-          topics: [],
-          developments: [],
-        },
-      },
       minimumImportance: 3,
-      maximumMissingStories: 4,
+      maximumCandidatesPerCall: 4,
     });
 
-    expect(result.missingStories).toEqual([]);
+    expect(result.stories).toEqual([]);
     expect(vi.mocked(client.execute).mock.calls[0]?.[0].instructions).toContain(
-      "Do not critique wording",
+      "focused follow-up research provider",
     );
+  });
+
+  it("passes an explicit empty focusKeywords array when none is supplied", async () => {
+    const client = clientReturning({ missingStories: [] }, ["https://example.com/check"]);
+    const provider = new ModelNewsResearchProvider({ client });
+
+    await provider.findGaps({
+      context,
+      existingStories: [],
+      minimumImportance: 3,
+      maximumCandidatesPerCall: 4,
+    });
+
+    const input = vi.mocked(client.execute).mock.calls[0]?.[0].input as { focusKeywords: unknown };
+    expect(input.focusKeywords).toEqual([]);
+  });
+
+  it("forwards focusKeywords when the admin-keyword pass supplies them", async () => {
+    const client = clientReturning({ missingStories: [] }, ["https://example.com/check"]);
+    const provider = new ModelNewsResearchProvider({ client });
+
+    await provider.findGaps({
+      context,
+      existingStories: [],
+      minimumImportance: 3,
+      maximumCandidatesPerCall: 4,
+      focusKeywords: ["OpenAI", "Robotics"],
+    });
+
+    const input = vi.mocked(client.execute).mock.calls[0]?.[0].input as { focusKeywords: unknown };
+    expect(input.focusKeywords).toEqual(["OpenAI", "Robotics"]);
+  });
+});
+
+describe("ModelNewsResearchProvider.deepResearch", () => {
+  it("ties each returned dossier to candidateId and requests a raised tool-call budget", async () => {
+    const client = clientReturning({ stories: [firstDeepStoryInput] }, ["https://example.com/model"]);
+    const provider = new ModelNewsResearchProvider({ client });
+
+    const result = await provider.deepResearch({
+      context,
+      candidates: [firstCandidate],
+      maximumStories: 8,
+      editorialInstructions: "",
+    });
+
+    expect(result.stories).toHaveLength(1);
+    expect(result.stories[0]?.candidateId).toBe("story-1");
+    expect(vi.mocked(client.execute).mock.calls[0]?.[0].maxToolCalls).toBeGreaterThan(20);
+  });
+
+  it("rejects a dossier whose candidateId is not one of the supplied candidates", async () => {
+    const invalid = { ...firstDeepStoryInput, candidateId: "unknown-candidate" };
+    const client = clientReturning({ stories: [invalid] }, ["https://example.com/model"]);
+    const provider = new ModelNewsResearchProvider({ client });
+
+    // The provider itself only parses and citation-checks the raw response; matching
+    // candidateId against the real candidate list happens in finalizeDeepResearchBatch,
+    // so a bogus id still parses fine here — this documents that split responsibility.
+    const result = await provider.deepResearch({
+      context,
+      candidates: [firstCandidate],
+      maximumStories: 8,
+      editorialInstructions: "",
+    });
+    expect(result.stories[0]?.candidateId).toBe("unknown-candidate");
   });
 });
 

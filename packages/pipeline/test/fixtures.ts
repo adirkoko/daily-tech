@@ -3,16 +3,15 @@ import type { BriefArtifact } from "@daily-tech/core";
 import {
   renderBriefMarkdown,
   type BriefDraft,
-  type ResearchedStory,
-  type ResearchStoryInput,
+  type CandidateStory,
+  type CandidateStoryInput,
+  type DeepResearchedStory,
+  type DeepResearchedStoryInput,
 } from "../src/index.js";
 
-export const firstStoryInput: ResearchStoryInput = {
+export const firstCandidateInput: CandidateStoryInput = {
   title: "מודל חדש הושק",
-  factualSummary: "החברה השיקה מודל חדש למפתחים.",
-  whyItMatters: "המודל מוסיף יכולות חדשות למפתחים.",
-  keyFacts: ["המודל זמין למפתחים"],
-  availability: "זמין כעת",
+  shortSummary: "החברה השיקה מודל חדש למפתחים.",
   category: "ai",
   importance: 4,
   occurredOn: "2026-08-27",
@@ -35,12 +34,9 @@ export const firstStoryInput: ResearchStoryInput = {
   ],
 };
 
-export const secondStoryInput: ResearchStoryInput = {
+export const secondCandidateInput: CandidateStoryInput = {
   title: "כלי פיתוח קיבל עדכון",
-  factualSummary: "נוספה יכולת חדשה לכלי הפיתוח.",
-  whyItMatters: "העדכון מקצר תהליך עבודה נפוץ.",
-  keyFacts: ["היכולת זמינה בגרסה החדשה"],
-  availability: "זמין בגרסה החדשה",
+  shortSummary: "נוספה יכולת חדשה לכלי הפיתוח.",
   category: "developer_tools",
   importance: 3,
   occurredOn: "2026-08-27",
@@ -63,8 +59,59 @@ export const secondStoryInput: ResearchStoryInput = {
   ],
 };
 
-export const firstStory: ResearchedStory = { id: "story-1", ...firstStoryInput };
-export const secondStory: ResearchedStory = { id: "story-2", ...secondStoryInput };
+export const firstCandidate: CandidateStory = { id: "story-1", ...firstCandidateInput };
+export const secondCandidate: CandidateStory = { id: "story-2", ...secondCandidateInput };
+
+export const firstDeepStoryInput: DeepResearchedStoryInput = {
+  candidateId: "story-1",
+  title: "מודל חדש הושק",
+  whatHappened: "החברה השיקה מודל חדש למפתחים.",
+  whatChangedFromBefore: null,
+  technicalDetails: null,
+  capabilities: null,
+  pricing: null,
+  availability: "זמין כעת",
+  rollout: null,
+  supportedUsersOrPlatforms: null,
+  limitations: null,
+  whoIsAffected: null,
+  whyItMatters: "המודל מוסיף יכולות חדשות למפתחים.",
+  whatToDoWithItNow: null,
+  category: "ai",
+  importance: 4,
+  occurredOn: "2026-08-27",
+  eventDateEvidence: firstCandidateInput.eventDateEvidence,
+  companies: ["OpenAI"],
+  topics: ["AI models"],
+  sources: firstCandidateInput.sources,
+};
+
+export const secondDeepStoryInput: DeepResearchedStoryInput = {
+  candidateId: "story-2",
+  title: "כלי פיתוח קיבל עדכון",
+  whatHappened: "נוספה יכולת חדשה לכלי הפיתוח.",
+  whatChangedFromBefore: null,
+  technicalDetails: null,
+  capabilities: null,
+  pricing: null,
+  availability: "זמין בגרסה החדשה",
+  rollout: null,
+  supportedUsersOrPlatforms: null,
+  limitations: null,
+  whoIsAffected: null,
+  whyItMatters: "העדכון מקצר תהליך עבודה נפוץ.",
+  whatToDoWithItNow: null,
+  category: "developer_tools",
+  importance: 3,
+  occurredOn: "2026-08-27",
+  eventDateEvidence: secondCandidateInput.eventDateEvidence,
+  companies: ["Google"],
+  topics: ["Developer tools"],
+  sources: secondCandidateInput.sources,
+};
+
+export const firstDeepStory: DeepResearchedStory = { id: "story-1", ...firstDeepStoryInput };
+export const secondDeepStory: DeepResearchedStory = { id: "story-2", ...secondDeepStoryInput };
 
 const firstDevelopment = {
   storyIds: ["story-1"],

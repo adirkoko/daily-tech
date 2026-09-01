@@ -15,7 +15,7 @@ import {
   type BriefWriter,
   type NewsResearchProvider,
 } from "../src/index.js";
-import { firstStoryInput, oneItemDraft } from "./fixtures.js";
+import { firstCandidateInput, firstDeepStoryInput, oneItemDraft } from "./fixtures.js";
 
 const createdPaths: string[] = [];
 
@@ -31,12 +31,12 @@ describe("daily pipeline end to end", () => {
     createdPaths.push(storageRoot);
     const database = DailyTechDatabase.open({ filename: ":memory:" });
     const researchProvider: NewsResearchProvider = {
-      research: vi.fn().mockResolvedValue({ stories: [firstStoryInput], rejectedStories: [] }),
-      findGaps: vi.fn().mockResolvedValue({ missingStories: [], rejectedStories: [] }),
+      discover: vi.fn().mockResolvedValue({ stories: [firstCandidateInput], rejectedStories: [] }),
+      findGaps: vi.fn().mockResolvedValue({ stories: [], rejectedStories: [] }),
+      deepResearch: vi.fn().mockResolvedValue({ stories: [firstDeepStoryInput] }),
     };
     const writer: BriefWriter = {
       write: vi.fn().mockResolvedValue(oneItemDraft),
-      revise: vi.fn(),
     };
     const pipeline = new DailyBriefPipeline(
       {
@@ -53,7 +53,7 @@ describe("daily pipeline end to end", () => {
     );
 
     try {
-      const result = await pipeline.run(new Date("2026-08-28T01:00:00.000Z"));
+      const result = await pipeline.run({ runAt: new Date("2026-08-28T01:00:00.000Z") });
       const storedPath = join(
         storageRoot,
         "2026",

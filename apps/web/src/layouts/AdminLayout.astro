@@ -6,6 +6,7 @@ import ThemeToggle from "../components/ThemeToggle.astro";
 
 interface Props { title?: string; }
 const csrf = Astro.locals.adminSession?.csrfToken;
+const pathname = Astro.url.pathname;
 ---
 <!doctype html>
 <html lang="he" dir="rtl">
@@ -32,9 +33,10 @@ const csrf = Astro.locals.adminSession?.csrfToken;
       <div class="admin-header-actions">
         {csrf && (
           <nav>
-            <a href="/admin">תדריכים</a>
-            <a href="/admin/feedback">פידבק</a>
-            <a href="/admin/alerts">התראות</a>
+            <a href="/admin" aria-current={pathname === "/admin" || pathname.startsWith("/admin/briefs/") ? "page" : undefined}>תדריכים</a>
+            <a href="/admin/feedback" aria-current={pathname === "/admin/feedback" ? "page" : undefined}>פידבק</a>
+            <a href="/admin/alerts" aria-current={pathname === "/admin/alerts" ? "page" : undefined}>התראות</a>
+            <a href="/admin/settings" aria-current={pathname === "/admin/settings" ? "page" : undefined}>הגדרות</a>
             <form action="/api/admin/logout" method="post" data-logout-form>
               <input type="hidden" name="csrf_token" value={csrf} />
               <button type="submit" class="admin-logout" data-logout>

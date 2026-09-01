@@ -1,0 +1,90 @@
+---
+/**
+ * Shared behavior for any admin form built from the editor component vocabulary
+ * (`.segmented`, `.chip-list`, a `[data-editor]` root): segmented-control sync,
+ * add/remove chip rows, and blocking Enter-to-submit inside single-line inputs.
+ * Used by the brief editor and the pipeline settings screen alike.
+ */
+---
+<script is:inline>
+  (() => {
+    const editor = document.querySelector("[data-editor]");
+    if (!editor) return;
+
+    const form = editor.querySelector("[data-editor-form]");
+    form?.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" && event.target instanceof HTMLInputElement) {
+        event.preventDefault();
+      }
+    });
+
+    editor.querySelectorAll("[data-segmented]").forEach((seg) => {
+      const inputs = Array.from(seg.querySelectorAll("input"));
+      seg.style.setProperty("--count", String(inputs.length));
+      const sync = () => {
+        const index = Math.max(0, inputs.findIndex((input) => input.checked));
+        seg.style.setProperty("--index", String(index));
+        inputs.forEach((input) => input.closest("label").classList.toggle("is-active", input.checked));
+      };
+      seg.addEventListener("change", sync);
+      sync();
+    });
+
+    editor.querySelectorAll("[data-chip-list]").forEach((list) => {
+      const name = list.dataset.chipName;
+      const field = list.closest("[data-chip-field]");
+      const addButton = field?.querySelector("[data-chip-add]");
+      const count = field?.querySelector("[data-chip-count]");
+      const maximumLength = Number(list.dataset.chipMaxlength || 200);
+      const maximumItems = Number(list.dataset.chipMaxitems || Number.MAX_SAFE_INTEGER);
+      const sync = () => {
+        const rows = Array.from(list.querySelectorAll(".chip-row"));
+        const populated = rows.filter((row) => row.querySelector("input")?.value.trim()).length;
+        if (count) count.textContent = String(populated);
+        if (addButton) {
+          addButton.disabled = rows.length >= maximumItems;
+          addButton.setAttribute("aria-disabled", String(rows.length >= maximumItems));
+        }
+      };
+      const addRow = (value) => {
+        if (list.querySelectorAll(".chip-row").length >= maximumItems) return null;
+        const row = document.createElement("div");
+        row.className = "chip-row";
+        const input = document.createElement("input");
+        input.className = "chip-input";
+        input.name = name;
+        input.maxLength = maximumLength;
+        input.setAttribute("aria-label", "ערך נוסף");
+        input.value = value || "";
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "chip-remove";
+        remove.dataset.chipRemove = "";
+        remove.setAttribute("aria-label", "הסרה");
+        remove.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 12h12" /></svg>';
+        row.append(input, remove);
+        list.append(row);
+        sync();
+        return input;
+      };
+      addButton?.addEventListener("click", () => addRow()?.focus());
+      list.addEventListener("click", (event) => {
+        const button = event.target.closest("[data-chip-remove]");
+        if (!button) return;
+        const rows = list.querySelectorAll(".chip-row");
+        if (rows.length > 1) button.closest(".chip-row").remove();
+        else button.closest(".chip-row").querySelector(".chip-input").value = "";
+        sync();
+      });
+      list.addEventListener("input", sync);
+      list.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" || !(event.target instanceof HTMLInputElement)) return;
+        event.preventDefault();
+        if (event.target.value.trim().length === 0) return;
+        const rows = Array.from(list.querySelectorAll(".chip-row"));
+        if (event.target.closest(".chip-row") === rows.at(-1)) addRow()?.focus();
+      });
+      sync();
+    });
+  })();
+</script>

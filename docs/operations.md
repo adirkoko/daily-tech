@@ -28,6 +28,17 @@ ticket status, inspect structured details, and resolve open System tickets.
 Admin is the only incident-notification channel. The application has no email,
 Telegram, Slack, webhook, or other outbound alert integration.
 
+## Provider reliability
+
+Each AI request retries HTTP 429/5xx responses and malformed provider envelopes such
+as missing output text, web-search calls, or machine-readable citations. The default
+is three attempts with exponential backoff and jitter; a valid `Retry-After` header
+takes precedence.
+
+Other 4xx responses and downstream validation failures are not retried. After the
+client exhausts its attempts, the run fails, creates a System ticket, and remains a
+terminal scheduler job. Recovery is manual with `npm run generate -- --run-at=...`.
+
 ## Logging
 
 Each generation run records one terminal event:

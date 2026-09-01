@@ -10,21 +10,35 @@ import {
   EVENT_DATE_EVIDENCE_KINDS,
   RESEARCH_CATEGORIES,
   SOURCE_TYPES,
-  type GapResearchBatch,
-  type GapResearchRequest,
+  type CandidateStoryInput,
+  type DeepResearchBatch,
+  type DeepResearchedStoryInput,
+  type DeepResearchRequest,
+  type DiscoveryBatch,
+  type EventDateEvidenceKind,
+  type FocusedDiscoveryRequest,
   type Importance,
+  type LightDiscoveryRequest,
   type NewsResearchProvider,
-  type NewsResearchRequest,
   type RejectedResearchStory,
-  type ResearchBatch,
   type ResearchCategory,
   type ResearchSource,
-  type ResearchStoryInput,
   type SourceType,
-  type EventDateEvidenceKind,
 } from "./contracts.js";
-import { WEB_GAP_RESEARCH_PROMPT, WEB_RESEARCH_PROMPT } from "./prompts.js";
-import { GAP_RESPONSE_SCHEMA, RESEARCH_RESPONSE_SCHEMA } from "./schemas.js";
+import {
+  WEB_DEEP_RESEARCH_PROMPT,
+  WEB_FOCUSED_DISCOVERY_PROMPT,
+  WEB_LIGHT_DISCOVERY_PROMPT,
+} from "./prompts.js";
+import {
+  DISCOVERY_RESPONSE_SCHEMA,
+  FOCUSED_DISCOVERY_RESPONSE_SCHEMA,
+  buildDeepResearchResponseSchema,
+} from "./schemas.js";
+
+/** Deep research investigates several candidates with several searches each, in one
+ *  call — it needs a materially higher tool-call budget than a discovery pass. */
+const DEEP_RESEARCH_MAX_TOOL_CALLS = 60;
 
 export class InvalidResearchResponseError extends Error {
   readonly rejectedStories: readonly RejectedResearchStory[];
@@ -53,51 +67,63 @@ export class ModelNewsResearchProvider implements NewsResearchProvider {
     this.#client = options.client;
   }
 
-  async research(request: NewsResearchRequest): Promise<ResearchBatch> {
+  async discover(request: LightDiscoveryRequest): Promise<DiscoveryBatch> {
     const result = await this.#client.execute({
-      instructions: WEB_RESEARCH_PROMPT,
+      instructions: WEB_LIGHT_DISCOVERY_PROMPT,
       input: {
         window: serializeWindow(request.context),
         scope: request.scope,
       },
-      schemaName: "daily_tech_research",
-      schema: RESEARCH_RESPONSE_SCHEMA,
+      schemaName: "daily_tech_light_discovery",
+      schema: DISCOVERY_RESPONSE_SCHEMA,
     });
-    return parseBatch(result, "stories", request.scope.maximumStories);
+    return parseDiscoveryBatch(result, "stories", request.scope.maximumCandidatesPerCall);
   }
 
-  async findGaps(request: GapResearchRequest): Promise<GapResearchBatch> {
+  async findGaps(request: FocusedDiscoveryRequest): Promise<DiscoveryBatch> {
     const result = await this.#client.execute({
-      instructions: WEB_GAP_RESEARCH_PROMPT,
+      instructions: WEB_FOCUSED_DISCOVERY_PROMPT,
       input: {
         window: serializeWindow(request.context),
         minimumImportance: request.minimumImportance,
-        maximumMissingStories: request.maximumMissingStories,
+        maximumMissingStories: request.maximumCandidatesPerCall,
         existingStories: request.existingStories,
-        draft: request.draft,
+        focusKeywords: request.focusKeywords ?? [],
       },
-      schemaName: "daily_tech_gap_research",
-      schema: GAP_RESPONSE_SCHEMA,
+      schemaName: "daily_tech_focused_discovery",
+      schema: FOCUSED_DISCOVERY_RESPONSE_SCHEMA,
     });
-    const batch = parseBatch(result, "missingStories", request.maximumMissingStories);
-    return {
-      missingStories: batch.stories,
-      rejectedStories: batch.rejectedStories,
-    };
+    return parseDiscoveryBatch(result, "missingStories", request.maximumCandidatesPerCall);
+  }
+
+  async deepResearch(request: DeepResearchRequest): Promise<DeepResearchBatch> {
+    const result = await this.#client.execute({
+      instructions: WEB_DEEP_RESEARCH_PROMPT,
+      input: {
+        window: serializeWindow(request.context),
+        maximumStories: request.maximumStories,
+        editorialInstructions: request.editorialInstructions,
+        candidates: request.candidates,
+      },
+      schemaName: "daily_tech_deep_research",
+      schema: buildDeepResearchResponseSchema(request.maximumStories),
+      maxToolCalls: DEEP_RESEARCH_MAX_TOOL_CALLS,
+    });
+    return parseDeepResearchBatch(result, request.maximumStories);
   }
 }
 
-function parseBatch(
+function parseDiscoveryBatch(
   result: AiWebResearchResult,
   property: "stories" | "missingStories",
   maximumStories: number,
-): ResearchBatch {
+): DiscoveryBatch {
   if (!Number.isInteger(maximumStories) || maximumStories < 0) {
     throw new RangeError("maximumStories must be a non-negative integer.");
   }
   const citations = new CitationIndex(result.citations);
-  return parseJsonResult(result.content, (value): ResearchBatch => {
-    const root = asRecord(value, "research response");
+  return parseJsonResult(result.content, (value): DiscoveryBatch => {
+    const root = asRecord(value, "discovery response");
     const rawStories = root[property];
     if (!Array.isArray(rawStories)) {
       throw new InvalidResearchResponseError(`${property} must be an array.`);
@@ -107,11 +133,11 @@ function parseBatch(
         `${property} exceeds the configured maximum of ${maximumStories}.`,
       );
     }
-    const stories: ResearchStoryInput[] = [];
+    const stories: CandidateStoryInput[] = [];
     const rejectedStories: RejectedResearchStory[] = [];
     rawStories.forEach((rawStory, index) => {
       try {
-        stories.push(parseStory(rawStory, `${property}[${index}]`, citations));
+        stories.push(parseCandidateStory(rawStory, `${property}[${index}]`, citations));
       } catch (error) {
         rejectedStories.push({
           index,
@@ -130,11 +156,11 @@ function parseBatch(
   });
 }
 
-function parseStory(
+function parseCandidateStory(
   value: unknown,
   path: string,
   citations: CitationIndex,
-): ResearchStoryInput {
+): CandidateStoryInput {
   const record = asRecord(value, path);
   const occurredOn = asString(record.occurredOn, `${path}.occurredOn`);
   if (!isCalendarDate(occurredOn)) {
@@ -144,54 +170,138 @@ function parseStory(
     parseSource(source, `${path}.sources[${index}]`, citations),
   );
   if (sources.length === 0) throw new TypeError(`${path}.sources cannot be empty.`);
-  const sourceUrls = new Set(sources.map(({ url }) => canonicalizeUrl(url)));
-  const evidenceRecord = asRecord(record.eventDateEvidence, `${path}.eventDateEvidence`);
-  const evidenceSourceUrl = citations.require(
-    asString(evidenceRecord.sourceUrl, `${path}.eventDateEvidence.sourceUrl`),
-    `${path}.eventDateEvidence.sourceUrl`,
+  const eventDateEvidence = parseEventDateEvidence(
+    record.eventDateEvidence,
+    `${path}.eventDateEvidence`,
+    sources,
+    citations,
   );
-  if (!sourceUrls.has(evidenceSourceUrl)) {
-    throw new TypeError(
-      `${path}.eventDateEvidence.sourceUrl must be a story source; value=${JSON.stringify(evidenceSourceUrl)}`,
-    );
-  }
-  const evidenceDate = asString(
-    evidenceRecord.eventDate,
-    `${path}.eventDateEvidence.eventDate`,
-  );
-  if (!isCalendarDate(evidenceDate)) {
-    throw new TypeError(`${path}.eventDateEvidence.eventDate must use YYYY-MM-DD format.`);
-  }
-  const evidenceKind = asEnum(
-    evidenceRecord.kind,
-    EVENT_DATE_EVIDENCE_KINDS,
-    `${path}.eventDateEvidence.kind`,
-  ) as EventDateEvidenceKind;
   return {
     title: asString(record.title, `${path}.title`),
-    factualSummary: asString(record.factualSummary, `${path}.factualSummary`),
-    whyItMatters: asString(record.whyItMatters, `${path}.whyItMatters`),
-    keyFacts: asStringArray(record.keyFacts, `${path}.keyFacts`),
-    availability: nullableString(record.availability, `${path}.availability`),
-    category: asEnum(
-      record.category,
-      RESEARCH_CATEGORIES,
-      `${path}.category`,
-    ) as ResearchCategory,
+    shortSummary: asString(record.shortSummary, `${path}.shortSummary`),
+    category: asEnum(record.category, RESEARCH_CATEGORIES, `${path}.category`) as ResearchCategory,
     importance: asImportance(record.importance, `${path}.importance`),
     occurredOn,
-    eventDateEvidence: {
-      eventDate: evidenceDate,
-      kind: evidenceKind,
-      sourceUrl: evidenceSourceUrl,
-      explanation: asString(
-        evidenceRecord.explanation,
-        `${path}.eventDateEvidence.explanation`,
-      ),
-    },
+    eventDateEvidence,
     companies: asStringArray(record.companies, `${path}.companies`),
     topics: asStringArray(record.topics, `${path}.topics`),
     sources,
+  };
+}
+
+function parseDeepResearchBatch(
+  result: AiWebResearchResult,
+  maximumStories: number,
+): DeepResearchBatch {
+  const citations = new CitationIndex(result.citations);
+  return parseJsonResult(result.content, (value): DeepResearchBatch => {
+    const root = asRecord(value, "deep research response");
+    const rawStories = root.stories;
+    if (!Array.isArray(rawStories)) {
+      throw new InvalidResearchResponseError("stories must be an array.");
+    }
+    if (rawStories.length > maximumStories) {
+      throw new InvalidResearchResponseError(
+        `stories exceeds the configured maximum of ${maximumStories}.`,
+      );
+    }
+    const stories: DeepResearchedStoryInput[] = [];
+    const rejectedStories: RejectedResearchStory[] = [];
+    rawStories.forEach((rawStory, index) => {
+      try {
+        stories.push(parseDeepStory(rawStory, `stories[${index}]`, citations));
+      } catch (error) {
+        rejectedStories.push({
+          index,
+          title: extractTitle(rawStory),
+          reason: errorMessage(error),
+        });
+      }
+    });
+    if (rawStories.length > 0 && stories.length === 0) {
+      throw new InvalidResearchResponseError(
+        formatAllRejectedMessage("stories", rejectedStories),
+        { rejectedStories },
+      );
+    }
+    return { stories };
+  });
+}
+
+function parseDeepStory(
+  value: unknown,
+  path: string,
+  citations: CitationIndex,
+): DeepResearchedStoryInput {
+  const record = asRecord(value, path);
+  const occurredOn = asString(record.occurredOn, `${path}.occurredOn`);
+  if (!isCalendarDate(occurredOn)) {
+    throw new TypeError(`${path}.occurredOn must use YYYY-MM-DD format.`);
+  }
+  const sources = asArray(record.sources, `${path}.sources`).map((source, index) =>
+    parseSource(source, `${path}.sources[${index}]`, citations),
+  );
+  if (sources.length === 0) throw new TypeError(`${path}.sources cannot be empty.`);
+  const eventDateEvidence = parseEventDateEvidence(
+    record.eventDateEvidence,
+    `${path}.eventDateEvidence`,
+    sources,
+    citations,
+  );
+  return {
+    candidateId: asString(record.candidateId, `${path}.candidateId`),
+    title: asString(record.title, `${path}.title`),
+    whatHappened: asString(record.whatHappened, `${path}.whatHappened`),
+    whatChangedFromBefore: nullableString(record.whatChangedFromBefore, `${path}.whatChangedFromBefore`),
+    technicalDetails: nullableString(record.technicalDetails, `${path}.technicalDetails`),
+    capabilities: nullableString(record.capabilities, `${path}.capabilities`),
+    pricing: nullableString(record.pricing, `${path}.pricing`),
+    availability: nullableString(record.availability, `${path}.availability`),
+    rollout: nullableString(record.rollout, `${path}.rollout`),
+    supportedUsersOrPlatforms: nullableString(
+      record.supportedUsersOrPlatforms,
+      `${path}.supportedUsersOrPlatforms`,
+    ),
+    limitations: nullableString(record.limitations, `${path}.limitations`),
+    whoIsAffected: nullableString(record.whoIsAffected, `${path}.whoIsAffected`),
+    whyItMatters: asString(record.whyItMatters, `${path}.whyItMatters`),
+    whatToDoWithItNow: nullableString(record.whatToDoWithItNow, `${path}.whatToDoWithItNow`),
+    category: asEnum(record.category, RESEARCH_CATEGORIES, `${path}.category`) as ResearchCategory,
+    importance: asImportance(record.importance, `${path}.importance`),
+    occurredOn,
+    eventDateEvidence,
+    companies: asStringArray(record.companies, `${path}.companies`),
+    topics: asStringArray(record.topics, `${path}.topics`),
+    sources,
+  };
+}
+
+function parseEventDateEvidence(
+  value: unknown,
+  path: string,
+  sources: readonly ResearchSource[],
+  citations: CitationIndex,
+): DeepResearchedStoryInput["eventDateEvidence"] {
+  const record = asRecord(value, path);
+  const sourceUrls = new Set(sources.map(({ url }) => canonicalizeUrl(url)));
+  const evidenceSourceUrl = citations.require(
+    asString(record.sourceUrl, `${path}.sourceUrl`),
+    `${path}.sourceUrl`,
+  );
+  if (!sourceUrls.has(evidenceSourceUrl)) {
+    throw new TypeError(
+      `${path}.sourceUrl must be a story source; value=${JSON.stringify(evidenceSourceUrl)}`,
+    );
+  }
+  const evidenceDate = asString(record.eventDate, `${path}.eventDate`);
+  if (!isCalendarDate(evidenceDate)) {
+    throw new TypeError(`${path}.eventDate must use YYYY-MM-DD format.`);
+  }
+  return {
+    eventDate: evidenceDate,
+    kind: asEnum(record.kind, EVENT_DATE_EVIDENCE_KINDS, `${path}.kind`) as EventDateEvidenceKind,
+    sourceUrl: evidenceSourceUrl,
+    explanation: asString(record.explanation, `${path}.explanation`),
   };
 }
 
@@ -210,7 +320,7 @@ function parseSource(
   };
 }
 
-function serializeWindow(context: NewsResearchRequest["context"]): Record<string, string> {
+function serializeWindow(context: LightDiscoveryRequest["context"]): Record<string, string> {
   return {
     date: context.window.date,
     timeZone: context.window.timeZone,

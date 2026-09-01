@@ -12,9 +12,11 @@ the password in command arguments, logs, screenshots, or client-side configurati
 
 ## Content management
 
-The dashboard shows the same month calendar as the public site, coloured by day
-intensity, but each day links to its editor (`/admin/briefs/<date>`) instead of the
-public brief and it covers every brief regardless of status. An editor can change the
+The dashboard includes briefs in every lifecycle status and links each populated day
+to `/admin/briefs/<date>`. Day colour retains the public intensity scale, while a
+separate indicator shows editorial status (`draft`, `ready`, `published`, or
+`failed`). Summary counts and a short list of recent unpublished briefs provide
+direct routes into work that still needs attention. The editor can change the
 Markdown and all editable metadata.
 
 The editor provides:
@@ -34,18 +36,42 @@ session, same-origin checks, and the session CSRF token. Repeated metadata input
 bounded and normalized on the server rather than trusted as client-side arrays.
 
 Save runs the same deterministic artifact validation used by the pipeline. Filesystem
-changes use a temporary file and short-lived rollback copy so a database failure does not leave
-half-written content. Administrative save, delete, login, and feedback-resolution
-actions are recorded in the operational log.
+changes use a temporary file and a short-lived rollback copy, preventing a database
+failure from leaving partially written content. Administrative save, delete, login,
+and feedback-resolution actions are recorded in the operational log.
+
+## Pipeline settings
+
+`/admin/settings` manages the operator-facing generation settings:
+
+- **Admin keywords** — up to 50 companies, products, technologies, or topics that
+  receive an additional focused discovery pass. Each value is limited to 60
+  characters. Keywords affect attention, not eligibility; an empty list skips the
+  call.
+- **Maximum stories** — the maximum number of dossiers Deep Research may return
+  (`1–20`). It is a ceiling, not a target.
+- **Discovery toggles** — independently enable the general gap pass and the focused
+  keyword pass.
+- **Editorial instructions** — optional guidance about emphasis. It cannot override
+  sourcing, confirmation, or research-date rules.
+- **Generate and publish times** — the daily schedule in `Asia/Jerusalem`.
+
+The settings are stored as one validated SQLite row. Generation reads the row at the
+start of each run, while the scheduler reads the two times on every tick so schedule
+changes do not require a restart. Saving records an `admin_settings_saved` event.
+Secrets, provider configuration, storage paths, cache settings, and safety limits
+remain deployment or implementation concerns rather than Admin settings. See
+[`pipeline.md`](pipeline.md) and [`data-model.md`](data-model.md#pipeline-settings).
 
 ## Feedback and alert inboxes
 
-`/admin/feedback` and `/admin/alerts` share a compact inbox interface. It supports
-title search, domain-specific filters, chronological sorting, pagination, expandable
-details, and resolving open tickets. The feedback inbox filters by status and
-category. The alert center combines System tickets with recent error-level
-operational logs and can filter by item type and ticket status. Timestamps are shown
-in Israel time while remaining stored as UTC.
+`/admin/feedback` and `/admin/alerts` share a compact inbox interface. Client-side
+search covers titles, bodies, and displayed metadata; the lists also support
+domain-specific filters, chronological sorting, pagination, expandable details, and
+resolving open tickets. The feedback inbox filters by status and category. The alert
+center combines System tickets with recent error-level operational logs and can
+filter by item type and ticket status. Timestamps are shown in Israel time while
+remaining stored as UTC.
 
 ## Security controls
 
@@ -69,8 +95,7 @@ in Israel time while remaining stored as UTC.
   never rendered to the browser.
 
 Production must terminate HTTPS before the service, keep
-`ADMIN_SECURE_COOKIES=true`, use a unique high-entropy
-`ADMIN_PASSWORD`, use a unique high-entropy `ADMIN_SESSION_SECRET` of at least 32
-characters, and keep the content/SQLite path on
-a private persistent volume. `npm run rate-limits:reset -- --scope=admin_login` clears login counters when
-the operator deliberately needs to recover access.
+`ADMIN_SECURE_COOKIES=true`, use unique high-entropy values for `ADMIN_PASSWORD` and
+`ADMIN_SESSION_SECRET`, and keep the content store on a private persistent volume.
+`npm run rate-limits:reset -- --scope=admin_login` clears login counters when the
+operator deliberately needs to recover access.

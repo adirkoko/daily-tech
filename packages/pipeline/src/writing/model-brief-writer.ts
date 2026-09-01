@@ -1,7 +1,7 @@
 import { isDayIntensity } from "@daily-tech/core";
 
 import { parseJsonResult, type AiCompletion } from "../ai/contracts.js";
-import type { ResearchedStory } from "../research/contracts.js";
+import type { DeepResearchedStory } from "../research/contracts.js";
 import type { PipelineContext } from "../types.js";
 import type {
   BriefDraft,
@@ -11,9 +11,8 @@ import type {
   DraftWorthWatchingItem,
   GeneratedDayMetadata,
   ModelBriefWriterOptions,
-  RevisionRequest,
 } from "./contracts.js";
-import { DRAFT_PROMPT, REVISION_PROMPT } from "./prompts.js";
+import { DRAFT_PROMPT } from "./prompts.js";
 import { BRIEF_DRAFT_RESPONSE_SCHEMA } from "./schemas.js";
 
 export class DraftResponseValidationError extends TypeError {
@@ -48,31 +47,21 @@ export class ModelBriefWriter implements BriefWriter {
 
   async write(
     context: PipelineContext,
-    stories: readonly ResearchedStory[],
+    stories: readonly DeepResearchedStory[],
+    editorialInstructions: string,
   ): Promise<BriefDraft> {
     if (stories.length === 0) throw new TypeError("ModelBriefWriter requires at least one story.");
-    return this.#complete(DRAFT_PROMPT, {
+    return this.#complete({
       window: serializeWindow(context),
       stories,
+      editorialInstructions,
     });
   }
 
-  async revise(request: RevisionRequest): Promise<BriefDraft> {
-    if (request.missingStories.length === 0) {
-      throw new TypeError("Revision requires at least one missing story.");
-    }
-    return this.#complete(REVISION_PROMPT, {
-      window: serializeWindow(request.context),
-      stories: request.stories,
-      currentDraft: request.draft,
-      missingStories: request.missingStories,
-    });
-  }
-
-  async #complete(prompt: string, input: unknown): Promise<BriefDraft> {
+  async #complete(input: unknown): Promise<BriefDraft> {
     const completion = await this.#client.complete({
       messages: [
-        { role: "system", content: prompt },
+        { role: "system", content: DRAFT_PROMPT },
         { role: "user", content: JSON.stringify(input) },
       ],
       responseFormat: {

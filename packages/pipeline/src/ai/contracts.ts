@@ -36,6 +36,10 @@ export interface AiWebResearchRequest {
   readonly input: unknown;
   readonly schemaName: string;
   readonly schema: Readonly<Record<string, unknown>>;
+  /** Overrides the client's default tool-call budget for this one call, e.g. a
+   *  deep-research call investigating several candidates needs more than a
+   *  single-topic discovery call does. */
+  readonly maxToolCalls?: number;
   readonly signal?: AbortSignal;
 }
 
@@ -51,11 +55,15 @@ export interface AiWebResearchClient {
 
 export class AiProviderError extends Error {
   readonly status: number | null;
+  /** The provider's own suggested wait, parsed from a `Retry-After` response
+   *  header when present (429/503). Only meaningful together with `status`. */
+  readonly retryAfterMs: number | null;
 
-  constructor(message: string, status: number | null, cause?: unknown) {
+  constructor(message: string, status: number | null, cause?: unknown, retryAfterMs: number | null = null) {
     super(message, { cause });
     this.name = "AiProviderError";
     this.status = status;
+    this.retryAfterMs = retryAfterMs;
   }
 }
 

@@ -34,6 +34,7 @@ describe("database migrations", () => {
       "daily_briefs",
       "feedback_tickets",
       "operational_logs",
+      "pipeline_settings",
       "publication_jobs",
       "rate_limit_counters",
       "scheduled_jobs",
@@ -125,6 +126,46 @@ describe("database migrations", () => {
         0,
         "2026-08-28T01:00:00.000Z",
       ),
+    ).toThrow();
+  });
+
+  it("seeds exactly one pipeline_settings row with sane defaults", () => {
+    database = new Database(":memory:");
+    runMigrations(database);
+
+    const rows = database.prepare("SELECT * FROM pipeline_settings").all() as Array<{
+      id: number;
+      admin_keywords: string;
+      maximum_stories: number;
+      gap_discovery_enabled: number;
+      admin_keywords_research_enabled: number;
+      generate_time: string;
+      publish_time: string;
+    }>;
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      id: 1,
+      admin_keywords: "[]",
+      maximum_stories: 8,
+      gap_discovery_enabled: 1,
+      admin_keywords_research_enabled: 1,
+      generate_time: "01:00",
+      publish_time: "07:00",
+    });
+
+    expect(() =>
+      database!.prepare("INSERT INTO pipeline_settings (id, updated_at) VALUES (2, ?)").run(
+        "2026-08-28T01:00:00.000Z",
+      ),
+    ).toThrow();
+    expect(() =>
+      database!.prepare("UPDATE pipeline_settings SET maximum_stories = 21 WHERE id = 1").run(),
+    ).toThrow();
+    expect(() =>
+      database!.prepare("UPDATE pipeline_settings SET generate_time = '9:00' WHERE id = 1").run(),
+    ).toThrow();
+    expect(() =>
+      database!.prepare("UPDATE pipeline_settings SET generate_time = '25:00' WHERE id = 1").run(),
     ).toThrow();
   });
 });

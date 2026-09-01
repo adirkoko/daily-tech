@@ -13,6 +13,7 @@ import {
 import { DatabaseIntegrityError, MetadataValidationError } from "./errors.js";
 import { getSchemaVersion, runMigrations } from "./migrations.js";
 import { OperationsStore } from "./operations.js";
+import { PipelineSettingsStore } from "./pipeline-settings.js";
 
 export interface OpenDatabaseOptions {
   readonly filename: string;
@@ -41,10 +42,12 @@ type DatabaseRow = Record<string, null | number | bigint | string | Uint8Array>;
 export class DailyTechDatabase {
   readonly #database: Database.Database;
   readonly operations: OperationsStore;
+  readonly pipelineSettings: PipelineSettingsStore;
 
   private constructor(database: Database.Database) {
     this.#database = database;
     this.operations = new OperationsStore(database);
+    this.pipelineSettings = new PipelineSettingsStore(database);
   }
 
   static open(options: OpenDatabaseOptions): DailyTechDatabase {

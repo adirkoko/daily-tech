@@ -1,7 +1,7 @@
 import type { DayIntensity } from "@daily-tech/core";
 
 import type { AiCompletionClient } from "../ai/contracts.js";
-import type { ResearchedStory } from "../research/contracts.js";
+import type { DeepResearchedStory } from "../research/contracts.js";
 import type { PipelineContext } from "../types.js";
 
 export interface GeneratedDayMetadata {
@@ -53,19 +53,13 @@ export interface BriefDraft {
   readonly metadata: GeneratedDayMetadata;
 }
 
-export interface RevisionRequest {
-  readonly context: PipelineContext;
-  readonly stories: readonly ResearchedStory[];
-  readonly draft: BriefDraft;
-  readonly missingStories: readonly ResearchedStory[];
-}
-
 export interface BriefWriter {
   write(
     context: PipelineContext,
-    stories: readonly ResearchedStory[],
+    stories: readonly DeepResearchedStory[],
+    /** "" when the operator has not set any editorial guidance. */
+    editorialInstructions: string,
   ): Promise<BriefDraft>;
-  revise(request: RevisionRequest): Promise<BriefDraft>;
 }
 
 export interface ModelBriefWriterOptions {

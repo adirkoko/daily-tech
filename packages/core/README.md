@@ -8,6 +8,8 @@ Framework-free TypeScript contracts and deterministic validation for Daily Tech.
 - Type guards: `isDayIntensity`, `isBriefStatus`.
 - Boundary validation: `validateDayMetadata`.
 - Full artifact validation: `validateBriefArtifact`.
+- Operator-tunable pipeline settings: `PipelineSettings`, `DEFAULT_PIPELINE_SETTINGS`,
+  `PIPELINE_SETTINGS_LIMITS`, `validatePipelineSettings`.
 - Date/path and Markdown inspection helpers used by storage and pipeline packages.
 
 `validateBriefArtifact` accepts raw bytes so callers reading from the filesystem can

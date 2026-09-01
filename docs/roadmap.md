@@ -5,7 +5,8 @@
 | Area | Status |
 | ---- | ------ |
 | Core validation, SQLite schema, and lifecycle | Implemented and tested |
-| Cited AI web research, writing, narrow gap check, and persistence | Implemented; production credentials still required |
+| Staged cited AI web research (discovery, gap discovery, deep research), writing, and persistence | Implemented; production credentials still required |
+| Admin-configurable pipeline settings (keywords, story ceiling, toggles, editorial guidance, schedule) | Implemented and tested |
 | Hebrew website, archive, heatmap, rolling statistics, and intensity trend | Implemented and tested |
 | Safe local publication with a durable lease | Implemented and tested |
 | Single standalone Node service | Implemented and integration-tested |
@@ -24,12 +25,12 @@ deployment-specific.
 - Automatic brief generation once a day.
 - Cited web research and deterministic evidence validation.
 - Brief written in Hebrew.
-- Narrow significant-omission gap check.
+- Significant-omission gap check, plus optional admin-keyword-focused research.
 - Deterministic code validation.
 - Markdown storage.
 - Metadata stored in SQLite.
 - `status` lifecycle management.
-- Automatic publishing at 07:00 Israel time.
+- Automatic publishing at the configured Israel time (`07:00` by default).
 - Home page.
 - Daily brief page.
 - Archive.
@@ -53,7 +54,7 @@ deployment-specific.
 ## Development priority
 
 1. **Daily brief quality** — good news selection, clear phrasing, reliable sources.
-2. **Pipeline reliability** — evidence validation, gap check, failure handling.
+2. **Pipeline reliability** — evidence validation, gap/keyword discovery, failure handling.
 3. **A useful archive** — daily pages and a calendar that accumulate into something
    valuable over time.
 4. **Simple operations** — admin, logs, feedback, and the ability to fix problems

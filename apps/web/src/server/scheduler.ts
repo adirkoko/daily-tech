@@ -13,8 +13,6 @@ import { openServerDatabase } from "./database.js";
 
 export interface SchedulerConfig {
   readonly enabled: boolean;
-  readonly generateAtMinute: number;
-  readonly publishAtMinute: number;
   readonly pollIntervalMs: number;
   readonly leaseDurationMs: number;
 }
@@ -55,8 +53,6 @@ const schedulerGlobal = globalThis as typeof globalThis & {
 export function loadSchedulerConfig(environment: NodeJS.ProcessEnv = process.env): SchedulerConfig {
   return {
     enabled: booleanValue(environment.SCHEDULER_ENABLED ?? "false", "SCHEDULER_ENABLED"),
-    generateAtMinute: parseTime(environment.SCHEDULER_GENERATE_TIME ?? "01:00", "SCHEDULER_GENERATE_TIME"),
-    publishAtMinute: parseTime(environment.SCHEDULER_PUBLISH_TIME ?? "07:00", "SCHEDULER_PUBLISH_TIME"),
     pollIntervalMs: integer(environment.SCHEDULER_POLL_SECONDS ?? "30", "SCHEDULER_POLL_SECONDS", 5, 3_600) * 1_000,
     leaseDurationMs: integer(environment.SCHEDULER_LEASE_HOURS ?? "6", "SCHEDULER_LEASE_HOURS", 1, 24) * 60 * 60 * 1_000,
   };
@@ -125,18 +121,30 @@ export class ServiceScheduler {
     this.#tickRunning = true;
     this.#snapshot = { ...this.#snapshot, lastTickAt: now.toISOString() };
     try {
+      // Read fresh every tick (not cached at startup) so an Admin change to the
+      // generate/publish time takes effect on the next tick, no restart needed.
+      const settings = await this.#readPipelineSettings();
       const israel = israelTime(now);
       const targetDate = previousIsraelCalendarDate(now);
-      if (israel.minuteOfDay >= this.#config.generateAtMinute) {
+      if (israel.minuteOfDay >= parseTime(settings.generateTime, "generateTime")) {
         await this.#runJob("generate", targetDate, now);
       }
-      if (israel.minuteOfDay >= this.#config.publishAtMinute) {
+      if (israel.minuteOfDay >= parseTime(settings.publishTime, "publishTime")) {
         await this.#runJob("publish", targetDate, now);
       }
     } catch (error) {
       this.#snapshot = { ...this.#snapshot, lastError: errorMessage(error) };
     } finally {
       this.#tickRunning = false;
+    }
+  }
+
+  async #readPipelineSettings() {
+    const database = await this.#openDatabase();
+    try {
+      return database.pipelineSettings.get();
+    } finally {
+      database.close();
     }
   }
 

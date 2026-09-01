@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   expectedBriefRelativePath,
   isCalendarDate,
+  isClockTime,
   isUtcTimestamp,
 } from "../src/index.js";
 
@@ -32,5 +33,15 @@ describe("date utilities", () => {
     expect(isUtcTimestamp("2026-02-30T01:42:10.000Z")).toBe(false);
     expect(isUtcTimestamp("2026-08-28T25:00:00.000Z")).toBe(false);
     expect(isUtcTimestamp("2026-08-28")).toBe(false);
+  });
+
+  it("requires 24-hour HH:MM clock times", () => {
+    expect(isClockTime("01:00")).toBe(true);
+    expect(isClockTime("23:59")).toBe(true);
+    expect(isClockTime("00:00")).toBe(true);
+    expect(isClockTime("24:00")).toBe(false);
+    expect(isClockTime("1:00")).toBe(false);
+    expect(isClockTime("01:60")).toBe(false);
+    expect(isClockTime("01:00:00")).toBe(false);
   });
 });

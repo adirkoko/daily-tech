@@ -1,0 +1,501 @@
+---
+export const prerender = false;
+
+import EditorFormControls from "../../components/EditorFormControls.astro";
+import AdminLayout from "../../layouts/AdminLayout.astro";
+import { formatIsraelDateTime } from "../../lib/dates.js";
+import { loadAdminPipelineSettings } from "../../server/pipeline-settings.js";
+
+const settings = await loadAdminPipelineSettings();
+const csrf = Astro.locals.adminSession!.csrfToken;
+const error = Astro.url.searchParams.get("error");
+const success = Astro.url.searchParams.get("success");
+const hasBeenUpdated = settings.updatedAt !== "1970-01-01T00:00:00.000Z";
+const updatedLabel = hasBeenUpdated
+  ? `עודכן לאחרונה ${formatIsraelDateTime(settings.updatedAt)}`
+  : "טרם עודכן ידנית";
+
+const TOGGLE_OPTIONS = [
+  { value: "true", label: "פעיל" },
+  { value: "false", label: "כבוי" },
+] as const;
+const [generateHour, generateMinute] = settings.generateTime.split(":");
+const [publishHour, publishMinute] = settings.publishTime.split(":");
+
+const DISCOVERY_CONTROLS = [
+  {
+    name: "gap_discovery_enabled",
+    enabled: settings.gapDiscoveryEnabled,
+    title: "בדיקת פספוסים כללית",
+    description: "מעבר נוסף שמחפש התפתחות משמעותית שלא הופיעה בגילוי הראשוני.",
+  },
+  {
+    name: "admin_keywords_research_enabled",
+    enabled: settings.adminKeywordsResearchEnabled,
+    title: "מחקר ממוקד לפי נושאים",
+    description: "בדיקה נוספת סביב החברות, המוצרים והתחומים שמוגדרים למטה.",
+  },
+] as const;
+
+function toggleIndex(enabled: boolean): number {
+  return enabled ? 0 : 1;
+}
+---
+
+<AdminLayout title="הגדרות הפייפליין">
+  <section class="settings-page" data-editor data-settings-page>
+    <header class="settings-hero">
+      <div class="settings-hero-main">
+        <span class="settings-hero-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 6h7M15 6h5M4 12h3M11 12h9M4 18h10M18 18h2" />
+            <circle cx="13" cy="6" r="2" /><circle cx="9" cy="12" r="2" /><circle cx="16" cy="18" r="2" />
+          </svg>
+        </span>
+        <div>
+          <p class="settings-eyebrow">Pipeline control</p>
+          <h1>הגדרות הפייפליין</h1>
+          <p class="settings-lead">שליטה בהיקף המחקר, בדגשים העריכתיים ובלוח הזמנים היומי.</p>
+        </div>
+      </div>
+      <div class="settings-updated">
+        <span aria-hidden="true"></span>
+        <p><small>מצב ההגדרות</small><strong>{updatedLabel}</strong></p>
+      </div>
+    </header>
+
+    {error && (
+      <div class="settings-notice is-error" role="alert">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 7v6M12 17h.01" /></svg>
+        <span>{error}</span>
+      </div>
+    )}
+    {success && (
+      <div class="settings-notice is-success" role="status">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="m8 12 2.5 2.5L16 9" /></svg>
+        <span>{success}</span>
+      </div>
+    )}
+
+    <form class="settings-form" data-editor-form data-settings-form action="/api/admin/settings" method="post">
+      <input type="hidden" name="csrf_token" value={csrf} />
+
+      <section class="settings-panel settings-panel-research" aria-labelledby="research-settings-title">
+        <header class="settings-panel-head">
+          <span class="settings-panel-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7" /><path d="m20 20-4-4M11 8v6M8 11h6" /></svg>
+          </span>
+          <div>
+            <p class="settings-section-number">01</p>
+            <h2 id="research-settings-title">מחקר וגילוי</h2>
+            <p>אילו בדיקות ירוצו, היכן לתת תשומת לב נוספת וכמה סיפורים ימשיכו למחקר המעמיק.</p>
+          </div>
+        </header>
+
+        <div class="settings-toggle-grid">
+          {DISCOVERY_CONTROLS.map((control) => (
+            <article class="settings-toggle-card" data-toggle-card>
+              <div class="settings-toggle-copy">
+                <span class="settings-toggle-state" data-toggle-state>{control.enabled ? "פעיל" : "כבוי"}</span>
+                <h3>{control.title}</h3>
+                <p>{control.description}</p>
+              </div>
+              <div
+                class="segmented segmented-sm settings-toggle-control"
+                data-segmented
+                aria-label={control.title}
+                style={`--count:${TOGGLE_OPTIONS.length};--index:${toggleIndex(control.enabled)}`}
+              >
+                <span class="segmented-thumb" aria-hidden="true"></span>
+                {TOGGLE_OPTIONS.map((option) => (
+                  <label class={String(control.enabled) === option.value ? "is-active" : undefined}>
+                    <input
+                      type="radio"
+                      name={control.name}
+                      value={option.value}
+                      checked={String(control.enabled) === option.value}
+                      required
+                    />
+                    <span>{option.label}</span>
+                  </label>
+                ))}
+              </div>
+            </article>
+          ))}
+        </div>
+
+        <div class="settings-research-grid">
+          <div class="settings-field-block settings-keywords" data-chip-field>
+            <div class="settings-field-heading">
+              <div>
+                <h3>נושאים לתשומת לב מיוחדת</h3>
+                <p>חברות, מוצרים או תחומים שיקבלו מעבר ממוקד נוסף. אין חובה לכלול אותם במהדורה.</p>
+              </div>
+              <span class="settings-counter"><strong data-chip-count>{settings.adminKeywords.length}</strong>/50</span>
+            </div>
+
+            <div
+              class="chip-list settings-chip-list"
+              data-chip-list
+              data-chip-name="admin_keywords"
+              data-chip-maxlength="60"
+              data-chip-maxitems="50"
+            >
+              {(settings.adminKeywords.length ? settings.adminKeywords : [""]).map((value) => (
+                <div class="chip-row">
+                  <input
+                    class="chip-input"
+                    name="admin_keywords"
+                    value={value}
+                    maxlength="60"
+                    placeholder="למשל: OpenAI, robotics, developer tools"
+                    aria-label="נושא למחקר ממוקד"
+                  />
+                  <button type="button" class="chip-remove" data-chip-remove aria-label="הסרת נושא">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 12h12" /></svg>
+                  </button>
+                </div>
+              ))}
+            </div>
+            <div class="settings-keyword-actions">
+              <button type="button" class="chip-add" data-chip-add>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 6v12M6 12h12" /></svg>
+                הוספת נושא
+              </button>
+              <span class="settings-inline-status" data-keyword-status aria-live="polite"></span>
+            </div>
+          </div>
+
+          <div class="settings-field-block settings-story-limit">
+            <div class="settings-field-heading">
+              <div>
+                <h3>מספר סיפורים מרבי</h3>
+                <p>תקרת הסיפורים ש־Deep Research רשאי להחזיר. זו תקרה, לא יעד למילוי.</p>
+              </div>
+              <span class="settings-limit-value"><strong data-maximum-output>{settings.maximumStories}</strong><small>מתוך 20</small></span>
+            </div>
+            <div class="settings-range-wrap">
+              <span>1</span>
+              <div class="settings-range-control" data-range-control>
+                <span class="settings-range-track" aria-hidden="true"><i></i><b></b></span>
+                <input
+                  type="range"
+                  min="1"
+                  max="20"
+                  step="1"
+                  value={settings.maximumStories}
+                  data-maximum-range
+                  aria-label="מספר סיפורים מרבי"
+                />
+              </div>
+              <span>20</span>
+            </div>
+            <label class="settings-number-input">
+              <span>ערך מדויק</span>
+              <input
+                name="maximum_stories"
+                type="number"
+                min="1"
+                max="20"
+                inputmode="numeric"
+                value={settings.maximumStories}
+                data-maximum-number
+                required
+              />
+            </label>
+          </div>
+        </div>
+      </section>
+
+      <section class="settings-panel" aria-labelledby="editorial-settings-title">
+        <header class="settings-panel-head">
+          <span class="settings-panel-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4l11-11a2.8 2.8 0 0 0-4-4L4 16v4Z" /><path d="m13.5 6.5 4 4M12 20h8" /></svg>
+          </span>
+          <div>
+            <p class="settings-section-number">02</p>
+            <h2 id="editorial-settings-title">הנחיות עריכתיות</h2>
+            <p>דגשים זמניים לבחירת הסיפורים ולמסגור שלהם — בלי לשנות את גבולות העובדות והמקורות.</p>
+          </div>
+        </header>
+
+        <div class="settings-editorial-field">
+          <textarea
+            name="editorial_instructions"
+            rows="7"
+            maxlength="4000"
+            data-editorial-input
+            placeholder="לדוגמה: השבוע תנו עדיפות לכלי פיתוח שימושיים ולהשקות שזמינות בפועל…"
+            aria-describedby="editorial-help editorial-count"
+          >{settings.editorialInstructions}</textarea>
+          <div class="settings-textarea-meta">
+            <p id="editorial-help"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8h.01" /></svg>ההנחיות משפיעות על הדגש בלבד ואינן עוקפות אימות מקורות, תאריך או חשיבות.</p>
+            <span id="editorial-count" data-editorial-count>{settings.editorialInstructions.length.toLocaleString("he-IL")} / 4,000</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="settings-panel settings-panel-schedule" aria-labelledby="schedule-settings-title">
+        <header class="settings-panel-head settings-panel-head-schedule">
+          <span class="settings-panel-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>
+          </span>
+          <div>
+            <p class="settings-section-number">03</p>
+            <h2 id="schedule-settings-title">לוח זמנים יומי</h2>
+            <p>שעות ההפקה והפרסום לפי שעון ישראל. שינוי נכנס לתוקף ב־tick הבא של ה־Scheduler.</p>
+          </div>
+          <span class="settings-timezone">Asia/Jerusalem</span>
+        </header>
+
+        <div class="settings-schedule">
+          <div class="settings-time-card">
+            <span class="settings-time-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v3M4.2 7.2l2.1 2.1M3 15h3M18 15h3M17.7 9.3l2.1-2.1" /><path d="M6 19a6 6 0 0 1 12 0" /></svg>
+            </span>
+            <span class="settings-time-copy"><small>שלב ראשון</small><strong>הפקת המהדורה</strong><span>מחקר, כתיבה ואימות</span></span>
+            <span class="settings-time-picker" data-time-picker>
+              <span class="settings-time-unit">
+                <button type="button" data-time-step="1" aria-label="הוספת שעה"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 12 4-4 4 4" /></svg></button>
+                <input type="text" name="generate_hour" value={generateHour} inputmode="numeric" pattern="[0-9]{2}" maxlength="2" data-time-hour data-time-part data-time-max="23" aria-label="שעת הפקה" required />
+                <button type="button" data-time-step="-1" aria-label="הפחתת שעה"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 8 4 4 4-4" /></svg></button>
+              </span>
+              <b aria-hidden="true">:</b>
+              <span class="settings-time-unit">
+                <button type="button" data-time-step="1" aria-label="הוספת דקה"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 12 4-4 4 4" /></svg></button>
+                <input type="text" name="generate_minute" value={generateMinute} inputmode="numeric" pattern="[0-9]{2}" maxlength="2" data-time-minute data-time-part data-time-max="59" aria-label="דקת הפקה" required />
+                <button type="button" data-time-step="-1" aria-label="הפחתת דקה"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 8 4 4 4-4" /></svg></button>
+              </span>
+            </span>
+          </div>
+
+          <div class="settings-schedule-connector" aria-hidden="true">
+            <span></span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6" /></svg>
+          </div>
+
+          <div class="settings-time-card is-publish">
+            <span class="settings-time-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v12H4zM8 21h8M12 17v4" /><path d="m9 11 2 2 4-4" /></svg>
+            </span>
+            <span class="settings-time-copy"><small>שלב שני</small><strong>פרסום באתר</strong><span>מעבר מ־ready ל־published</span></span>
+            <span class="settings-time-picker" data-time-picker>
+              <span class="settings-time-unit">
+                <button type="button" data-time-step="1" aria-label="הוספת שעה"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 12 4-4 4 4" /></svg></button>
+                <input type="text" name="publish_hour" value={publishHour} inputmode="numeric" pattern="[0-9]{2}" maxlength="2" data-time-hour data-time-part data-time-max="23" aria-label="שעת פרסום" required />
+                <button type="button" data-time-step="-1" aria-label="הפחתת שעה"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 8 4 4 4-4" /></svg></button>
+              </span>
+              <b aria-hidden="true">:</b>
+              <span class="settings-time-unit">
+                <button type="button" data-time-step="1" aria-label="הוספת דקה"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 12 4-4 4 4" /></svg></button>
+                <input type="text" name="publish_minute" value={publishMinute} inputmode="numeric" pattern="[0-9]{2}" maxlength="2" data-time-minute data-time-part data-time-max="59" aria-label="דקת פרסום" required />
+                <button type="button" data-time-step="-1" aria-label="הפחתת דקה"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 8 4 4 4-4" /></svg></button>
+              </span>
+            </span>
+          </div>
+        </div>
+        <p class="settings-schedule-summary" data-schedule-summary aria-live="polite"></p>
+      </section>
+
+      <footer class="settings-savebar">
+        <div class="settings-save-copy">
+          <span class="settings-save-dot" aria-hidden="true"></span>
+          <p><strong data-save-state>הכול מעודכן</strong><small data-save-detail>לא בוצעו שינויים מאז הטעינה.</small></p>
+        </div>
+        <button class="button settings-save-button" name="action" value="save" type="submit" data-save-button>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h12l2 2v14H5z" /><path d="M8 4v6h8V4M8 20v-6h8v6" /></svg>
+          <span>שמירת שינויים</span>
+        </button>
+      </footer>
+    </form>
+  </section>
+
+  <EditorFormControls />
+
+  <script is:inline>
+    (() => {
+      const page = document.querySelector("[data-settings-page]");
+      const form = page?.querySelector("[data-settings-form]");
+      if (!page || !form) return;
+
+      const editorial = form.querySelector("[data-editorial-input]");
+      const editorialCount = form.querySelector("[data-editorial-count]");
+      const range = form.querySelector("[data-maximum-range]");
+      const rangeControl = form.querySelector("[data-range-control]");
+      const number = form.querySelector("[data-maximum-number]");
+      const maximumOutput = form.querySelector("[data-maximum-output]");
+      const timePickers = Array.from(form.querySelectorAll("[data-time-picker]"));
+      const timeInputs = Array.from(form.querySelectorAll("[data-time-part]"));
+      const generateTime = timePickers[0];
+      const publishTime = timePickers[1];
+      const scheduleSummary = form.querySelector("[data-schedule-summary]");
+      const keywordList = form.querySelector('[data-chip-name="admin_keywords"]');
+      const keywordStatus = form.querySelector("[data-keyword-status]");
+      const saveButton = form.querySelector("[data-save-button]");
+      const saveState = form.querySelector("[data-save-state]");
+      const saveDetail = form.querySelector("[data-save-detail]");
+      const savebar = form.querySelector(".settings-savebar");
+
+      const serialized = () => new URLSearchParams(new FormData(form)).toString();
+      const initial = serialized();
+      let dirty = false;
+      let submitting = false;
+
+      const syncEditorial = () => {
+        if (!editorial || !editorialCount) return;
+        editorialCount.textContent = editorial.value.length.toLocaleString("he-IL") + " / 4,000";
+      };
+
+      const syncMaximum = (source) => {
+        if (!range || !number || !maximumOutput) return;
+        const raw = Number(source.value);
+        const value = Math.min(20, Math.max(1, Number.isFinite(raw) ? Math.round(raw) : 1));
+        range.value = String(value);
+        number.value = String(value);
+        maximumOutput.textContent = String(value);
+        rangeControl?.style.setProperty("--range-progress", ((value - 1) / 19 * 100) + "%");
+      };
+
+      const pickerValue = (picker) => {
+        if (!picker) return "";
+        const hour = picker.querySelector("[data-time-hour]")?.value;
+        const minute = picker.querySelector("[data-time-minute]")?.value;
+        return hour && minute ? hour + ":" + minute : "";
+      };
+      const normalizeTimeInput = (input) => {
+        const maximum = Number(input.dataset.timeMax);
+        const parsed = Number(input.value.replace(/\D/gu, ""));
+        const value = Number.isFinite(parsed) ? Math.min(maximum, Math.max(0, parsed)) : 0;
+        input.value = String(value).padStart(2, "0");
+      };
+      const stepTimeInput = (input, delta) => {
+        const maximum = Number(input.dataset.timeMax);
+        const current = Number(input.value) || 0;
+        input.value = String((current + delta + maximum + 1) % (maximum + 1)).padStart(2, "0");
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        input.focus();
+        input.select();
+      };
+      const minutes = (value) => {
+        const parts = value.split(":").map(Number);
+        return parts.length === 2 && parts.every(Number.isFinite) ? parts[0] * 60 + parts[1] : null;
+      };
+      const durationLabel = (duration) => {
+        const hours = Math.floor(duration / 60);
+        const mins = duration % 60;
+        if (hours && mins) return hours + " שעות ו־" + mins + " דקות";
+        if (hours) return hours + (hours === 1 ? " שעה" : " שעות");
+        return mins + " דקות";
+      };
+      const syncSchedule = () => {
+        if (!generateTime || !publishTime || !scheduleSummary) return;
+        const generated = minutes(pickerValue(generateTime));
+        const published = minutes(pickerValue(publishTime));
+        scheduleSummary.classList.remove("is-warning");
+        if (generated === null || published === null) {
+          scheduleSummary.textContent = "יש לבחור שתי שעות תקינות.";
+          scheduleSummary.classList.add("is-warning");
+          return;
+        }
+        if (published <= generated) {
+          scheduleSummary.textContent = "שעת הפרסום אינה מאוחרת משעת ההפקה. כדאי לבדוק את סדר הפעולות.";
+          scheduleSummary.classList.add("is-warning");
+          return;
+        }
+        scheduleSummary.textContent = "חלון של " + durationLabel(published - generated) + " בין תחילת ההפקה לפרסום.";
+      };
+
+      const syncKeywords = () => {
+        if (!keywordList || !keywordStatus) return;
+        const count = Array.from(keywordList.querySelectorAll("input"))
+          .filter((input) => input.value.trim().length > 0).length;
+        const enabled = form.querySelector('[name="admin_keywords_research_enabled"]:checked')?.value === "true";
+        keywordStatus.classList.toggle("is-warning", enabled && count === 0);
+        keywordStatus.textContent = enabled && count === 0
+          ? "המחקר הממוקד לא ירוץ ללא נושאים"
+          : count > 0
+            ? count + " נושאים מוגדרים"
+            : "אין נושאים מוגדרים";
+      };
+
+      const syncToggleCards = () => {
+        form.querySelectorAll("[data-toggle-card]").forEach((card) => {
+          const enabled = card.querySelector('input:checked')?.value === "true";
+          card.classList.toggle("is-enabled", enabled);
+          const state = card.querySelector("[data-toggle-state]");
+          if (state) state.textContent = enabled ? "פעיל" : "כבוי";
+        });
+      };
+
+      const syncDirty = () => {
+        dirty = serialized() !== initial;
+        savebar?.classList.toggle("is-dirty", dirty);
+        if (saveButton) saveButton.disabled = !dirty;
+        if (saveState) saveState.textContent = dirty ? "יש שינויים שלא נשמרו" : "הכול מעודכן";
+        if (saveDetail) saveDetail.textContent = dirty
+          ? "השינויים ייכנסו לתוקף לאחר השמירה."
+          : "לא בוצעו שינויים מאז הטעינה.";
+      };
+
+      const syncAll = () => {
+        syncEditorial();
+        syncSchedule();
+        syncKeywords();
+        syncToggleCards();
+        syncDirty();
+      };
+
+      editorial?.addEventListener("input", syncEditorial);
+      range?.addEventListener("input", () => { syncMaximum(range); syncDirty(); });
+      number?.addEventListener("input", () => { syncMaximum(number); syncDirty(); });
+      timePickers.forEach((picker) => picker.addEventListener("change", syncSchedule));
+      timeInputs.forEach((input) => {
+        input.addEventListener("focus", () => input.select());
+        input.addEventListener("input", () => {
+          input.value = input.value.replace(/\D/gu, "").slice(0, 2);
+          syncSchedule();
+        });
+        input.addEventListener("blur", () => {
+          normalizeTimeInput(input);
+          syncAll();
+        });
+        input.addEventListener("keydown", (event) => {
+          if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+          event.preventDefault();
+          stepTimeInput(input, event.key === "ArrowUp" ? 1 : -1);
+        });
+      });
+      form.querySelectorAll("[data-time-step]").forEach((button) => {
+        button.addEventListener("click", () => {
+          const unit = button.closest(".settings-time-unit");
+          const input = unit?.querySelector("[data-time-part]");
+          if (input) stepTimeInput(input, Number(button.dataset.timeStep));
+        });
+      });
+      form.addEventListener("input", syncAll);
+      form.addEventListener("change", syncAll);
+      if (keywordList) {
+        new MutationObserver(() => {
+          syncKeywords();
+          syncDirty();
+        }).observe(keywordList, { childList: true });
+      }
+
+      form.addEventListener("submit", () => {
+        timeInputs.forEach(normalizeTimeInput);
+        submitting = true;
+        saveButton.disabled = true;
+        savebar?.classList.add("is-saving");
+        if (saveState) saveState.textContent = "שומר את ההגדרות…";
+        if (saveDetail) saveDetail.textContent = "נא להמתין לסיום השמירה.";
+      });
+      window.addEventListener("beforeunload", (event) => {
+        if (!dirty || submitting) return;
+        event.preventDefault();
+      });
+
+      syncMaximum(number);
+      syncAll();
+    })();
+  </script>
+</AdminLayout>

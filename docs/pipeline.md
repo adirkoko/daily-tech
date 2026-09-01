@@ -1,140 +1,157 @@
 # Daily Brief Pipeline
 
-`packages/pipeline` generates one validated brief for the previous Israel calendar
-day. There is one production path:
+`packages/pipeline` generates one validated brief for the previous calendar date in
+`Asia/Jerusalem`.
 
 ```text
-Research -> validation and IDs -> Draft -> validation -> Gap Check
-         -> optional Revision -> final validation -> persist as ready
+Light Discovery
+  -> optional Gap Discovery
+  -> optional Admin Keywords Research
+  -> Deep Research
+  -> Draft
+  -> validation and persistence
 ```
 
-`NewsResearchProvider` defines the Daily Tech research domain. `AiWebResearchClient`
-isolates the configured provider's live web-search and citation mechanics. Writing
-uses a separate completion client and cannot search the web.
+Research uses live web search and machine-readable citations. Writing uses a separate
+completion client with no web-search capability. The pipeline never runs on a reader
+request.
 
 ## Research date
 
-The pipeline derives the previous calendar date in `Asia/Jerusalem`, including DST
-transitions. Only `date` and `timeZone` are sent to Research; stories and sources do
-not carry time-of-day fields.
+The run derives the previous Israel calendar date, including daylight-saving
+transitions. Research receives the date and time zone; stories use `occurredOn`,
+sources use nullable `publishedOn`, and neither field carries invented time-of-day
+precision.
 
 ## Stages
 
-### 1. Model Web Research
+### 1. Light Discovery
 
-One request searches across the configured technology categories, compares sources,
-deduplicates reports about the same event, evaluates significance, and returns
-structured story inputs. Research returns all qualifying stories up to the configured
-limit; it does not curate the final edition or assign internal IDs.
+One broad request searches the configured technology categories and returns
+`CandidateStory` inputs. Each candidate contains enough information for triage: a
+title, short factual summary, category, importance, event-date evidence, central
+companies/topics, and cited sources.
 
-Each story contains its factual summary, significance, key facts, availability,
-category, importance, companies/topics, sources, `occurredOn`, and separate
-event-date evidence. Each source has a nullable `publishedOn`. A generated URL is
-accepted only when it matches a machine-readable citation returned by the provider.
+Code validates citation-backed URLs, the importance threshold, the requested date,
+and event-evidence consistency. Invalid stories are rejected individually; valid
+siblings continue. Surviving candidates are conservatively deduplicated and receive
+internal IDs from code.
 
-### 2. Research validation, deduplication, and IDs
+### 2. Optional discovery passes
 
-Code validates schema shape, the importance threshold, citation-backed source URLs,
-the requested calendar date, and event-date evidence consistency. Validation is
-fail-closed at the smallest safe boundary:
+Gap Discovery asks whether the broad pass missed a significant eligible development.
+Admin Keywords Research asks the same question within operator-selected companies,
+products, technologies, or topics. Each pass compares against the candidates already
+accepted and returns only new candidates.
 
-- A broken base response or missing citation set fails the request.
-- An invalid story is rejected without discarding valid sibling stories.
-- A non-empty response from which no valid story survives fails the request.
-- An explicitly empty response is a valid quiet-day result.
+The two passes are independently configurable. Keyword research is also skipped when
+the keyword list is empty. Keywords influence attention only; they do not lower the
+importance, confirmation, source, or date requirements.
 
-The model performs semantic deduplication. Code only merges stories that share a
-canonical source URL, then assigns internal IDs to the surviving stories.
+### 3. Candidate merge
 
-### 3. Draft
+Each discovery result is validated and deduplicated against the accumulated set. A
+high internal safety cap bounds the candidate list sent to Deep Research on an
+exceptionally busy day; it is a request-size safeguard, not the normal editorial
+selection mechanism.
 
-When Research returns stories, one writing request produces structured Hebrew content
-and metadata. The writer decides selection, grouping, order, wording, and which of the
-stories' verified sources to cite.
+### 4. Deep Research
 
-`ResearchedStory[]` is the only factual input. The writer may not introduce a fact,
-name, number, date, comparison, availability claim, or URL that is absent from the
-referenced research.
+One web-enabled request investigates all surviving candidates. It may omit a
+candidate that does not hold up under closer inspection and returns at most the
+configured `maximumStories` dossiers. Each `DeepResearchedStory` contains the factual
+material the writer may need, nullable fields for details that were not verified,
+event-date evidence, and cited sources.
 
-### 4. Draft validation and Markdown rendering
+Code matches every dossier to a known candidate ID, rejects duplicate candidate IDs,
+and revalidates source citations and date evidence. The candidate's code-assigned ID
+becomes the final story ID.
 
-Code verifies that every referenced story ID exists and every cited URL belongs to
-the referenced stories. It then renders the structured draft as deterministic
-Markdown with numbered developments, optional subsections, an optional
-worth-watching section, and the closing paragraph. `packages/core` validates the
-complete Markdown/metadata artifact.
+### 5. Draft
 
-The writer is not required to use every researched story; inclusion is an editorial
-decision.
+One non-search model request turns `DeepResearchedStory[]` into structured Hebrew
+content and metadata. The writer controls selection, grouping, order, and wording,
+but may use only facts and URLs present in the referenced dossiers. Optional
+editorial instructions can affect emphasis without overriding that factual boundary.
 
-### 5. Model Web Gap Check
+When Deep Research returns no stories, code creates the quiet-day draft without a
+writing request.
 
-One narrow research request asks whether the research date contains a significant,
-eligible technology development that is missing from both the accepted stories and
-the draft. It does not review prose or propose stylistic changes. Returned stories
-must already meet the normal significance and source requirements.
+### 6. Validation and persistence
 
-### 6. Optional Revision
+Draft validation checks that every referenced story ID exists and every cited URL
+belongs to the referenced dossiers. Code then renders deterministic Markdown and
+validates the final Markdown/metadata artifact with `@daily-tech/core`.
 
-If Gap Check returns valid missing stories, the pipeline assigns their IDs and makes
-one Revision request. The revised draft is validated again. There is no second Gap
-Check and no revision loop.
-
-### 7. Final validation and persistence
-
-The final artifact is validated once more and saved as Markdown plus SQLite metadata
-with `status=ready`. The combined sink restores the previous Markdown state if the
-metadata transaction fails.
+The accepted artifact is written to the content store with `status=ready`. If the
+metadata write fails, the combined sink restores the previous Markdown state.
 
 ## Model requests
 
-Normal non-empty run:
+With both optional discovery passes enabled and at least one Admin keyword, a
+non-empty run makes five requests:
 
 ```text
-Research -> Draft -> Gap Check
+Light Discovery       web search
+Gap Discovery         web search
+Admin Keywords        web search
+Deep Research         web search
+Draft                 no web search
 ```
 
-Run with a missing story:
+Disabled optional passes make no request. A missing keyword list skips the keyword
+pass, and an empty candidate/story set skips Deep Research or Draft as appropriate.
+A run therefore makes between one and five logical model requests. Transient
+provider retries may produce additional HTTP attempts for any one request.
 
-```text
-Research -> Draft -> Gap Check -> Revision
-```
+## Pipeline settings
 
-A quiet day skips the initial Draft. Gap Check still runs; if it also returns no
-stories, code creates the quiet-day artifact without a writing request. The pipeline
-therefore makes only the calls required by the result, with four as the maximum.
+Production generation loads `PipelineSettings` from SQLite at the start of the run:
+
+- Admin focus keywords.
+- Maximum Deep Research stories.
+- Gap and keyword discovery toggles.
+- Editorial instructions.
+- Generate and publish times used by the embedded scheduler.
+
+The real-provider dry run does not open SQLite and uses the built-in defaults. See
+[`admin.md`](admin.md#pipeline-settings) and
+[`data-model.md`](data-model.md#pipeline-settings).
 
 ## Continuing stories
 
-A continuing topic can appear on a later date only when that date contains a new,
-significant development. An article published during the window about an older event
-does not make the event eligible.
+A continuing topic may appear on a later date only when that date contains a new,
+significant development. A newly published article about an older event does not
+make the event eligible.
 
 ## Failures and diagnostics
 
 A provider, validation, or persistence failure never produces a publishable partial
-artifact. The run creates one failure log and one System ticket in Admin. When every
-story in a non-empty Research or Gap response is rejected, the failure includes each
-story's index, title, and rejection reason.
+artifact. The run records `run_failed` and creates a System ticket in Admin. When an
+entire non-empty research batch is rejected, diagnostics include each story's index,
+title, and rejection reason.
 
-See [`operations.md`](operations.md) for the wider logging and alert behavior.
+Transient provider failures are retried by the AI client as documented in
+[`operations.md`](operations.md#provider-reliability).
 
 ## Schedule and manual execution
 
-Generation defaults to `01:00` Israel time and publication to `07:00`; both are
-configurable. The embedded scheduler runs them inside the application service. Manual
-commands remain available:
+The embedded scheduler uses the Admin-configured generate and publish times,
+defaulting to `01:00` and `07:00` in `Asia/Jerusalem`. It reads the times on every
+tick, so changes do not require a restart.
+
+Manual commands remain available:
 
 ```sh
 npm run generate
 npm run publish:brief
 ```
 
-To run the real provider and full pipeline without opening SQLite or publishing, use:
+To exercise the real provider without opening SQLite or publishing:
 
 ```sh
 npm run generate:dry-run -- --date=YYYY-MM-DD
 ```
 
-Dry-run configuration and outputs are documented in
+Dry-run outputs are documented in
 [`packages/pipeline/README.md`](../packages/pipeline/README.md#real-provider-dry-run).

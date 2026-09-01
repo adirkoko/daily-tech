@@ -2,12 +2,20 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   ResearchProcessingError,
-  finalizeGapBatch,
-  finalizeResearchBatch,
+  finalizeDeepResearchBatch,
+  finalizeDiscoveryBatch,
+  finalizeFocusedDiscoveryBatch,
   type PipelineContext,
   type StoryIdFactory,
 } from "../src/index.js";
-import { firstStory, firstStoryInput, secondStoryInput } from "./fixtures.js";
+import {
+  firstCandidate,
+  firstCandidateInput,
+  firstDeepStoryInput,
+  secondCandidate,
+  secondCandidateInput,
+  secondDeepStoryInput,
+} from "./fixtures.js";
 
 const context: PipelineContext = {
   runId: "run-1",
@@ -25,17 +33,17 @@ function ids(...values: readonly string[]): StoryIdFactory {
   return { create };
 }
 
-describe("deterministic research processing", () => {
+describe("deterministic discovery processing", () => {
   it("assigns IDs only after evidence validation and conservative deduplication", () => {
     const duplicate = {
-      ...firstStoryInput,
-      title: `${firstStoryInput.title} `,
-      keyFacts: [...firstStoryInput.keyFacts, "עובדה נוספת"],
+      ...firstCandidateInput,
+      title: `${firstCandidateInput.title} `,
+      shortSummary: `${firstCandidateInput.shortSummary} פרט נוסף שנמצא במקור השני.`,
     };
     const storyIds = ids("story-generated");
 
-    const result = finalizeResearchBatch(
-      { stories: [firstStoryInput, duplicate], rejectedStories: [] },
+    const result = finalizeDiscoveryBatch(
+      { stories: [firstCandidateInput, duplicate], rejectedStories: [] },
       context,
       3,
       storyIds,
@@ -43,20 +51,20 @@ describe("deterministic research processing", () => {
 
     expect(result.stories).toHaveLength(1);
     expect(result.stories[0]).toMatchObject({ id: "story-generated" });
-    expect(result.stories[0]?.keyFacts).toContain("עובדה נוספת");
+    expect(result.stories[0]?.shortSummary).toContain("פרט נוסף שנמצא במקור השני");
     expect(storyIds.create).toHaveBeenCalledOnce();
   });
 
   it("rejects a story whose event-date evidence does not match the target day", () => {
     const wrongDay = {
-      ...firstStoryInput,
+      ...firstCandidateInput,
       eventDateEvidence: {
-        ...firstStoryInput.eventDateEvidence,
+        ...firstCandidateInput.eventDateEvidence,
         eventDate: "2026-08-26",
       },
     };
 
-    expect(() => finalizeResearchBatch(
+    expect(() => finalizeDiscoveryBatch(
       { stories: [wrongDay], rejectedStories: [] },
       context,
       3,
@@ -66,15 +74,15 @@ describe("deterministic research processing", () => {
 
   it("rejects invalid event-date evidence per story while preserving valid siblings", () => {
     const wrongDay = {
-      ...secondStoryInput,
+      ...secondCandidateInput,
       eventDateEvidence: {
-        ...secondStoryInput.eventDateEvidence,
+        ...secondCandidateInput.eventDateEvidence,
         eventDate: "2026-08-26",
       },
     };
 
-    const result = finalizeResearchBatch(
-      { stories: [firstStoryInput, wrongDay], rejectedStories: [] },
+    const result = finalizeDiscoveryBatch(
+      { stories: [firstCandidateInput, wrongDay], rejectedStories: [] },
       context,
       3,
       ids("story-valid"),
@@ -86,14 +94,14 @@ describe("deterministic research processing", () => {
 
   it("reports index, title, and reason for every story when the whole batch is rejected", () => {
     const wrongDay = {
-      ...firstStoryInput,
+      ...firstCandidateInput,
       eventDateEvidence: {
-        ...firstStoryInput.eventDateEvidence,
+        ...firstCandidateInput.eventDateEvidence,
         eventDate: "2026-08-26",
       },
     };
-    const tooMinor = { ...secondStoryInput, importance: 1 as const };
-    const attempt = (): unknown => finalizeResearchBatch(
+    const tooMinor = { ...secondCandidateInput, importance: 1 as const };
+    const attempt = (): unknown => finalizeDiscoveryBatch(
       { stories: [wrongDay, tooMinor], rejectedStories: [] },
       context,
       3,
@@ -104,7 +112,7 @@ describe("deterministic research processing", () => {
     expect(attempt).toThrow(/index=0; title=.*index=1; title=/su);
     try {
       attempt();
-      throw new Error("finalizeResearchBatch should have thrown ResearchProcessingError.");
+      throw new Error("finalizeDiscoveryBatch should have thrown ResearchProcessingError.");
     } catch (error) {
       expect(error).toBeInstanceOf(ResearchProcessingError);
       expect((error as InstanceType<typeof ResearchProcessingError>).rejectedStories).toEqual([
@@ -115,8 +123,8 @@ describe("deterministic research processing", () => {
   });
 
   it("fails closed when code-generated story IDs collide", () => {
-    expect(() => finalizeResearchBatch(
-      { stories: [firstStoryInput, secondStoryInput], rejectedStories: [] },
+    expect(() => finalizeDiscoveryBatch(
+      { stories: [firstCandidateInput, secondCandidateInput], rejectedStories: [] },
       context,
       3,
       ids("story-duplicate", "story-duplicate"),
@@ -125,12 +133,12 @@ describe("deterministic research processing", () => {
 
   it("preserves semantically ambiguous stories when high-confidence signals differ", () => {
     const relatedButDistinct = {
-      ...secondStoryInput,
+      ...secondCandidateInput,
       title: "כלי פיתוח חדש הוכרז עבור צוותים",
       companies: ["Google"],
     };
-    const result = finalizeResearchBatch(
-      { stories: [firstStoryInput, relatedButDistinct], rejectedStories: [] },
+    const result = finalizeDiscoveryBatch(
+      { stories: [firstCandidateInput, relatedButDistinct], rejectedStories: [] },
       context,
       3,
       ids("story-1", "story-2"),
@@ -139,14 +147,109 @@ describe("deterministic research processing", () => {
     expect(result.stories).toHaveLength(2);
   });
 
-  it("does not treat an already represented gap as a reason to revise", () => {
-    const result = finalizeGapBatch(
-      { missingStories: [firstStoryInput], rejectedStories: [] },
-      [firstStory],
+  it("does not treat an already represented gap as a reason to continue", () => {
+    const result = finalizeFocusedDiscoveryBatch(
+      { stories: [firstCandidateInput], rejectedStories: [] },
+      [firstCandidate],
       context,
       3,
       ids("unused"),
     );
+
+    expect(result.stories).toEqual([]);
+  });
+});
+
+describe("deterministic deep-research processing", () => {
+  const candidates = [firstCandidate, secondCandidate];
+
+  it("reuses the candidate's own id as the final story id — never a new one", () => {
+    const result = finalizeDeepResearchBatch(
+      { stories: [firstDeepStoryInput] },
+      candidates,
+      context,
+      8,
+    );
+
+    expect(result.stories).toEqual([{ ...firstDeepStoryInput, id: "story-1" }]);
+  });
+
+  it("never sorts or truncates to a target count — a response under maximumStories is accepted as-is", () => {
+    const result = finalizeDeepResearchBatch(
+      { stories: [firstDeepStoryInput] },
+      candidates,
+      context,
+      8,
+    );
+
+    expect(result.stories).toHaveLength(1);
+  });
+
+  it("refuses a response that exceeds maximumStories rather than truncating it", () => {
+    expect(() => finalizeDeepResearchBatch(
+      { stories: [firstDeepStoryInput, secondDeepStoryInput] },
+      candidates,
+      context,
+      1,
+    )).toThrow(ResearchProcessingError);
+  });
+
+  it("rejects a dossier whose candidateId does not match any supplied candidate, keeping valid siblings", () => {
+    const unknownCandidateId = { ...secondDeepStoryInput, candidateId: "story-does-not-exist" };
+
+    const result = finalizeDeepResearchBatch(
+      { stories: [firstDeepStoryInput, unknownCandidateId] },
+      candidates,
+      context,
+      8,
+    );
+
+    expect(result.stories).toEqual([{ ...firstDeepStoryInput, id: "story-1" }]);
+  });
+
+  it("rejects a candidateId reused across two dossiers, keeping only the first", () => {
+    const duplicateCandidateId = { ...secondDeepStoryInput, candidateId: firstDeepStoryInput.candidateId };
+
+    const result = finalizeDeepResearchBatch(
+      { stories: [firstDeepStoryInput, duplicateCandidateId] },
+      candidates,
+      context,
+      8,
+    );
+
+    expect(result.stories).toHaveLength(1);
+    expect(result.stories[0]?.candidateId).toBe(firstDeepStoryInput.candidateId);
+  });
+
+  it("rejects a dossier whose event-date evidence does not match the target day, keeping valid siblings", () => {
+    const wrongDay = {
+      ...secondDeepStoryInput,
+      eventDateEvidence: { ...secondDeepStoryInput.eventDateEvidence, eventDate: "2026-08-26" },
+    };
+
+    const result = finalizeDeepResearchBatch(
+      { stories: [firstDeepStoryInput, wrongDay] },
+      candidates,
+      context,
+      8,
+    );
+
+    expect(result.stories).toEqual([{ ...firstDeepStoryInput, id: "story-1" }]);
+  });
+
+  it("fails closed when every dossier in a non-empty batch is rejected", () => {
+    const unknownCandidateId = { ...firstDeepStoryInput, candidateId: "story-does-not-exist" };
+
+    expect(() => finalizeDeepResearchBatch(
+      { stories: [unknownCandidateId] },
+      candidates,
+      context,
+      8,
+    )).toThrow(ResearchProcessingError);
+  });
+
+  it("accepts an empty batch as a valid quiet result — no candidate was worth a dossier", () => {
+    const result = finalizeDeepResearchBatch({ stories: [] }, candidates, context, 8);
 
     expect(result.stories).toEqual([]);
   });

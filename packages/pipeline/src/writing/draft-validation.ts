@@ -1,5 +1,5 @@
 import { canonicalizeUrl } from "../research/citation-validation.js";
-import type { ResearchedStory } from "../research/contracts.js";
+import type { DeepResearchedStory } from "../research/contracts.js";
 import type { BriefDraft, DraftDevelopment, DraftWorthWatchingItem } from "./contracts.js";
 
 export class DraftResearchBoundaryError extends Error {
@@ -26,7 +26,7 @@ export class DraftResearchBoundaryError extends Error {
  */
 export function validateDraftAgainstStories(
   draft: BriefDraft,
-  stories: readonly ResearchedStory[],
+  stories: readonly DeepResearchedStory[],
 ): void {
   const storiesById = new Map(stories.map((story) => [story.id, story]));
   const issues: string[] = [];
@@ -44,10 +44,10 @@ export function validateDraftAgainstStories(
 function checkItem(
   label: string,
   item: DraftDevelopment | DraftWorthWatchingItem,
-  storiesById: ReadonlyMap<string, ResearchedStory>,
+  storiesById: ReadonlyMap<string, DeepResearchedStory>,
   issues: string[],
 ): void {
-  const referencedStories: ResearchedStory[] = [];
+  const referencedStories: DeepResearchedStory[] = [];
   for (const storyId of item.storyIds) {
     const story = storiesById.get(storyId);
     if (story === undefined) {

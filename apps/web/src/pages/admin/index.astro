@@ -4,7 +4,7 @@ import type { DayMetadata } from "@daily-tech/core";
 
 import AdminLayout from "../../layouts/AdminLayout.astro";
 import CalendarMonth from "../../components/CalendarMonth.astro";
-import { toIsraelDate } from "../../lib/dates.js";
+import { formatHebrewDate, toIsraelDate } from "../../lib/dates.js";
 import { openServerDatabase } from "../../server/database.js";
 
 const db = await openServerDatabase();
@@ -18,14 +18,67 @@ db.close();
 
 const currentDate = toIsraelDate();
 const month = currentDate.slice(0, 7);
+const statusLabels: Record<DayMetadata["status"], string> = {
+  draft: "טיוטה",
+  ready: "מוכן",
+  published: "פורסם",
+  failed: "נכשל",
+};
+const statusCounts = {
+  draft: days.filter((day) => day.status === "draft").length,
+  ready: days.filter((day) => day.status === "ready").length,
+  published: days.filter((day) => day.status === "published").length,
+  failed: days.filter((day) => day.status === "failed").length,
+};
+const attentionDays = days
+  .filter((day) => day.status !== "published")
+  .sort((left, right) => right.date.localeCompare(left.date))
+  .slice(0, 4);
 ---
 <AdminLayout title="ניהול תדריכים">
-  <h1 class="admin-page-title">ניהול תדריכים</h1>
-  <CalendarMonth
-    month={month}
-    currentDate={currentDate}
-    days={days}
-    hrefBase="/admin/briefs"
-    dayActionLabel="עריכת המהדורה"
-  />
+  <section class="briefs-admin-page">
+    <header class="briefs-admin-hero">
+      <div class="briefs-admin-hero-copy">
+        <span class="briefs-admin-hero-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h11l3 3v15H5z" /><path d="M16 3v4h4M8 11h8M8 15h8M8 7h3" /></svg></span>
+        <div><p class="briefs-admin-eyebrow">Editorial workspace</p><h1>ניהול תדריכים</h1><p>מעקב אחר מהדורות, סטטוסים ועריכה יומית מתוך לוח אחד.</p></div>
+      </div>
+      <dl class="briefs-admin-overview" aria-label="סיכום סטטוס התדריכים">
+        <div data-status="published"><dt>פורסמו</dt><dd>{statusCounts.published}</dd></div>
+        <div data-status="ready"><dt>מוכנים</dt><dd>{statusCounts.ready}</dd></div>
+        <div data-status="draft"><dt>טיוטות</dt><dd>{statusCounts.draft}</dd></div>
+        <div data-status="failed"><dt>נכשלו</dt><dd>{statusCounts.failed}</dd></div>
+      </dl>
+    </header>
+
+    <section class="briefs-calendar-panel" aria-labelledby="briefs-calendar-title">
+      <header class="briefs-calendar-head">
+        <div><p>ארכיון ועריכה</p><h2 id="briefs-calendar-title">כל התדריכים</h2></div>
+        <span>לחיצה על יום עם נתונים תפתח אותו לעריכה</span>
+      </header>
+      <CalendarMonth
+        month={month}
+        currentDate={currentDate}
+        days={days}
+        hrefBase="/admin/briefs"
+        dayActionLabel="עריכת המהדורה"
+        managementMode
+      />
+    </section>
+
+    {attentionDays.length > 0 && (
+      <section class="briefs-attention" aria-labelledby="attention-title">
+        <header><div><p>דורשים תשומת לב</p><h2 id="attention-title">התדריכים הבאים עדיין לא פורסמו</h2></div><span>{attentionDays.length}</span></header>
+        <div class="briefs-attention-list">
+          {attentionDays.map((day) => (
+            <a href={`/admin/briefs/${day.date}`} data-status={day.status}>
+              <span class="briefs-attention-status"><i></i>{statusLabels[day.status]}</span>
+              <strong>{day.summary || "תדריך ללא תקציר"}</strong>
+              <span class="briefs-attention-date">{formatHebrewDate(day.date, { day: "numeric", month: "long", year: "numeric" })}</span>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
+            </a>
+          ))}
+        </div>
+      </section>
+    )}
+  </section>
 </AdminLayout>

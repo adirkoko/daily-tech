@@ -1,3 +1,4 @@
+import { DEFAULT_PIPELINE_SETTINGS, type PipelineSettings } from "@daily-tech/core";
 import { describe, expect, it, vi } from "vitest";
 
 import {
@@ -13,9 +14,11 @@ import {
   type StoryIdFactory,
 } from "../src/index.js";
 import {
-  firstStoryInput,
+  firstCandidateInput,
+  firstDeepStoryInput,
   oneItemDraft,
-  secondStoryInput,
+  secondCandidateInput,
+  secondDeepStoryInput,
   twoItemDraft,
 } from "./fixtures.js";
 
@@ -30,12 +33,12 @@ function dependencies(): DailyBriefPipelineDependencies & {
   let id = 0;
   const storyIds: StoryIdFactory = { create: () => `story-${++id}` };
   const researchProvider: NewsResearchProvider = {
-    research: vi.fn().mockResolvedValue({ stories: [firstStoryInput], rejectedStories: [] }),
-    findGaps: vi.fn().mockResolvedValue({ missingStories: [], rejectedStories: [] }),
+    discover: vi.fn().mockResolvedValue({ stories: [firstCandidateInput], rejectedStories: [] }),
+    findGaps: vi.fn().mockResolvedValue({ stories: [], rejectedStories: [] }),
+    deepResearch: vi.fn().mockResolvedValue({ stories: [firstDeepStoryInput] }),
   };
   const writer: BriefWriter = {
     write: vi.fn().mockResolvedValue(oneItemDraft),
-    revise: vi.fn().mockResolvedValue(twoItemDraft),
   };
   const logger: PipelineLogger = { log: (event) => { events.push(event); } };
   const failureReporter: FailureReporter = {
@@ -55,23 +58,29 @@ function dependencies(): DailyBriefPipelineDependencies & {
   };
 }
 
+const runAt = new Date("2026-08-28T01:00:00.000Z");
+
 describe("DailyBriefPipeline", () => {
-  it("runs Research, Draft, and one Gap Check on a normal run", async () => {
+  it("runs light discovery, a gap check, deep research, and one draft on a normal run", async () => {
     const deps = dependencies();
     const pipeline = new DailyBriefPipeline(deps, { storageRoot: "tech_briefs/daily" });
 
-    const result = await pipeline.run(new Date("2026-08-28T01:00:00.000Z"));
+    const result = await pipeline.run({ runAt });
 
     expect(result.artifact.metadata).toMatchObject({ status: "ready", significant_items: 1 });
-    expect(deps.researchProvider.research).toHaveBeenCalledOnce();
-    expect(deps.researchProvider.research).toHaveBeenCalledWith(
+    expect(deps.researchProvider.discover).toHaveBeenCalledOnce();
+    expect(deps.researchProvider.discover).toHaveBeenCalledWith(
       expect.objectContaining({
-        scope: expect.objectContaining({ maximumStories: 20 }),
+        scope: expect.objectContaining({ maximumCandidatesPerCall: 20 }),
       }),
     );
-    expect(deps.writer.write).toHaveBeenCalledOnce();
     expect(deps.researchProvider.findGaps).toHaveBeenCalledOnce();
-    expect(deps.writer.revise).not.toHaveBeenCalled();
+    expect(deps.researchProvider.deepResearch).toHaveBeenCalledOnce();
+    expect(deps.researchProvider.deepResearch).toHaveBeenCalledWith(
+      expect.objectContaining({ maximumStories: DEFAULT_PIPELINE_SETTINGS.maximumStories, editorialInstructions: "" }),
+    );
+    expect(deps.writer.write).toHaveBeenCalledOnce();
+    expect(deps.writer.write).toHaveBeenCalledWith(expect.anything(), expect.anything(), "");
     expect(deps.sink.saveReady).toHaveBeenCalledOnce();
     expect(deps.failures).toEqual([]);
     expect(deps.events).toEqual([
@@ -79,37 +88,109 @@ describe("DailyBriefPipeline", () => {
     ]);
   });
 
-  it("revises exactly once when the one Gap Check finds a missing story, with no second check", async () => {
+  it("merges a gap-discovered story into deep research and the final edition", async () => {
     const deps = dependencies();
     vi.mocked(deps.researchProvider.findGaps).mockResolvedValue({
-      missingStories: [secondStoryInput],
+      stories: [secondCandidateInput],
       rejectedStories: [],
     });
+    vi.mocked(deps.researchProvider.deepResearch).mockResolvedValue({
+      stories: [firstDeepStoryInput, secondDeepStoryInput],
+    });
+    vi.mocked(deps.writer.write).mockResolvedValue(twoItemDraft);
     const pipeline = new DailyBriefPipeline(deps);
 
-    const result = await pipeline.run(new Date("2026-08-28T01:00:00.000Z"));
+    const result = await pipeline.run({ runAt });
 
     expect(result.artifact.metadata.significant_items).toBe(2);
-    expect(deps.researchProvider.research).toHaveBeenCalledOnce();
-    expect(deps.writer.write).toHaveBeenCalledOnce();
+    expect(deps.researchProvider.discover).toHaveBeenCalledOnce();
     expect(deps.researchProvider.findGaps).toHaveBeenCalledOnce();
-    expect(deps.writer.revise).toHaveBeenCalledOnce();
+    const deepResearchCall = vi.mocked(deps.researchProvider.deepResearch).mock.calls[0]![0];
+    expect(deepResearchCall.candidates.map((candidate) => candidate.id)).toEqual(["story-1", "story-2"]);
   });
 
-  it("does not call the writer for a genuine quiet day", async () => {
+  it("runs admin-keyword-focused discovery only when keywords are configured and enabled", async () => {
     const deps = dependencies();
-    vi.mocked(deps.researchProvider.research).mockResolvedValue({
-      stories: [],
-      rejectedStories: [],
-    });
+    const settings: PipelineSettings = {
+      ...DEFAULT_PIPELINE_SETTINGS,
+      adminKeywords: ["OpenAI", "Robotics"],
+    };
     const pipeline = new DailyBriefPipeline(deps);
 
-    const result = await pipeline.run(new Date("2026-08-28T01:00:00.000Z"));
+    await pipeline.run({ runAt, settings });
+
+    expect(deps.researchProvider.findGaps).toHaveBeenCalledTimes(2);
+    expect(deps.researchProvider.findGaps).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ focusKeywords: ["OpenAI", "Robotics"] }),
+    );
+  });
+
+  it("skips admin-keyword discovery entirely when the keyword list is empty, even if enabled", async () => {
+    const deps = dependencies();
+    const pipeline = new DailyBriefPipeline(deps);
+
+    await pipeline.run({ runAt, settings: DEFAULT_PIPELINE_SETTINGS });
+
+    expect(deps.researchProvider.findGaps).toHaveBeenCalledOnce();
+  });
+
+  it("skips admin-keyword discovery when disabled, even with keywords configured", async () => {
+    const deps = dependencies();
+    const settings: PipelineSettings = {
+      ...DEFAULT_PIPELINE_SETTINGS,
+      adminKeywords: ["OpenAI"],
+      adminKeywordsResearchEnabled: false,
+    };
+    const pipeline = new DailyBriefPipeline(deps);
+
+    await pipeline.run({ runAt, settings });
+
+    expect(deps.researchProvider.findGaps).toHaveBeenCalledOnce();
+  });
+
+  it("skips gap discovery entirely when disabled", async () => {
+    const deps = dependencies();
+    const settings: PipelineSettings = { ...DEFAULT_PIPELINE_SETTINGS, gapDiscoveryEnabled: false };
+    const pipeline = new DailyBriefPipeline(deps);
+
+    await pipeline.run({ runAt, settings });
+
+    expect(deps.researchProvider.findGaps).not.toHaveBeenCalled();
+  });
+
+  it("does not call deep research or the writer for a genuine quiet day", async () => {
+    const deps = dependencies();
+    vi.mocked(deps.researchProvider.discover).mockResolvedValue({ stories: [], rejectedStories: [] });
+    const pipeline = new DailyBriefPipeline(deps);
+
+    const result = await pipeline.run({ runAt });
 
     expect(result.artifact.metadata.day_intensity).toBe("minimal");
     expect(result.artifact.metadata.significant_items).toBe(0);
+    expect(deps.researchProvider.deepResearch).not.toHaveBeenCalled();
     expect(deps.writer.write).not.toHaveBeenCalled();
-    expect(deps.writer.revise).not.toHaveBeenCalled();
+  });
+
+  it("bounds a pathological candidate count before deep research, keeping the most important ones", async () => {
+    const deps = dependencies();
+    const manyCandidates = Array.from({ length: 45 }, (_, index) => ({
+      ...firstCandidateInput,
+      title: `Candidate ${index}`,
+      importance: (index < 15 ? 5 : 2) as 1 | 2 | 3 | 4 | 5,
+      sources: [{ ...firstCandidateInput.sources[0]!, url: `https://example.com/story-${index}` }],
+    }));
+    vi.mocked(deps.researchProvider.discover).mockResolvedValue({
+      stories: manyCandidates,
+      rejectedStories: [],
+    });
+    const pipeline = new DailyBriefPipeline(deps, { maximumDiscoveryCandidates: 10 });
+
+    await pipeline.run({ runAt });
+
+    const deepResearchCall = vi.mocked(deps.researchProvider.deepResearch).mock.calls[0]![0];
+    expect(deepResearchCall.candidates).toHaveLength(10);
+    expect(deepResearchCall.candidates.every((candidate) => candidate.importance === 5)).toBe(true);
   });
 
   it("fails before persistence when the draft crosses the research boundary", async () => {
@@ -124,7 +205,7 @@ describe("DailyBriefPipeline", () => {
     const pipeline = new DailyBriefPipeline(deps);
 
     await expect(
-      pipeline.run(new Date("2026-08-28T01:00:00.000Z")),
+      pipeline.run({ runAt }),
     ).rejects.toMatchObject({
       name: "PipelineRunError",
       stage: "draft_validation",

@@ -129,6 +129,101 @@ describe("AI clients", () => {
     })).toThrow(/citations/u);
   });
 
+  it("retries a completion request once after a 429 and succeeds", async () => {
+    const sleep = vi.fn(async () => undefined);
+    const fetchMock = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response("rate limited", { status: 429 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        model: "writer-model",
+        choices: [{ message: { content: "ok" } }],
+      }), { status: 200 }));
+    const client = new OpenAiCompatibleCompletionClient({
+      apiKey: "secret",
+      model: "writer-model",
+      fetch: fetchMock,
+      retry: { sleep },
+    });
+
+    await expect(client.complete({ messages: [{ role: "user", content: "write" }] }))
+      .resolves.toMatchObject({ content: "ok" });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(sleep).toHaveBeenCalledOnce();
+  });
+
+  it("does not retry a completion request after a non-retryable 400", async () => {
+    const sleep = vi.fn(async () => undefined);
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response("bad request", { status: 400 }),
+    );
+    const client = new OpenAiCompatibleCompletionClient({
+      apiKey: "secret",
+      model: "writer-model",
+      fetch: fetchMock,
+      retry: { sleep },
+    });
+
+    await expect(client.complete({ messages: [{ role: "user", content: "write" }] }))
+      .rejects.toMatchObject({ status: 400 });
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(sleep).not.toHaveBeenCalled();
+  });
+
+  it("retries a web-research request after a 429 with the provider's Retry-After header", async () => {
+    const sleep = vi.fn(async () => undefined);
+    const fetchMock = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        new Response("rate limited", { status: 429, headers: { "retry-after": "2" } }),
+      )
+      .mockResolvedValueOnce(new Response(JSON.stringify(responsesPayload()), { status: 200 }));
+    const client = new OpenAiResponsesWebResearchClient({
+      apiKey: "secret",
+      model: "research-model",
+      fetch: fetchMock,
+      retry: { sleep },
+    });
+
+    const result = await client.execute({
+      instructions: "Research the target day.",
+      input: { date: "2026-08-27" },
+      schemaName: "research",
+      schema: { type: "object" },
+    });
+
+    expect(result.content).toBe("{\"stories\":[]}");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(sleep).toHaveBeenCalledWith(2_000, undefined);
+  });
+
+  it("retries a web-research request that returned no machine-readable citations", async () => {
+    const sleep = vi.fn(async () => undefined);
+    const flakyPayload = {
+      ...responsesPayload(),
+      output: [
+        { type: "web_search_call", action: { sources: [] } },
+        { type: "message", content: [{ type: "output_text", text: "{\"stories\":[]}", annotations: [] }] },
+      ],
+    };
+    const fetchMock = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(JSON.stringify(flakyPayload), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(responsesPayload()), { status: 200 }));
+    const client = new OpenAiResponsesWebResearchClient({
+      apiKey: "secret",
+      model: "research-model",
+      fetch: fetchMock,
+      retry: { sleep },
+    });
+
+    const result = await client.execute({
+      instructions: "Research the target day.",
+      input: { date: "2026-08-27" },
+      schemaName: "research",
+      schema: { type: "object" },
+    });
+
+    expect(result.content).toBe("{\"stories\":[]}");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it("distinguishes invalid JSON syntax from validation after parsing", () => {
     expect(() => parseJsonResult("not-json", () => null)).toThrowError(
       new InvalidAiResponseError("AI response content was not valid JSON."),

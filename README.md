@@ -3,15 +3,15 @@
 An automated engine that builds, over time, a curated Hebrew archive of the
 developments that actually mattered in technology.
 
-Once a day, a web-enabled model researches the previous Israel calendar day and
-returns cited, deduplicated stories. Deterministic code validates their source and
-event-date evidence, a constrained writer turns only those stories into a Hebrew
-brief, and a narrow web gap check looks for significant omissions. Only after every
-check passes is the brief saved as a Markdown file (the
-source of truth) with its metadata in SQLite, and published at a fixed hour. One
-standalone Node service serves the public site, secure admin, feedback endpoint,
-in-admin system alerts, and the daily generation/publication scheduler. The website
-never calls an AI model at request time.
+Each day, staged web research discovers significant developments from the previous
+Israel calendar date and builds cited dossiers for the strongest candidates.
+Deterministic validation enforces source, date-evidence, and artifact boundaries; a
+constrained writer turns only the accepted research into a Hebrew brief.
+
+Validated briefs are stored as Markdown with metadata in SQLite and published on an
+Admin-configurable schedule. One standalone Node service runs the public site,
+secure Admin, feedback, alerts, and the embedded scheduler. Reader requests never
+call an AI model.
 
 ```
 AI creates content  ->  code validates it  ->  SQLite + files store it  ->  the website displays it
@@ -25,7 +25,7 @@ AI creates content  ->  code validates it  ->  SQLite + files store it  ->  the 
 | `packages/core/`    | Shared TypeScript: metadata schema, enums, deterministic validators. |
 | `packages/db/`      | SQLite access layer and schema for the metadata database. |
 | `packages/demo-data/` | Destructive development-only utility for resetting and filling a local content store with valid fake data. |
-| `packages/pipeline/`| The daily generation engine (web research → evidence validation → writing → gap check → validation). |
+| `packages/pipeline/` | The daily generation engine (staged web research → validation → writing → persistence). |
 | `packages/publisher/` | Safe local publication transition with a durable SQLite lease. |
 | `scripts/`          | Operational scripts (e.g. reset login-attempt counters). |
 | `tech_briefs/`      | Default content store: `daily/` Markdown briefs + `meta/` SQLite DB. |
@@ -47,8 +47,10 @@ npm run publish:brief
 npm start
 ```
 
-Copy `.env.example` to `.env`, set a unique `ADMIN_PASSWORD` of at least 14
-characters, fill the remaining secrets, and run the single production service:
+Copy `.env.example` to `.env` and set a unique `ADMIN_PASSWORD` of at least 14
+characters plus a unique `ADMIN_SESSION_SECRET` of at least 32 characters. AI
+credentials are required only when generation will run, either manually or through
+the embedded scheduler. Start the single application service with:
 
 ```sh
 npm run build
@@ -87,14 +89,10 @@ existing dataset before writing anything. See
 [`packages/demo-data/README.md`](packages/demo-data/README.md) for flags, retained
 tables, and reset behavior.
 
-Public index pages use a short-lived in-process snapshot of SQLite metadata, while a
-daily page reads its Markdown only when requested. Writes made by Admin or the
-embedded scheduler invalidate the snapshot immediately; changes made by a separate
-process appear after `SITE_SNAPSHOT_CACHE_TTL_SECONDS` (10 seconds by default). A
-missing database produces a valid first-run state. Markdown written through the
-pipeline or Admin is validated before persistence; if a published file is later
-missing, only its requested daily page fails rather than every metadata-driven page.
-Set `SITE_URL` to the production origin for canonical URLs.
+Public pages cache SQLite metadata briefly and load Markdown only for the requested
+daily edition. Admin and embedded-scheduler writes invalidate the cache immediately.
+See [`docs/architecture.md`](docs/architecture.md) and
+[`docs/deployment.md`](docs/deployment.md) for runtime details.
 
 ## Status
 

@@ -1,6 +1,7 @@
 export {
   expectedBriefRelativePath,
   isCalendarDate,
+  isClockTime,
   isUtcTimestamp,
 } from "./date.js";
 export {
@@ -16,6 +17,12 @@ export {
   validateDayMetadata,
 } from "./metadata.js";
 export { validateBriefArtifact } from "./artifact.js";
+export {
+  DEFAULT_PIPELINE_SETTINGS,
+  PIPELINE_SETTINGS_LIMITS,
+  validatePipelineSettings,
+  type PipelineSettings,
+} from "./pipeline-settings.js";
 export {
   BRIEF_STATUSES,
   DAY_INTENSITIES,

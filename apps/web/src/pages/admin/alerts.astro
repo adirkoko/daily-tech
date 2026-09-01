@@ -51,6 +51,8 @@ const logItems: InboxItem[] = logs.map((log) => ({
 }));
 
 const items = [...ticketItems, ...logItems];
+const openAlertCount = alerts.filter((alert) => alert.status === "open").length;
+const resolvedAlertCount = alerts.length - openAlertCount;
 const filterGroups = [
   {
     key: "type",
@@ -71,6 +73,25 @@ const filterGroups = [
 ];
 ---
 <AdminLayout title="התראות">
-  <div class="admin-title"><div><p class="eyebrow">System</p><h1>התראות מערכת</h1></div></div>
-  <InboxList items={items} filterGroups={filterGroups} csrf={csrf} emptyText="אין התראות שתואמות לסינון." />
+  <section class="inbox-page inbox-page-alerts">
+    <header class="inbox-hero">
+      <div class="inbox-hero-copy">
+        <span class="inbox-hero-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 4.3 2.6 18a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 4.3a2 2 0 0 0-3.4 0Z" /><path d="M12 9v4M12 17h.01" /></svg></span>
+        <div><p class="inbox-eyebrow">System health</p><h1>התראות מערכת</h1><p>תקלות פעילות, אירועי כשל והיסטוריית טיפול במקום אחד.</p></div>
+      </div>
+      <dl class="inbox-overview" aria-label="סיכום התראות">
+        <div class="is-primary"><dt>דורשות טיפול</dt><dd>{openAlertCount}</dd></div>
+        <div><dt>אירועי כשל</dt><dd>{logs.length}</dd></div>
+        <div><dt>התראות שטופלו</dt><dd>{resolvedAlertCount}</dd></div>
+      </dl>
+    </header>
+    <InboxList
+      items={items}
+      filterGroups={filterGroups}
+      csrf={csrf}
+      variant="alerts"
+      searchPlaceholder="חיפוש בהתראות ובלוגים…"
+      emptyText="אין התראות או לוגים שתואמים לחיפוש ולסינון שבחרת."
+    />
+  </section>
 </AdminLayout>

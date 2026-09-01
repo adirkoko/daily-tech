@@ -3,17 +3,18 @@
 Generates one cited, validated Hebrew technology brief for the previous Israel
 calendar day.
 
-The package coordinates model-native web research, story-level validation,
-code-assigned IDs, structured writing, one narrow Gap Check, optional Revision, final
-Markdown rendering, and persistence. The full stage contract is documented in
+The package coordinates staged model-native research, deterministic evidence
+validation, code-assigned IDs, a single structured writing pass, Markdown rendering,
+and persistence. The full stage contract is documented in
 [`docs/pipeline.md`](../../docs/pipeline.md).
 
 ## Boundaries
 
-- `NewsResearchProvider` owns research scope, significance, stories, and Gap Check.
+- `NewsResearchProvider` owns research scope, significance, discovery, gap
+  checking, and deep research.
 - `AiWebResearchClient` owns provider web-search tools, structured output, and
   machine-readable citations.
-- `BriefWriter` writes only from accepted `ResearchedStory[]` and cannot search.
+- `BriefWriter` writes only from accepted `DeepResearchedStory[]` and cannot search.
 - `@daily-tech/core` validates the final Markdown and metadata artifact.
 - External research, writing, persistence, logging, and failure reporting are
   dependency-injected for tests.

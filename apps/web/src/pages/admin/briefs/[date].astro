@@ -1,6 +1,7 @@
 ---
 export const prerender = false;
 import AdminLayout from "../../../layouts/AdminLayout.astro";
+import EditorFormControls from "../../../components/EditorFormControls.astro";
 import { loadAdminBrief } from "../../../server/admin-content.js";
 
 const date = Astro.params.date ?? "";
@@ -147,6 +148,8 @@ const intensityIndex = Math.max(0, INTENSITY_OPTIONS.findIndex((option) => optio
     </form>
   </section>
 
+  <EditorFormControls />
+
   <dialog class="confirm-dialog" data-delete-dialog>
     <form method="dialog" class="confirm-dialog-body">
       <h2>מחיקת התדריך</h2>
@@ -166,25 +169,6 @@ const intensityIndex = Math.max(0, INTENSITY_OPTIONS.findIndex((option) => optio
       const markdownEl = editor.querySelector("#markdown");
       const csrf = form.querySelector('[name="csrf_token"]').value;
 
-      // Enter inside a single-line input must not implicitly submit (save) the form.
-      form.addEventListener("keydown", (event) => {
-        if (event.key === "Enter" && event.target instanceof HTMLInputElement) {
-          event.preventDefault();
-        }
-      });
-
-      editor.querySelectorAll("[data-segmented]").forEach((seg) => {
-        const inputs = Array.from(seg.querySelectorAll("input"));
-        seg.style.setProperty("--count", String(inputs.length));
-        const sync = () => {
-          const index = Math.max(0, inputs.findIndex((input) => input.checked));
-          seg.style.setProperty("--index", String(index));
-          inputs.forEach((input) => input.closest("label").classList.toggle("is-active", input.checked));
-        };
-        seg.addEventListener("change", sync);
-        sync();
-      });
-
       const copyButton = editor.querySelector("[data-copy]");
       copyButton?.addEventListener("click", async () => {
         try {
@@ -199,37 +183,6 @@ const intensityIndex = Math.max(0, INTENSITY_OPTIONS.findIndex((option) => optio
         if (mdCount) mdCount.textContent = markdownEl.value.length.toLocaleString("he-IL") + " תווים";
       };
       updateCount();
-
-      editor.querySelectorAll("[data-chip-list]").forEach((list) => {
-        const name = list.dataset.chipName;
-        const field = list.closest("[data-chip-field]");
-        const addRow = (value) => {
-          const row = document.createElement("div");
-          row.className = "chip-row";
-          const input = document.createElement("input");
-          input.className = "chip-input";
-          input.name = name;
-          input.maxLength = 200;
-          input.value = value || "";
-          const remove = document.createElement("button");
-          remove.type = "button";
-          remove.className = "chip-remove";
-          remove.dataset.chipRemove = "";
-          remove.setAttribute("aria-label", "הסרה");
-          remove.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 12h12" /></svg>';
-          row.append(input, remove);
-          list.append(row);
-          return input;
-        };
-        field.querySelector("[data-chip-add]")?.addEventListener("click", () => addRow().focus());
-        list.addEventListener("click", (event) => {
-          const button = event.target.closest("[data-chip-remove]");
-          if (!button) return;
-          const rows = list.querySelectorAll(".chip-row");
-          if (rows.length > 1) button.closest(".chip-row").remove();
-          else button.closest(".chip-row").querySelector(".chip-input").value = "";
-        });
-      });
 
       const previewBody = editor.querySelector("[data-preview-body]");
       let previewTimer;

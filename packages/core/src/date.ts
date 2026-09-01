@@ -49,6 +49,13 @@ export function expectedBriefRelativePath(date: string): string | null {
   return `${year}/${month}/${date}/${date}-tech_briefs.md`;
 }
 
+const CLOCK_TIME_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+/** A 24-hour "HH:MM" time of day, e.g. "01:00". No seconds, no time zone. */
+export function isClockTime(value: string): boolean {
+  return CLOCK_TIME_PATTERN.test(value);
+}
+
 export function isUtcTimestamp(value: string): boolean {
   const match = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d{1,3}))?Z$/.exec(
     value,

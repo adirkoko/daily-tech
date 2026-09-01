@@ -1,20 +1,9 @@
 import type { APIRoute } from "astro";
 import { isBriefStatus, isCalendarDate, isDayIntensity } from "@daily-tech/core";
-import { deleteAdminBrief, saveAdminBrief, stringList } from "../../../../server/admin-content.js";
+import { deleteAdminBrief, listField, saveAdminBrief } from "../../../../server/admin-content.js";
 import { field, integerField, protectedForm, redirectWith } from "../../../../server/http.js";
 
 export const prerender = false;
-
-/** Joins repeated form entries (one per chip input) into the newline-delimited
- * form `stringList` expects. A single value still works unchanged. */
-function listField(form: FormData, name: string, maximum: number): readonly string[] {
-  const joined = form
-    .getAll(name)
-    .map((entry) => (typeof entry === "string" ? entry : ""))
-    .join("\n");
-  if (joined.length > maximum) throw new TypeError(`${name} is invalid.`);
-  return stringList(joined);
-}
 
 export const POST: APIRoute = async (context) => {
   const form = await protectedForm(context);

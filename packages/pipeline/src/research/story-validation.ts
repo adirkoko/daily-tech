@@ -3,12 +3,14 @@ import { isCalendarDate } from "@daily-tech/core";
 import type { PipelineContext } from "../types.js";
 import { deduplicateStoryInputs, representedByExistingStory } from "./deduplication.js";
 import type {
-  GapResearchBatch,
+  CandidateStory,
+  CandidateStoryInput,
+  DeepResearchBatch,
+  DeepResearchedStory,
+  DeepResearchedStoryInput,
+  DiscoveryBatch,
   Importance,
   RejectedResearchStory,
-  ResearchedStory,
-  ResearchBatch,
-  ResearchStoryInput,
   StoryIdFactory,
 } from "./contracts.js";
 
@@ -23,46 +25,48 @@ export class ResearchProcessingError extends Error {
   }
 }
 
-export interface ProcessedResearchStories {
-  readonly stories: readonly ResearchedStory[];
+export interface ProcessedCandidates {
+  readonly stories: readonly CandidateStory[];
 }
 
-export function finalizeResearchBatch(
-  batch: ResearchBatch,
+export function finalizeDiscoveryBatch(
+  batch: DiscoveryBatch,
   context: PipelineContext,
   minimumImportance: Importance,
   storyIds: StoryIdFactory,
-): ProcessedResearchStories {
-  const validated = validateStories(batch.stories, context, minimumImportance);
+): ProcessedCandidates {
+  const validated = validateCandidates(batch.stories, context, minimumImportance);
   const deduplicated = deduplicateStoryInputs(validated.stories);
   const rejectedStories = [...batch.rejectedStories, ...validated.rejectedStories];
   assertNotEntirelyRejected(
     batch.stories.length + batch.rejectedStories.length,
     deduplicated.length,
-    "research",
+    "discovery",
     rejectedStories,
   );
   return { stories: assignIds(deduplicated, storyIds) };
 }
 
-export function finalizeGapBatch(
-  batch: GapResearchBatch,
-  existingStories: readonly ResearchedStory[],
+/** Used for both the general gap check and admin-keyword-focused research — they
+ *  share the same "here's what we have, what's missing" shape. */
+export function finalizeFocusedDiscoveryBatch(
+  batch: DiscoveryBatch,
+  existingStories: readonly CandidateStory[],
   context: PipelineContext,
   minimumImportance: Importance,
   storyIds: StoryIdFactory,
-): ProcessedResearchStories {
-  const validated = validateStories(batch.missingStories, context, minimumImportance);
+): ProcessedCandidates {
+  const validated = validateCandidates(batch.stories, context, minimumImportance);
   const uniqueMissing = deduplicateStoryInputs(validated.stories).filter(
     (story) => !representedByExistingStory(story, existingStories),
   );
   const rejectedStories = [...batch.rejectedStories, ...validated.rejectedStories];
   assertNotEntirelyRejected(
-    batch.missingStories.length + batch.rejectedStories.length,
+    batch.stories.length + batch.rejectedStories.length,
     uniqueMissing.length,
-    "gap research",
+    "focused discovery",
     rejectedStories,
-    batch.missingStories.length > 0 && uniqueMissing.length === 0,
+    batch.stories.length > 0 && uniqueMissing.length === 0,
   );
   return {
     stories: assignIds(
@@ -73,12 +77,12 @@ export function finalizeGapBatch(
   };
 }
 
-function validateStories(
-  stories: readonly ResearchStoryInput[],
+function validateCandidates(
+  stories: readonly CandidateStoryInput[],
   context: PipelineContext,
   minimumImportance: Importance,
-): { stories: readonly ResearchStoryInput[]; rejectedStories: readonly RejectedResearchStory[] } {
-  const accepted: ResearchStoryInput[] = [];
+): { stories: readonly CandidateStoryInput[]; rejectedStories: readonly RejectedResearchStory[] } {
+  const accepted: CandidateStoryInput[] = [];
   const rejected: RejectedResearchStory[] = [];
   stories.forEach((story, index) => {
     try {
@@ -98,11 +102,11 @@ function validateStories(
 /**
  * Deliberately narrow: only what code can check without judgment. Evidence
  * wording quality and not inventing precision are the model's job (see the
- * research prompt) — `occurredOn`, the calendar day and nothing finer, is the
+ * research prompts) — `occurredOn`, the calendar day and nothing finer, is the
  * one hard, unambiguous date check the rest of the system relies on.
  */
 export function validateStoryEvidence(
-  story: ResearchStoryInput,
+  story: CandidateStoryInput,
   context: PipelineContext,
   minimumImportance: Importance,
 ): void {
@@ -115,15 +119,14 @@ export function validateStoryEvidence(
   if (story.eventDateEvidence.eventDate !== story.occurredOn) {
     throw new TypeError("Event-date evidence does not match occurredOn.");
   }
-  if (story.keyFacts.length === 0) throw new TypeError("Story must include key facts.");
   if (story.sources.length === 0) throw new TypeError("Story must include sources.");
 }
 
 function assignIds(
-  stories: readonly ResearchStoryInput[],
+  stories: readonly CandidateStoryInput[],
   storyIds: StoryIdFactory,
   reservedIds: Set<string> = new Set(),
-): readonly ResearchedStory[] {
+): readonly CandidateStory[] {
   return stories.map((story) => {
     const id = storyIds.create().trim();
     if (id.length === 0) {
@@ -135,6 +138,70 @@ function assignIds(
     reservedIds.add(id);
     return { id, ...story };
   });
+}
+
+// ---- Deep research ----
+
+export interface ProcessedDeepResearch {
+  readonly stories: readonly DeepResearchedStory[];
+}
+
+/**
+ * Ties each returned dossier back to the candidate it investigated. A candidateId
+ * that does not match a supplied candidate, or is reused across two dossiers, is a
+ * contract violation code can catch objectively — which candidates the model chose
+ * to keep at all is its call, not checked here.
+ */
+export function finalizeDeepResearchBatch(
+  batch: DeepResearchBatch,
+  candidates: readonly CandidateStory[],
+  context: PipelineContext,
+  maximumStories: number,
+): ProcessedDeepResearch {
+  if (batch.stories.length > maximumStories) {
+    throw new ResearchProcessingError(
+      `Deep research returned ${batch.stories.length} stories, exceeding the configured maximum of ${maximumStories}.`,
+    );
+  }
+
+  const candidatesById = new Map(candidates.map((candidate) => [candidate.id, candidate]));
+  const seenCandidateIds = new Set<string>();
+  const accepted: DeepResearchedStory[] = [];
+  const rejected: RejectedResearchStory[] = [];
+
+  batch.stories.forEach((story, index) => {
+    try {
+      const candidate = candidatesById.get(story.candidateId);
+      if (candidate === undefined) {
+        throw new TypeError(`candidateId does not match a supplied candidate: ${story.candidateId}`);
+      }
+      if (seenCandidateIds.has(story.candidateId)) {
+        throw new TypeError(`candidateId was returned more than once: ${story.candidateId}`);
+      }
+      validateDeepStoryEvidence(story, context);
+      seenCandidateIds.add(story.candidateId);
+      accepted.push({ ...story, id: candidate.id });
+    } catch (error) {
+      rejected.push({
+        index,
+        title: typeof story.title === "string" ? story.title : null,
+        reason: error instanceof Error ? error.message : "Unknown evidence validation failure.",
+      });
+    }
+  });
+
+  assertNotEntirelyRejected(batch.stories.length, accepted.length, "deep research", rejected);
+  return { stories: accepted };
+}
+
+function validateDeepStoryEvidence(story: DeepResearchedStoryInput, context: PipelineContext): void {
+  if (!isCalendarDate(story.occurredOn) || story.occurredOn !== context.window.date) {
+    throw new TypeError("Story occurredOn is outside the research calendar date.");
+  }
+  if (story.eventDateEvidence.eventDate !== story.occurredOn) {
+    throw new TypeError("Event-date evidence does not match occurredOn.");
+  }
+  if (story.sources.length === 0) throw new TypeError("Story must include sources.");
 }
 
 /**

@@ -14,6 +14,8 @@ Typed SQLite persistence for Daily Tech, built on `better-sqlite3`.
 - Store feedback/System tickets and their open/resolved lifecycle.
 - Atomically count admin-login and feedback attempts inside fixed rate-limit windows.
 - Lease publication attempts and persist trigger success/failure for safe retries.
+- Store the single operator-tunable pipeline settings row (`pipeline_settings`),
+  always present with valid defaults after migration.
 
 ## Usage
 

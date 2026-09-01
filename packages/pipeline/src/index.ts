@@ -21,6 +21,7 @@ export {
   parseResponsesPayload,
   type OpenAiResponsesWebResearchClientOptions,
 } from "./ai/web-research-client.js";
+export { withAiRetry, type AiRetryOptions } from "./ai/retry.js";
 export { loadPipelineEnvironment, type PipelineEnvironmentConfig } from "./config.js";
 export { createProductionPipeline, type ProductionPipelineOptions } from "./factory.js";
 export {
@@ -31,6 +32,7 @@ export {
   DailyBriefPipeline,
   type DailyBriefPipelineDependencies,
   type DailyBriefPipelineOptions,
+  type RunPipelineOptions,
 } from "./orchestrator.js";
 export { DatabaseFailureReporter, DatabasePipelineLogger } from "./operations-adapters.js";
 export {
@@ -44,20 +46,23 @@ export {
   EVENT_DATE_EVIDENCE_KINDS,
   RESEARCH_CATEGORIES,
   SOURCE_TYPES,
+  type CandidateStory,
+  type CandidateStoryInput,
+  type DeepResearchBatch,
+  type DeepResearchedStory,
+  type DeepResearchedStoryInput,
+  type DeepResearchRequest,
+  type DiscoveryBatch,
   type EventDateEvidence,
   type EventDateEvidenceKind,
-  type GapResearchBatch,
-  type GapResearchRequest,
+  type FocusedDiscoveryRequest,
   type Importance,
+  type LightDiscoveryRequest,
+  type NewsDiscoveryScope,
   type NewsResearchProvider,
-  type NewsResearchRequest,
-  type NewsResearchScope,
   type RejectedResearchStory,
-  type ResearchedStory,
-  type ResearchBatch,
   type ResearchCategory,
   type ResearchSource,
-  type ResearchStoryInput,
   type SourceType,
   type StoryIdFactory,
 } from "./research/contracts.js";
@@ -69,9 +74,12 @@ export {
 } from "./research/model-news-research-provider.js";
 export {
   ResearchProcessingError,
-  finalizeGapBatch,
-  finalizeResearchBatch,
+  finalizeDeepResearchBatch,
+  finalizeDiscoveryBatch,
+  finalizeFocusedDiscoveryBatch,
   validateStoryEvidence,
+  type ProcessedCandidates,
+  type ProcessedDeepResearch,
 } from "./research/story-validation.js";
 export { randomStoryIdFactory } from "./research/story-id.js";
 export type {
@@ -104,7 +112,6 @@ export type {
   DraftWorthWatchingItem,
   GeneratedDayMetadata,
   ModelBriefWriterOptions,
-  RevisionRequest,
 } from "./writing/contracts.js";
 export { renderBriefMarkdown } from "./writing/render-markdown.js";
 export { previousIsraelDayWindow } from "./window.js";

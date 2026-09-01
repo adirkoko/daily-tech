@@ -6,6 +6,7 @@ import {
   type AiWebResearchResult,
   type ProviderCitation,
 } from "./contracts.js";
+import { withAiRetry, type AiRetryOptions } from "./retry.js";
 
 export interface OpenAiResponsesWebResearchClientOptions {
   readonly apiKey: string;
@@ -15,6 +16,10 @@ export interface OpenAiResponsesWebResearchClientOptions {
   readonly maxToolCalls?: number;
   readonly headers?: Readonly<Record<string, string>>;
   readonly fetch?: typeof globalThis.fetch;
+  /** Retry behavior for a transient failure (429/5xx, or a malformed-but-200
+   *  envelope such as a missing web-search call or missing citations) — see
+   *  ./retry.js. Defaults apply when omitted. */
+  readonly retry?: AiRetryOptions;
 }
 
 export class OpenAiResponsesWebResearchClient implements AiWebResearchClient {
@@ -25,6 +30,7 @@ export class OpenAiResponsesWebResearchClient implements AiWebResearchClient {
   readonly #maxToolCalls: number;
   readonly #headers: Readonly<Record<string, string>>;
   readonly #fetch: typeof globalThis.fetch;
+  readonly #retry: Omit<AiRetryOptions, "signal">;
 
   constructor(options: OpenAiResponsesWebResearchClientOptions) {
     if (options.apiKey.trim().length === 0) throw new TypeError("apiKey cannot be empty.");
@@ -46,6 +52,7 @@ export class OpenAiResponsesWebResearchClient implements AiWebResearchClient {
     this.#model = options.model;
     this.#headers = options.headers ?? {};
     this.#fetch = options.fetch ?? globalThis.fetch;
+    this.#retry = options.retry ?? {};
   }
 
   async execute(request: AiWebResearchRequest): Promise<AiWebResearchResult> {
@@ -55,7 +62,21 @@ export class OpenAiResponsesWebResearchClient implements AiWebResearchClient {
     if (request.schemaName.trim().length === 0) {
       throw new TypeError("schemaName cannot be empty.");
     }
+    const maxToolCalls = request.maxToolCalls ?? this.#maxToolCalls;
+    if (!Number.isInteger(maxToolCalls) || maxToolCalls < 1) {
+      throw new RangeError("maxToolCalls must be a positive integer.");
+    }
 
+    return withAiRetry(
+      () => this.#performRequest(request, maxToolCalls),
+      { ...this.#retry, ...(request.signal === undefined ? {} : { signal: request.signal }) },
+    );
+  }
+
+  async #performRequest(
+    request: AiWebResearchRequest,
+    maxToolCalls: number,
+  ): Promise<AiWebResearchResult> {
     const abortController = new AbortController();
     const onAbort = (): void => abortController.abort(request.signal?.reason);
     if (request.signal?.aborted === true) onAbort();
@@ -76,7 +97,7 @@ export class OpenAiResponsesWebResearchClient implements AiWebResearchClient {
           input: JSON.stringify(request.input),
           tools: [{ type: "web_search" }],
           tool_choice: "required",
-          max_tool_calls: this.#maxToolCalls,
+          max_tool_calls: maxToolCalls,
           include: ["web_search_call.action.sources"],
           text: {
             format: {
@@ -95,6 +116,8 @@ export class OpenAiResponsesWebResearchClient implements AiWebResearchClient {
         throw new AiProviderError(
           `AI web-research provider returned HTTP ${response.status}${body ? `: ${body}` : "."}`,
           response.status,
+          undefined,
+          parseRetryAfterMs(response),
         );
       }
       const payload = await readJsonResponse(response);
@@ -113,6 +136,15 @@ export class OpenAiResponsesWebResearchClient implements AiWebResearchClient {
       request.signal?.removeEventListener("abort", onAbort);
     }
   }
+}
+
+function parseRetryAfterMs(response: Response): number | null {
+  const header = response.headers.get("retry-after");
+  if (header === null) return null;
+  const seconds = Number(header);
+  if (Number.isFinite(seconds) && seconds >= 0) return Math.round(seconds * 1_000);
+  const untilMs = Date.parse(header);
+  return Number.isNaN(untilMs) ? null : Math.max(0, untilMs - Date.now());
 }
 
 async function readJsonResponse(response: Response): Promise<unknown> {

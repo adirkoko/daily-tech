@@ -1,24 +1,31 @@
 import { randomUUID } from "node:crypto";
 
 import {
+  DEFAULT_PIPELINE_SETTINGS,
   expectedBriefRelativePath,
   validateBriefArtifact,
   type BriefArtifact,
   type DayMetadata,
+  type PipelineSettings,
 } from "@daily-tech/core";
 
 import { ArtifactValidationError, PipelineRunError } from "./errors.js";
 import {
   RESEARCH_CATEGORIES,
   SOURCE_TYPES,
+  type CandidateStory,
+  type DeepResearchedStory,
   type Importance,
+  type NewsDiscoveryScope,
   type NewsResearchProvider,
-  type NewsResearchScope,
-  type ResearchedStory,
   type StoryIdFactory,
 } from "./research/contracts.js";
 import { randomStoryIdFactory } from "./research/story-id.js";
-import { finalizeGapBatch, finalizeResearchBatch } from "./research/story-validation.js";
+import {
+  finalizeDeepResearchBatch,
+  finalizeDiscoveryBatch,
+  finalizeFocusedDiscoveryBatch,
+} from "./research/story-validation.js";
 import type {
   ArtifactSink,
   Clock,
@@ -48,45 +55,54 @@ export interface DailyBriefPipelineDependencies {
 export interface DailyBriefPipelineOptions {
   readonly storageRoot?: string;
   readonly minimumImportance?: Importance;
-  readonly maximumStories?: number;
-  readonly maximumMissingStories?: number;
+  /** Safety cap on one discovery/gap/keyword call's own output size — an API-shape
+   *  guard, not an editorial setting. */
+  readonly maximumCandidatesPerCall?: number;
+  /** Exceptional safety valve bounding how many merged candidates may be sent into
+   *  deep research at all on a pathologically busy day. Never the normal editorial
+   *  selection mechanism — that stays the model's call inside deep research,
+   *  guided by the operator's maximumStories setting. */
+  readonly maximumDiscoveryCandidates?: number;
+}
+
+export interface RunPipelineOptions {
+  readonly runAt?: Date;
+  readonly settings?: PipelineSettings;
 }
 
 const systemClock: Clock = { now: () => new Date() };
 const silentLogger: PipelineLogger = { log: () => undefined };
-const defaultScope: NewsResearchScope = {
-  categories: RESEARCH_CATEGORIES,
-  minimumImportance: 3,
-  maximumStories: 20,
-  preferredSourceTypes: SOURCE_TYPES,
-};
 
 export class DailyBriefPipeline {
   readonly #dependencies: Required<DailyBriefPipelineDependencies>;
   readonly #storageRoot: string;
-  readonly #scope: NewsResearchScope;
-  readonly #maximumMissingStories: number;
+  readonly #scope: NewsDiscoveryScope;
+  readonly #minimumImportance: Importance;
+  readonly #maximumCandidatesPerCall: number;
+  readonly #maximumDiscoveryCandidates: number;
 
   constructor(
     dependencies: DailyBriefPipelineDependencies,
     options: DailyBriefPipelineOptions = {},
   ) {
-    this.#maximumMissingStories = boundedInteger(
-      options.maximumMissingStories ?? 4,
-      1,
-      12,
-      "maximumMissingStories",
-    );
-    const maximumStories = boundedInteger(
-      options.maximumStories ?? defaultScope.maximumStories,
+    this.#minimumImportance = options.minimumImportance ?? 3;
+    this.#maximumCandidatesPerCall = boundedInteger(
+      options.maximumCandidatesPerCall ?? 20,
       1,
       30,
-      "maximumStories",
+      "maximumCandidatesPerCall",
+    );
+    this.#maximumDiscoveryCandidates = boundedInteger(
+      options.maximumDiscoveryCandidates ?? 40,
+      5,
+      100,
+      "maximumDiscoveryCandidates",
     );
     this.#scope = {
-      ...defaultScope,
-      minimumImportance: options.minimumImportance ?? defaultScope.minimumImportance,
-      maximumStories,
+      categories: RESEARCH_CATEGORIES,
+      minimumImportance: this.#minimumImportance,
+      maximumCandidatesPerCall: this.#maximumCandidatesPerCall,
+      preferredSourceTypes: SOURCE_TYPES,
     };
     this.#storageRoot = (options.storageRoot ?? "tech_briefs/daily")
       .replaceAll("\\", "/")
@@ -101,7 +117,9 @@ export class DailyBriefPipeline {
     };
   }
 
-  async run(runAt = this.#dependencies.clock.now()): Promise<PipelineRunResult> {
+  async run(options: RunPipelineOptions = {}): Promise<PipelineRunResult> {
+    const runAt = options.runAt ?? this.#dependencies.clock.now();
+    const settings = options.settings ?? DEFAULT_PIPELINE_SETTINGS;
     const window = previousIsraelDayWindow(runAt);
     const runId = this.#dependencies.createRunId();
     if (runId.trim().length === 0) throw new Error("createRunId returned an empty identifier.");
@@ -129,59 +147,99 @@ export class DailyBriefPipeline {
     };
 
     try {
-      const rawResearch = await executeStage("research", () =>
-        this.#dependencies.researchProvider.research({ context, scope: this.#scope }),
+      // 1. Light discovery: broad, shallow — find what happened, not why it matters.
+      const lightBatch = await executeStage("light_discovery", () =>
+        this.#dependencies.researchProvider.discover({ context, scope: this.#scope }),
       );
-      const processedResearch = await executeStage("research_validation", async () =>
-        finalizeResearchBatch(
-          rawResearch,
-          context,
-          this.#scope.minimumImportance,
-          this.#dependencies.storyIds,
-        ),
-      );
-      let stories = [...processedResearch.stories];
+      let candidates: readonly CandidateStory[] = finalizeDiscoveryBatch(
+        lightBatch,
+        context,
+        this.#minimumImportance,
+        this.#dependencies.storyIds,
+      ).stories;
 
-      const hadStoriesFromResearch = stories.length > 0;
-      let draft: BriefDraft = hadStoriesFromResearch
-        ? await executeStage("draft", () => this.#dependencies.writer.write(context, stories))
+      // 2. Gap discovery: did the broad pass miss anything material?
+      if (settings.gapDiscoveryEnabled) {
+        const gapBatch = await executeStage("gap_discovery", () =>
+          this.#dependencies.researchProvider.findGaps({
+            context,
+            existingStories: candidates,
+            minimumImportance: this.#minimumImportance,
+            maximumCandidatesPerCall: this.#maximumCandidatesPerCall,
+          }),
+        );
+        const gapCandidates = finalizeFocusedDiscoveryBatch(
+          gapBatch,
+          candidates,
+          context,
+          this.#minimumImportance,
+          this.#dependencies.storyIds,
+        ).stories;
+        candidates = [...candidates, ...gapCandidates];
+      }
+
+      // 3. Admin keywords: extra attention on operator-chosen areas, never an
+      // inclusion requirement. Skipped entirely — no model call — when disabled or
+      // when the operator has not configured any keywords.
+      if (settings.adminKeywordsResearchEnabled && settings.adminKeywords.length > 0) {
+        const keywordBatch = await executeStage("keyword_discovery", () =>
+          this.#dependencies.researchProvider.findGaps({
+            context,
+            existingStories: candidates,
+            minimumImportance: this.#minimumImportance,
+            maximumCandidatesPerCall: this.#maximumCandidatesPerCall,
+            focusKeywords: settings.adminKeywords,
+          }),
+        );
+        const keywordCandidates = finalizeFocusedDiscoveryBatch(
+          keywordBatch,
+          candidates,
+          context,
+          this.#minimumImportance,
+          this.#dependencies.storyIds,
+        ).stories;
+        candidates = [...candidates, ...keywordCandidates];
+      }
+
+      // 4. Merge already happened above (each stage dedupes against what came
+      // before it). This is only an exceptional safety valve for a pathologically
+      // busy day — never the normal editorial selection, which stays the model's
+      // call inside deep research, guided by settings.maximumStories.
+      const boundedCandidates = candidates.length > this.#maximumDiscoveryCandidates
+        ? [...candidates].sort((a, b) => b.importance - a.importance).slice(0, this.#maximumDiscoveryCandidates)
+        : candidates;
+
+      // 5. Deep research: one call covering every candidate, however many searches
+      // it needs. The model decides which candidates hold up, up to maximumStories.
+      let stories: readonly DeepResearchedStory[] = [];
+      if (boundedCandidates.length > 0) {
+        const deepBatch = await executeStage("deep_research", () =>
+          this.#dependencies.researchProvider.deepResearch({
+            context,
+            candidates: boundedCandidates,
+            maximumStories: settings.maximumStories,
+            editorialInstructions: settings.editorialInstructions,
+          }),
+        );
+        stories = finalizeDeepResearchBatch(
+          deepBatch,
+          boundedCandidates,
+          context,
+          settings.maximumStories,
+        ).stories;
+      }
+
+      // 6. Draft: a single edit pass, no web search, no revision loop.
+      const draft: BriefDraft = stories.length > 0
+        ? await executeStage("draft", () =>
+            this.#dependencies.writer.write(context, stories, settings.editorialInstructions),
+          )
         : await executeStage("draft", async () => createQuietDayDraft());
       await executeStage("draft_validation", async () =>
         validateDraftAgainstStories(draft, stories),
       );
 
-      // Exactly one Gap Check, exactly one Revision at most — never a loop. Live web
-      // research can always surface one more thing; a loop chasing zero missing
-      // stories has no natural end. One check, one fix, then move on.
-      const gapResult = await executeStage("gap_check", () =>
-        this.#dependencies.researchProvider.findGaps({
-          context,
-          existingStories: stories,
-          draft,
-          minimumImportance: this.#scope.minimumImportance,
-          maximumMissingStories: this.#maximumMissingStories,
-        }),
-      );
-      const processedGap = finalizeGapBatch(
-        gapResult,
-        stories,
-        context,
-        this.#scope.minimumImportance,
-        this.#dependencies.storyIds,
-      );
-      if (processedGap.stories.length > 0) {
-        const missingStories = processedGap.stories;
-        stories = [...stories, ...missingStories];
-        draft = await executeStage("revision", () =>
-          hadStoriesFromResearch
-            ? this.#dependencies.writer.revise({ context, stories, draft, missingStories })
-            : this.#dependencies.writer.write(context, stories),
-        );
-        await executeStage("draft_validation", async () =>
-          validateDraftAgainstStories(draft, stories),
-        );
-      }
-
+      // 7-8. Validate mechanically, then persist as ready.
       const artifact = await executeStage("validate", async () =>
         this.#buildAndValidateArtifact(context, draft, stories, createdAt),
       );
@@ -221,7 +279,7 @@ export class DailyBriefPipeline {
   #buildAndValidateArtifact(
     context: PipelineContext,
     draft: BriefDraft,
-    stories: readonly ResearchedStory[],
+    stories: readonly DeepResearchedStory[],
     createdAt: string,
   ): BriefArtifact {
     const relativePath = expectedBriefRelativePath(context.window.date);
@@ -245,7 +303,7 @@ export class DailyBriefPipeline {
   }
 }
 
-function countUniqueSources(stories: readonly ResearchedStory[]): number {
+function countUniqueSources(stories: readonly DeepResearchedStory[]): number {
   return new Set(stories.flatMap(({ sources }) => sources.map(({ url }) => url))).size;
 }
 

@@ -4,7 +4,16 @@ export {
   type OpenDatabaseOptions,
   type PublishReadyDayResult,
 } from "./database.js";
-export { DatabaseIntegrityError, MetadataValidationError } from "./errors.js";
+export {
+  DatabaseIntegrityError,
+  MetadataValidationError,
+  PipelineSettingsIntegrityError,
+  PipelineSettingsValidationError,
+} from "./errors.js";
+export {
+  PipelineSettingsStore,
+  type SavePipelineSettingsInput,
+} from "./pipeline-settings.js";
 export {
   LATEST_SCHEMA_VERSION,
   getSchemaVersion,

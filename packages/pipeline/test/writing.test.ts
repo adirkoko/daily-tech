@@ -10,7 +10,7 @@ import {
   type BriefDraft,
   type PipelineContext,
 } from "../src/index.js";
-import { firstStory, oneItemDraft } from "./fixtures.js";
+import { firstDeepStory, oneItemDraft } from "./fixtures.js";
 
 const context: PipelineContext = {
   runId: "run-1",
@@ -40,7 +40,7 @@ describe("writing boundary", () => {
     });
     const writer = new ModelBriefWriter({ client: { complete } });
 
-    await writer.write(context, [firstStory]);
+    await writer.write(context, [firstDeepStory], "");
 
     const prompt = complete.mock.calls[0]?.[0].messages[0]?.content ?? "";
     expect(prompt).toContain("only factual source of truth");
@@ -79,6 +79,24 @@ describe("writing boundary", () => {
     });
   });
 
+  it("treats editorial instructions as guidance, passed through the input rather than the prompt", async () => {
+    const complete = vi.fn<AiCompletionClient["complete"]>().mockResolvedValue({
+      content: JSON.stringify(draftResponseJson(oneItemDraft)),
+      model: "writer",
+    });
+    const writer = new ModelBriefWriter({ client: { complete } });
+
+    await writer.write(context, [firstDeepStory], "Give more weight to developer tools this week.");
+
+    const prompt = complete.mock.calls[0]?.[0].messages[0]?.content ?? "";
+    expect(prompt).toContain("never overrides the factual boundary above");
+    expect(prompt).toContain("when it is empty you simply have no additional guidance");
+    const input = JSON.parse(complete.mock.calls[0]?.[0].messages[1]?.content ?? "{}") as {
+      editorialInstructions: string;
+    };
+    expect(input.editorialInstructions).toBe("Give more weight to developer tools this week.");
+  });
+
   it("allows temperature only through an explicit writer opt-in", async () => {
     const complete = vi.fn<AiCompletionClient["complete"]>().mockResolvedValue({
       content: JSON.stringify(draftResponseJson(oneItemDraft)),
@@ -86,7 +104,7 @@ describe("writing boundary", () => {
     });
     const writer = new ModelBriefWriter({ client: { complete }, temperature: 0.2 });
 
-    await writer.write(context, [firstStory]);
+    await writer.write(context, [firstDeepStory], "");
 
     expect(complete.mock.calls[0]?.[0]).toMatchObject({ temperature: 0.2 });
   });
@@ -98,7 +116,7 @@ describe("writing boundary", () => {
     });
     const writer = new ModelBriefWriter({ client: { complete } });
 
-    const promise = writer.write(context, [firstStory]);
+    const promise = writer.write(context, [firstDeepStory], "");
 
     await expect(promise).rejects.toBeInstanceOf(DraftResponseValidationError);
     await expect(promise).rejects.toMatchObject({
@@ -122,7 +140,7 @@ describe("writing boundary", () => {
           sources: [{ url: "https://invented.example", label: "Invented" }],
         },
       ],
-    }, [firstStory]);
+    }, [firstDeepStory]);
 
     expect(attempt).toThrow(DraftResearchBoundaryError);
     // The failure message is what reaches the run_failed log and the System
@@ -132,11 +150,11 @@ describe("writing boundary", () => {
   });
 
   it("does not require every researched story to appear — the writer chooses what makes the edition", () => {
-    // firstStory is accepted research but never referenced by the draft; that is a
-    // legitimate editorial choice, not a boundary violation.
+    // firstDeepStory is accepted research but never referenced by the draft; that is
+    // a legitimate editorial choice, not a boundary violation.
     expect(() => validateDraftAgainstStories(
       { ...oneItemDraft, developments: [], worthWatching: [] },
-      [firstStory],
+      [firstDeepStory],
     )).not.toThrow();
   });
 

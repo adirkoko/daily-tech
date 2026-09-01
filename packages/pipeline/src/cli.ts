@@ -76,6 +76,7 @@ export async function runPipelineCli(
   await mkdir(dirname(config.databaseFile), { recursive: true });
   const database = DailyTechDatabase.open({ filename: config.databaseFile });
   try {
+    const settings = database.pipelineSettings.get();
     const pipeline = new DailyBriefPipeline(
       {
         researchProvider,
@@ -89,7 +90,10 @@ export async function runPipelineCli(
       },
       { storageRoot: config.dailyStorageRoot },
     );
-    const result = await pipeline.run(options.runAt);
+    const result = await pipeline.run({
+      ...(options.runAt === undefined ? {} : { runAt: options.runAt }),
+      settings,
+    });
     process.stdout.write(
       `${JSON.stringify({
         runId: result.runId,
@@ -142,7 +146,9 @@ async function runDryRun(
   process.stdout.write(
     `[dry-run] TARGET date=${previousIsraelDayWindow(options.runAt).date} output=${resolve(options.outputRoot)}\n`,
   );
-  const result = await pipeline.run(options.runAt);
+  // Dry-run never opens the database (see USAGE above), so it always uses the
+  // built-in default pipeline settings rather than the operator's saved ones.
+  const result = await pipeline.run({ runAt: options.runAt });
   const artifact = sink.requireArtifact();
   const paths = await exportDryRunArtifacts(artifact, events, options.outputRoot);
   process.stdout.write(

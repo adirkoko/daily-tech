@@ -63,6 +63,10 @@ To build and run the same application as one containerized service:
 docker compose up --build
 ```
 
+Set `SITE_URL` in `.env` to the exact public origin before building the image. Compose
+passes it into the Astro build so canonical URLs and trusted reverse-proxy origin
+reconstruction use the same host.
+
 For local development, keep the default `TECH_BRIEFS_ROOT` or point it at another
 content store. Set `ADMIN_SECURE_COOKIES=false` only while using local HTTP, then run:
 

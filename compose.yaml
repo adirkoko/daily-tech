@@ -2,6 +2,8 @@ services:
   daily-tech:
     build:
       context: .
+      args:
+        SITE_URL: ${SITE_URL:-http://localhost:4321}
     init: true
     restart: unless-stopped
     env_file:

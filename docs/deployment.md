@@ -43,10 +43,14 @@ Required by the application:
 Set explicitly for production:
 
 - `ADMIN_SECURE_COOKIES=true` — keep enabled in every HTTPS deployment.
-- `SITE_URL` — the public HTTPS origin used for canonical URLs.
+- `SITE_URL` — the exact public HTTP(S) origin, without credentials, a path, query,
+  or fragment. It is used at build time for canonical URLs and Astro's validated
+  reverse-proxy origin reconstruction. Compose passes it into the image build;
+  changing it requires rebuilding the image, not only restarting the container.
 - `TECH_BRIEFS_ROOT` — persistent content/database path; defaults to `tech_briefs`.
 - `TRUSTED_PROXY_HOPS` — `0` without a proxy; otherwise the exact number of trusted
-  reverse proxies in front of Node. Forwarding headers are ignored when it is `0`.
+  reverse proxies represented in `X-Forwarded-For`. This setting controls caller-IP
+  resolution for rate limiting; it is separate from host/protocol validation.
 
 Optional performance setting:
 
@@ -62,6 +66,30 @@ in `.env.example`. The Node server caps request bodies at 300 KiB.
 to `false`, is not required by the application runtime, and must remain false or
 unset in production. Even when it is explicitly set to `true`, the demo-data
 commands still refuse to run without `--confirm-reset`.
+
+## Reverse proxy and origin validation
+
+Astro's origin check remains enabled. The build derives one exact
+`security.allowedDomains` entry from `SITE_URL`; only matching forwarded host and
+protocol values are trusted when reconstructing the request URL. This lets form POSTs
+arriving through a TLS-terminating proxy pass same-origin checks without accepting an
+arbitrary `X-Forwarded-Host`.
+
+The final reverse proxy in front of the container must overwrite, rather than append
+or pass through, the public-origin headers. For an HTTPS-only Nginx Proxy Manager host:
+
+```nginx
+proxy_set_header Host $host;
+proxy_set_header X-Forwarded-Host $host;
+proxy_set_header X-Forwarded-Proto https;
+proxy_set_header X-Forwarded-Port 443;
+```
+
+The forced HTTPS values are appropriate when Cloudflare terminates public TLS but
+connects to Nginx Proxy Manager over an internal HTTP hop. Deployments that expose a
+different public scheme or port must send values matching `SITE_URL`. Do not disable
+`security.checkOrigin`; Admin mutations still add their session-bound CSRF token on
+top of Astro's framework-level origin check.
 
 ## Embedded generation and publication schedule
 
@@ -107,10 +135,12 @@ uses the stronger `/ready` check.
 1. Terminate TLS and redirect HTTP to HTTPS.
 2. Use a non-root process account and expose only the web port.
 3. Mount one private persistent volume for `TECH_BRIEFS_ROOT`.
-4. Keep `.env` outside version control with access restricted to the service account;
+4. Set the exact public `SITE_URL`, configure the final proxy to overwrite the
+   forwarded host/protocol headers, and rebuild the image.
+5. Keep `.env` outside version control with access restricted to the service account;
    rotate both the Admin password and session secret after exposure.
-5. Enable the embedded scheduler when automatic daily runs are wanted.
-6. Monitor process health and disk capacity; inspect application failures inside the
+6. Enable the embedded scheduler when automatic daily runs are wanted.
+7. Monitor process health and disk capacity; inspect application failures inside the
    Admin alert center.
 
 Provider-specific TLS and domain configuration remain deployment work; the

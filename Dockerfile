@@ -15,6 +15,8 @@ COPY packages/publisher/package.json packages/publisher/package.json
 RUN npm ci
 
 COPY . .
+ARG SITE_URL=http://localhost:4321
+ENV SITE_URL=${SITE_URL}
 RUN npm run build && npm prune --omit=dev
 
 FROM node:22-bookworm-slim AS runtime

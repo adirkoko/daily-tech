@@ -82,13 +82,19 @@ remaining stored as UTC.
   browser cookie is `HttpOnly`, `SameSite=Strict`, path-scoped to `/`, and `Secure`
   in production. Sessions expire after the configured TTL; logout revokes them.
 - Every state-changing admin form requires an exact same-origin request and a random,
-  session-bound CSRF token.
+  session-bound CSRF token. Same-origin is checked twice: Astro's own origin check,
+  validated against the `SITE_URL`-derived `security.allowedDomains` entry so it
+  still passes behind a reverse proxy, and the app's own `Origin` comparison. See
+  [`deployment.md`](deployment.md#reverse-proxy-and-origin-validation) for the
+  reverse-proxy configuration this depends on.
 - Admin responses use `Cache-Control: no-store`. Middleware also applies anti-framing,
   MIME-sniffing, referrer, and browser-permission headers.
 - Login is limited to three attempts per caller in the configured fixed window.
   Raw caller IPs are not stored; rate-limit keys are HMAC digests.
 - Forwarded caller addresses are trusted only when `TRUSTED_PROXY_HOPS` explicitly
-  matches the reverse-proxy chain; the default ignores forwarding headers.
+  matches the reverse-proxy chain; the default ignores forwarding headers. This
+  setting governs rate-limit caller-IP resolution only — it is unrelated to the
+  origin/host validation above.
 - Form fields and request bodies are bounded. The Node adapter rejects bodies above
   300 KiB.
 - The Admin password, session secret, and other secrets remain server-side and are

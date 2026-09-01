@@ -12,6 +12,12 @@ import { afterEach, describe, expect, it } from "vitest";
 const webRoot = fileURLToPath(new URL("../../", import.meta.url));
 const temporaryRoots: string[] = [];
 const adminPassword = "Daily-Tech-Test-Password-2026!";
+const publicOrigin = "https://daily-tech.example";
+const forwardedHeaders = {
+  "X-Forwarded-Host": "daily-tech.example",
+  "X-Forwarded-Proto": "https",
+  "X-Forwarded-Port": "443",
+};
 
 function runWebBuild(contentRoot: string): Promise<void> {
   const astroCli = join(webRoot, "..", "..", "node_modules", "astro", "bin", "astro.mjs");
@@ -21,7 +27,7 @@ function runWebBuild(contentRoot: string): Promise<void> {
       env: {
         ...process.env,
         ASTRO_TELEMETRY_DISABLED: "1",
-        SITE_URL: "https://daily-tech.example",
+        SITE_URL: publicOrigin,
         TECH_BRIEFS_ROOT: contentRoot,
       },
       stdio: "pipe",
@@ -155,10 +161,23 @@ describe("standalone site service", () => {
       expect(anonymousAdmin.status).toBe(303);
       expect(anonymousAdmin.headers.get("location")).toBe("/admin/login");
 
+      const crossSiteFeedback = await fetch(`${origin}/api/feedback`, {
+        method: "POST",
+        redirect: "manual",
+        headers: { ...forwardedHeaders, Origin: "https://attacker.example" },
+        body: new URLSearchParams({
+          title: "Cross-site submission",
+          category: "general",
+          body: "This request must be rejected before the route runs.",
+        }),
+      });
+      expect(crossSiteFeedback.status).toBe(403);
+      await expect(crossSiteFeedback.text()).resolves.toBe("Cross-site POST form submissions are forbidden");
+
       const feedback = await fetch(`${origin}/api/feedback`, {
         method: "POST",
         redirect: "manual",
-        headers: { Origin: origin },
+        headers: { ...forwardedHeaders, Origin: publicOrigin },
         body: new URLSearchParams({
           title: "Integration feedback",
           name: "Test reader",
@@ -171,7 +190,7 @@ describe("standalone site service", () => {
       const login = await fetch(`${origin}/api/admin/login`, {
         method: "POST",
         redirect: "manual",
-        headers: { Origin: origin },
+        headers: { ...forwardedHeaders, Origin: publicOrigin },
         body: new URLSearchParams({ password: adminPassword }),
       });
       expect(login.status).toBe(303);
@@ -207,7 +226,7 @@ describe("standalone site service", () => {
       const rejectedSettings = await fetch(`${origin}/api/admin/settings`, {
         method: "POST",
         redirect: "manual",
-        headers: { ...adminHeaders, Origin: origin },
+        headers: { ...adminHeaders, ...forwardedHeaders, Origin: publicOrigin },
         body: new URLSearchParams({ csrf_token: "invalid" }),
       });
       expect(rejectedSettings.status).toBe(403);
@@ -215,7 +234,7 @@ describe("standalone site service", () => {
       const savedSettings = await fetch(`${origin}/api/admin/settings`, {
         method: "POST",
         redirect: "manual",
-        headers: { ...adminHeaders, Origin: origin },
+        headers: { ...adminHeaders, ...forwardedHeaders, Origin: publicOrigin },
         body: new URLSearchParams({
           csrf_token: settingsCsrf ?? "",
           admin_keywords: "קוונטים",
@@ -246,7 +265,7 @@ describe("standalone site service", () => {
       const rejectedEdit = await fetch(`${origin}/api/admin/briefs/${day.date}`, {
         method: "POST",
         redirect: "manual",
-        headers: { ...adminHeaders, Origin: origin },
+        headers: { ...adminHeaders, ...forwardedHeaders, Origin: publicOrigin },
         body: new URLSearchParams({ csrf_token: "invalid" }),
       });
       expect(rejectedEdit.status).toBe(403);
@@ -255,7 +274,7 @@ describe("standalone site service", () => {
       const savedEdit = await fetch(`${origin}/api/admin/briefs/${day.date}`, {
         method: "POST",
         redirect: "manual",
-        headers: { ...adminHeaders, Origin: origin },
+        headers: { ...adminHeaders, ...forwardedHeaders, Origin: publicOrigin },
         body: new URLSearchParams({
           csrf_token: csrf ?? "",
           action: "save",
@@ -279,7 +298,7 @@ describe("standalone site service", () => {
       const deleted = await fetch(`${origin}/api/admin/briefs/${day.date}`, {
         method: "POST",
         redirect: "manual",
-        headers: { ...adminHeaders, Origin: origin },
+        headers: { ...adminHeaders, ...forwardedHeaders, Origin: publicOrigin },
         body: new URLSearchParams({ csrf_token: csrf ?? "", action: "delete" }),
       });
       expect(deleted.status).toBe(303);

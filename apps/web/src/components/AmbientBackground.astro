@@ -147,7 +147,7 @@ for (let rowIndex = 0; rowIndex < ambientRows.length - 1; rowIndex += 1) {
     document.documentElement.dataset.ambientMotion = mode;
 
     // Geometry and gradient SMIL animations are intentionally desktop-only.
-    // The lightweight mode keeps motion on compositor-friendly CSS layers.
+    // Mobile freezes the SVG internals; CSS moves the already-painted mesh as one layer.
     if (mode === "full") ambientSvg.unpauseAnimations();
     else ambientSvg.pauseAnimations();
   };

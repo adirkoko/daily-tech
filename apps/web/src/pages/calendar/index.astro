@@ -8,8 +8,8 @@ const snapshot = await getSiteSnapshot();
 const month = snapshot.currentDate.slice(0, 7);
 ---
 
-<BaseLayout description="כל מהדורות Daily Tech לפי יום וחודש.">
-  <section class="shell calendar-shell">
+<BaseLayout description="כל מהדורות Daily Tech לפי יום וחודש." ambient>
+  <section class="shell calendar-shell public-page public-calendar">
     <div class="calendar-page-heading">
       <h1 class="section-title">לוח המהדורות</h1>
     </div>

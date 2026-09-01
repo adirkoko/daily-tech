@@ -11,9 +11,9 @@ const pending = snapshot.targetDay === null || snapshot.targetDay.status === "dr
 const failed = snapshot.targetDay?.status === "failed";
 ---
 
-<BaseLayout>
+<BaseLayout ambient>
   {latest ? (
-    <section class="hero">
+    <section class="hero public-page public-home">
       <div class="shell">
         {pending && (
           <div class="status-note" role="status">
@@ -71,7 +71,7 @@ const failed = snapshot.targetDay?.status === "failed";
       </div>
     </section>
   ) : (
-    <section class="shell empty-state">
+    <section class="shell empty-state public-page public-home">
       <div class="empty-glyph" aria-hidden="true">⌁</div>
       <p class="eyebrow">הארכיון מתעורר</p>
       <h1>המהדורה הראשונה עדיין בהכנה</h1>

@@ -1,0 +1,150 @@
+---
+interface AmbientPoint { x: number; y: number }
+
+const ambientRows: AmbientPoint[][] = [
+  [{ x: -140, y: -35 }, { x: 120, y: 25 }, { x: 380, y: -20 }, { x: 640, y: 35 }, { x: 900, y: -25 }, { x: 1160, y: 30 }, { x: 1420, y: -15 }, { x: 1740, y: 35 }],
+  [{ x: -90, y: 170 }, { x: 170, y: 215 }, { x: 430, y: 150 }, { x: 690, y: 220 }, { x: 950, y: 145 }, { x: 1210, y: 225 }, { x: 1470, y: 155 }, { x: 1710, y: 210 }],
+  [{ x: -130, y: 340 }, { x: 130, y: 395 }, { x: 390, y: 315 }, { x: 650, y: 400 }, { x: 910, y: 305 }, { x: 1170, y: 405 }, { x: 1430, y: 320 }, { x: 1750, y: 390 }],
+  [{ x: -80, y: 520 }, { x: 180, y: 590 }, { x: 440, y: 500 }, { x: 700, y: 600 }, { x: 960, y: 495 }, { x: 1220, y: 605 }, { x: 1480, y: 505 }, { x: 1720, y: 585 }],
+  [{ x: -150, y: 700 }, { x: 110, y: 775 }, { x: 370, y: 680 }, { x: 630, y: 785 }, { x: 890, y: 675 }, { x: 1150, y: 790 }, { x: 1410, y: 690 }, { x: 1760, y: 770 }],
+  [{ x: -100, y: 920 }, { x: 160, y: 880 }, { x: 420, y: 960 }, { x: 680, y: 890 }, { x: 940, y: 970 }, { x: 1200, y: 885 }, { x: 1460, y: 955 }, { x: 1730, y: 900 }],
+];
+const ambientTones = [
+  "geometry-indigo",
+  "geometry-blue",
+  "geometry-violet",
+  "geometry-indigo",
+  "geometry-blue",
+  "geometry-indigo",
+  "geometry-warm",
+  "geometry-violet",
+  "geometry-indigo",
+  "geometry-blue",
+  "geometry-indigo",
+  "geometry-violet",
+];
+const ambientPhases = ["mesh-phase-a", "mesh-phase-b", "mesh-phase-c", "mesh-phase-d"];
+const ambientFacets: Array<{ points: string; frames: string; tone: string; phase: string; deep: boolean; delay: string }> = [];
+const pointList = (points: AmbientPoint[]): string =>
+  points.map(({ x, y }) => `${Math.round(x * 10) / 10},${Math.round(y * 10) / 10}`).join(" ");
+const meshFrameCount = 17;
+const meshFrameProgress = Array.from({ length: meshFrameCount }, (_, index) => index / (meshFrameCount - 1));
+const meshKeyTimes = meshFrameProgress.map((progress) => Math.round(progress * 10_000) / 10_000).join(";");
+const meshKeySplines = Array.from({ length: meshFrameCount - 1 }, () => ".42 0 .58 1").join(";");
+const meshAnimationDuration = "43s";
+const unitFromPoint = (point: AmbientPoint, salt: number): number => {
+  const value = Math.sin(point.x * 12.9898 + point.y * 78.233 + salt * 37.719) * 43_758.5453;
+  return value - Math.floor(value);
+};
+const deformMeshPoint = (point: AmbientPoint, progress: number): AmbientPoint => {
+  const tau = Math.PI * 2;
+  const xAmplitude = 8 + unitFromPoint(point, 1) * 12;
+  const yAmplitude = 18 + unitFromPoint(point, 2) * 24;
+  const xFrequency = 1 + Math.floor(unitFromPoint(point, 3) * 3);
+  const yFrequency = 1 + Math.floor(unitFromPoint(point, 4) * 4);
+  const xPhase = unitFromPoint(point, 5) * tau;
+  const yPhase = unitFromPoint(point, 6) * tau;
+  const secondaryPhase = unitFromPoint(point, 7) * tau;
+  return {
+    x:
+      point.x
+      + xAmplitude * (
+        Math.sin(tau * xFrequency * progress + xPhase) * .68
+        + Math.sin(tau * (xFrequency + 2) * progress + secondaryPhase) * .32
+      ),
+    y:
+      point.y
+      + yAmplitude * (
+        Math.sin(tau * yFrequency * progress + yPhase) * .64
+        + Math.cos(tau * (yFrequency + 1) * progress + secondaryPhase) * .36
+      ),
+  };
+};
+const meshFrames = (points: AmbientPoint[]): string =>
+  meshFrameProgress
+    .map((progress) => pointList(points.map((point) => deformMeshPoint(point, progress))))
+    .join(";");
+
+for (let rowIndex = 0; rowIndex < ambientRows.length - 1; rowIndex += 1) {
+  const row = ambientRows[rowIndex]!;
+  const nextRow = ambientRows[rowIndex + 1]!;
+  for (let columnIndex = 0; columnIndex < row.length - 1; columnIndex += 1) {
+    const topStart = row[columnIndex]!;
+    const topEnd = row[columnIndex + 1]!;
+    const bottomStart = nextRow[columnIndex]!;
+    const bottomEnd = nextRow[columnIndex + 1]!;
+    const splitForward = (rowIndex + columnIndex) % 2 === 0;
+    const triangles = splitForward
+      ? [[topStart, bottomStart, topEnd], [topEnd, bottomStart, bottomEnd]]
+      : [[topStart, bottomStart, bottomEnd], [topStart, bottomEnd, topEnd]];
+
+    for (const triangle of triangles) {
+      const index = ambientFacets.length;
+      ambientFacets.push({
+        points: pointList(triangle),
+        frames: meshFrames(triangle),
+        tone: ambientTones[(index + rowIndex) % ambientTones.length]!,
+        phase: ambientPhases[(index + columnIndex) % ambientPhases.length]!,
+        deep: index % 5 === 0 || index % 7 === 0,
+        delay: `-${Math.round(unitFromPoint(triangle[0]!, index + 11) * 170) / 10}s`,
+      });
+    }
+  }
+}
+---
+
+<div class="site-ambient" aria-hidden="true">
+  <svg class="site-ambient-geometry" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice">
+    <defs>
+      {(["indigo", "blue", "violet", "warm"] as const).map((tone) => (
+        <linearGradient id={`mesh-fill-${tone}`} x1="0" y1="0" x2="1" y2="1">
+          <stop class="mesh-stop-highlight" offset="0" />
+          <stop class={`mesh-stop-${tone}`} offset=".22" />
+          <stop class={`mesh-stop-${tone} mesh-stop-tone-shadow`} offset=".68" />
+          <stop class="mesh-stop-shadow" offset="1" />
+          <animateTransform
+            attributeName="gradientTransform"
+            type="rotate"
+            values="-24 .5 .5;9 .5 .5;-7 .5 .5;28 .5 .5;-24 .5 .5"
+            dur="37s"
+            repeatCount="indefinite"
+            calcMode="spline"
+            keyTimes="0;.21;.49;.78;1"
+            keySplines=".42 0 .58 1;.42 0 .58 1;.42 0 .58 1;.42 0 .58 1"
+          />
+        </linearGradient>
+      ))}
+    </defs>
+    <g class="tech-mesh">
+      {ambientFacets.map((facet) => (
+        <polygon
+          class:list={["mesh-facet", facet.tone, facet.phase, { "mesh-facet-deep": facet.deep }]}
+          points={facet.points}
+          style={`animation-delay:${facet.delay}`}
+        >
+          <animate
+            attributeName="points"
+            values={facet.frames}
+            dur={meshAnimationDuration}
+            repeatCount="indefinite"
+            calcMode="spline"
+            keyTimes={meshKeyTimes}
+            keySplines={meshKeySplines}
+          />
+        </polygon>
+      ))}
+    </g>
+  </svg>
+</div>
+
+<script is:inline>
+  const ambientSvg = document.querySelector(".site-ambient-geometry");
+  const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
+  const syncAmbientMotion = () => {
+    if (!(ambientSvg instanceof SVGSVGElement)) return;
+    if (reducedMotion.matches) ambientSvg.pauseAnimations();
+    else ambientSvg.unpauseAnimations();
+  };
+  syncAmbientMotion();
+  reducedMotion.addEventListener("change", syncAmbientMotion);
+</script>

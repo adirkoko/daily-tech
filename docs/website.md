@@ -89,16 +89,20 @@ together with the relevant development for each day.
 
 ## Branding and visual language
 
-- Product name: **Daily Tech**. Logo: a geometric monogram based on D / T. Interface
-  language: Hebrew. The two-tone Indigo SVG uses a transparent background, a defined
-  black outline, and separate light/dark colours; the same mark is used in public/Admin
-  headers and as the browser favicon. Browser titles are intentionally limited to
-  `Daily Tech` and `Daily Tech Admin`. The domain is not decided yet.
-- Plenty of white space, strong typography, an Indigo primary accent, emphasis on
-  text and content, few superfluous UI elements, and subtle animations only.
-  Semantic status colours are reserved for success, warning, and failure states.
-  Light and dark palettes use the same Indigo identity with contrast tuned
-  independently for each mode.
+- Product name: **Daily Tech**. The logo is an abstract open brief built from two
+  Indigo facets, with a restrained copper beacon representing the daily insight
+  extracted from the news stream. The transparent SVG has separately tuned light
+  and dark palettes; the same geometry is used in public/Admin headers and as the
+  browser favicon. Interface language is Hebrew. Browser titles are intentionally
+  limited to `Daily Tech` and `Daily Tech Admin`. The domain is not decided yet.
+- Generous spacing, strong typography, and an Indigo foundation keep the interface
+  quiet and content-led. Copper is a restrained contrast colour for selected primary
+  headings and accents; semantic status colours remain reserved for success, warning,
+  and failure states.
+- The main archive views and Admin sit above a full-viewport animated faceted mesh.
+  Semi-transparent frosted surfaces preserve depth without sacrificing legibility;
+  denser Admin work surfaces use greater opacity. Motion is decorative, remains
+  subtle, and is disabled when the browser requests reduced motion.
 
 ## Display mode
 

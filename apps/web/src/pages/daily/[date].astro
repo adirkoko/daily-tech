@@ -1,5 +1,6 @@
 ---
 import BaseLayout from "../../layouts/BaseLayout.astro";
+import IntensityBadge from "../../components/IntensityBadge.astro";
 import { formatHebrewDate } from "../../lib/dates.js";
 import { getSiteSnapshot, renderBrief } from "../../lib/content.js";
 
@@ -20,14 +21,21 @@ const dayMonth = (value: string): string =>
   );
 ---
 
-<BaseLayout description={day.summary}>
-  <article class="shell article-layout">
+<BaseLayout description={day.summary} ambient>
+  <article class="shell article-layout public-page public-article">
     {day.day_intensity === "minimal" && (
       <div class="status-note">
         <span class="status-dot"></span>
         <span>זה היה יום שקט יחסית בטכנולוגיה — התדריך קצר בהתאם.</span>
       </div>
     )}
+    <div class="article-meta" aria-label="פרטי המהדורה">
+      <span class="article-meta-date">{formatHebrewDate(day.date, { weekday: "long" })}</span>
+      <span class="article-meta-separator" aria-hidden="true"></span>
+      <span>{day.significant_items} אירועים משמעותיים</span>
+      <span class="article-meta-separator" aria-hidden="true"></span>
+      <IntensityBadge level={day.day_intensity} />
+    </div>
     <div class="article-body" set:html={html}></div>
   </article>
 
@@ -43,7 +51,10 @@ const dayMonth = (value: string): string =>
           <span class="article-nav-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
           </span>
-          <span class="article-nav-date">{dayMonth(older.metadata.date)}</span>
+          <span class="article-nav-date">
+            <small>המהדורה הקודמת</small>
+            <strong>{dayMonth(older.metadata.date)}</strong>
+          </span>
         </a>
       ) : (
         <span aria-hidden="true"></span>
@@ -55,7 +66,10 @@ const dayMonth = (value: string): string =>
           rel="next"
           aria-label={`למהדורה מ־${formatHebrewDate(newer.metadata.date)}`}
         >
-          <span class="article-nav-date">{dayMonth(newer.metadata.date)}</span>
+          <span class="article-nav-date">
+            <small>המהדורה הבאה</small>
+            <strong>{dayMonth(newer.metadata.date)}</strong>
+          </span>
           <span class="article-nav-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6" /></svg>
           </span>

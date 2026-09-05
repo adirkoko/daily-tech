@@ -8,12 +8,18 @@ export const prerender = false;
 const snapshot = await getSiteSnapshot();
 const date = Astro.params.date ?? "";
 const briefIndex = snapshot.published.findIndex((item) => item.metadata.date === date);
-if (briefIndex < 0) return Astro.redirect("/404", 302);
-const brief = snapshot.published[briefIndex]!;
-const newer = snapshot.published[briefIndex - 1] ?? null;
-const older = snapshot.published[briefIndex + 1] ?? null;
-const day = brief.metadata;
-const html = await renderBrief(brief);
+const requestedDay = snapshot.days.find((item) => item.date === date) ?? null;
+const brief = briefIndex >= 0 ? snapshot.published[briefIndex]! : null;
+const unavailableDay = brief === null && requestedDay?.status === "failed" ? requestedDay : null;
+if (brief === null && unavailableDay === null) return Astro.redirect("/404", 302);
+if (unavailableDay !== null) {
+  Astro.response.status = 503;
+  Astro.response.headers.set("Retry-After", "3600");
+}
+const newer = brief === null ? null : snapshot.published[briefIndex - 1] ?? null;
+const older = brief === null ? null : snapshot.published[briefIndex + 1] ?? null;
+const day = brief?.metadata ?? unavailableDay!;
+const html = brief === null ? null : await renderBrief(brief);
 
 const dayMonth = (value: string): string =>
   new Intl.DateTimeFormat("he-IL", { timeZone: "UTC", day: "numeric", month: "long" }).format(
@@ -21,7 +27,22 @@ const dayMonth = (value: string): string =>
   );
 ---
 
-<BaseLayout description={day.summary} ambient>
+<BaseLayout description={day.summary} noindex={unavailableDay !== null} ambient>
+  {unavailableDay ? (
+    <section class="shell friendly-state friendly-state-error public-page" role="status">
+      <div class="friendly-state-glyph" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v4M12 16h.01" /><path d="M10.3 3.6 2.4 17.2A2 2 0 0 0 4.1 20h15.8a2 2 0 0 0 1.7-2.8L13.7 3.6a2 2 0 0 0-3.4 0Z" /></svg>
+      </div>
+      <p class="eyebrow">המהדורה לא זמינה</p>
+      <h1>אופס, משהו השתבש בדרך</h1>
+      <p>לא הצלחנו להשלים את המהדורה של {formatHebrewDate(day.date)}. התקלה נרשמה במערכת, ובינתיים אפשר לחזור למהדורות שכבר פורסמו.</p>
+      <div class="friendly-state-actions">
+        <a class="button" href="/">חזרה לעמוד הבית</a>
+        <a class="button secondary" href="/calendar">לוח המהדורות</a>
+      </div>
+    </section>
+  ) : (
+    <>
   <article class="shell article-layout public-page public-article">
     {day.day_intensity === "minimal" && (
       <div class="status-note">
@@ -78,5 +99,7 @@ const dayMonth = (value: string): string =>
         <span aria-hidden="true"></span>
       )}
     </nav>
+  )}
+    </>
   )}
 </BaseLayout>

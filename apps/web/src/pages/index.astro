@@ -3,12 +3,18 @@ import BaseLayout from "../layouts/BaseLayout.astro";
 import IntensityBadge from "../components/IntensityBadge.astro";
 import { getSiteSnapshot } from "../lib/content.js";
 import { formatHebrewDate } from "../lib/dates.js";
+import { homePublicationStatus } from "../lib/home-status.js";
 
 export const prerender = false;
 const snapshot = await getSiteSnapshot();
 const latest = snapshot.latestPublished;
-const pending = snapshot.targetDay === null || snapshot.targetDay.status === "draft" || snapshot.targetDay.status === "ready";
-const failed = snapshot.targetDay?.status === "failed";
+const publicationStatus = homePublicationStatus({
+  publicationDue: snapshot.publicationDue,
+  targetStatus: snapshot.targetDay?.status ?? null,
+  publicationState: snapshot.targetPublicationState,
+});
+const failed = publicationStatus === "failed";
+const pending = publicationStatus === "pending";
 ---
 
 <BaseLayout ambient>

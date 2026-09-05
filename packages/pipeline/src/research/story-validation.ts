@@ -1,7 +1,11 @@
 import { isCalendarDate } from "@daily-tech/core";
 
 import type { PipelineContext } from "../types.js";
-import { deduplicateStoryInputs, representedByExistingStory } from "./deduplication.js";
+import {
+  deduplicateStoryInputs,
+  representedByExistingStory,
+  sameHighConfidenceEvent,
+} from "./deduplication.js";
 import type {
   CandidateStory,
   CandidateStoryInput,
@@ -27,6 +31,8 @@ export class ResearchProcessingError extends Error {
 
 export interface ProcessedCandidates {
   readonly stories: readonly CandidateStory[];
+  readonly rejectedStories: readonly RejectedResearchStory[];
+  readonly filteredStories: readonly RejectedResearchStory[];
 }
 
 export function finalizeDiscoveryBatch(
@@ -38,13 +44,18 @@ export function finalizeDiscoveryBatch(
   const validated = validateCandidates(batch.stories, context, minimumImportance);
   const deduplicated = deduplicateStoryInputs(validated.stories);
   const rejectedStories = [...batch.rejectedStories, ...validated.rejectedStories];
+  const filteredStories = duplicateDiagnostics(validated.stories, batch.stories);
   assertNotEntirelyRejected(
     batch.stories.length + batch.rejectedStories.length,
     deduplicated.length,
     "discovery",
     rejectedStories,
   );
-  return { stories: assignIds(deduplicated, storyIds) };
+  return {
+    stories: assignIds(deduplicated, storyIds),
+    rejectedStories,
+    filteredStories,
+  };
 }
 
 /** Used for both the general gap check and admin-keyword-focused research — they
@@ -57,10 +68,21 @@ export function finalizeFocusedDiscoveryBatch(
   storyIds: StoryIdFactory,
 ): ProcessedCandidates {
   const validated = validateCandidates(batch.stories, context, minimumImportance);
-  const uniqueMissing = deduplicateStoryInputs(validated.stories).filter(
+  const deduplicated = deduplicateStoryInputs(validated.stories);
+  const uniqueMissing = deduplicated.filter(
     (story) => !representedByExistingStory(story, existingStories),
   );
   const rejectedStories = [...batch.rejectedStories, ...validated.rejectedStories];
+  const filteredStories = [
+    ...duplicateDiagnostics(validated.stories, batch.stories),
+    ...deduplicated
+      .filter((story) => representedByExistingStory(story, existingStories))
+      .map((story) => ({
+        index: batch.stories.indexOf(story),
+        title: story.title,
+        reason: "Already represented by an earlier discovery stage.",
+      })),
+  ];
   assertNotEntirelyRejected(
     batch.stories.length + batch.rejectedStories.length,
     uniqueMissing.length,
@@ -74,7 +96,29 @@ export function finalizeFocusedDiscoveryBatch(
       storyIds,
       new Set(existingStories.map(({ id }) => id)),
     ),
+    rejectedStories,
+    filteredStories,
   };
+}
+
+function duplicateDiagnostics(
+  stories: readonly CandidateStoryInput[],
+  originalStories: readonly CandidateStoryInput[],
+): readonly RejectedResearchStory[] {
+  const seen: CandidateStoryInput[] = [];
+  const filtered: RejectedResearchStory[] = [];
+  for (const story of stories) {
+    if (seen.some((existing) => sameHighConfidenceEvent(existing, story))) {
+      filtered.push({
+        index: originalStories.indexOf(story),
+        title: story.title,
+        reason: "Merged as a high-confidence duplicate.",
+      });
+    } else {
+      seen.push(story);
+    }
+  }
+  return filtered;
 }
 
 function validateCandidates(
@@ -144,6 +188,8 @@ function assignIds(
 
 export interface ProcessedDeepResearch {
   readonly stories: readonly DeepResearchedStory[];
+  readonly rejectedStories: readonly RejectedResearchStory[];
+  readonly notSelectedStories: readonly CandidateStory[];
 }
 
 /**
@@ -191,7 +237,12 @@ export function finalizeDeepResearchBatch(
   });
 
   assertNotEntirelyRejected(batch.stories.length, accepted.length, "deep research", rejected);
-  return { stories: accepted };
+  const returnedCandidateIds = new Set(batch.stories.map(({ candidateId }) => candidateId));
+  return {
+    stories: accepted,
+    rejectedStories: rejected,
+    notSelectedStories: candidates.filter(({ id }) => !returnedCandidateIds.has(id)),
+  };
 }
 
 function validateDeepStoryEvidence(story: DeepResearchedStoryInput, context: PipelineContext): void {

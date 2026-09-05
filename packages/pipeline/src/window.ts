@@ -1,3 +1,5 @@
+import { isCalendarDate } from "@daily-tech/core";
+
 import type { BriefWindow } from "./types.js";
 
 const ISRAEL_TIME_ZONE = "Asia/Jerusalem" as const;
@@ -28,6 +30,21 @@ export function previousIsraelDayWindow(runAt: Date): BriefWindow {
 
   const localRunDate = partsAt(runAt);
   const target = shiftCalendarDate(localRunDate, -1);
+  return windowForParts(target);
+}
+
+export function israelDayWindow(date: string): BriefWindow {
+  if (!isCalendarDate(date)) {
+    throw new TypeError("date must be a real calendar date in YYYY-MM-DD format.");
+  }
+  return windowForParts({
+    year: Number(date.slice(0, 4)),
+    month: Number(date.slice(5, 7)),
+    day: Number(date.slice(8, 10)),
+  });
+}
+
+function windowForParts(target: Pick<DateTimeParts, "year" | "month" | "day">): BriefWindow {
   const next = shiftCalendarDate(target, 1);
   const start = localDateTimeToUtc({ ...target, hour: 0, minute: 0, second: 0 });
   const endExclusive = localDateTimeToUtc({

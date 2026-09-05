@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { previousIsraelDayWindow } from "../src/index.js";
+import { israelDayWindow, previousIsraelDayWindow } from "../src/index.js";
 
 describe("previousIsraelDayWindow", () => {
   it("returns the previous local day during daylight saving time", () => {
@@ -33,5 +33,19 @@ describe("previousIsraelDayWindow", () => {
 
   it("rejects invalid dates", () => {
     expect(() => previousIsraelDayWindow(new Date(Number.NaN))).toThrow(TypeError);
+  });
+});
+
+describe("israelDayWindow", () => {
+  it("builds the exact requested Israel calendar day", () => {
+    const window = israelDayWindow("2026-08-27");
+
+    expect(window.date).toBe("2026-08-27");
+    expect(window.start.toISOString()).toBe("2026-08-26T21:00:00.000Z");
+    expect(window.endExclusive.toISOString()).toBe("2026-08-27T21:00:00.000Z");
+  });
+
+  it("rejects impossible calendar dates", () => {
+    expect(() => israelDayWindow("2026-02-30")).toThrow(TypeError);
   });
 });

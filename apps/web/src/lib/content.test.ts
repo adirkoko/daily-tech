@@ -62,6 +62,9 @@ describe("site content loading", () => {
     expect(snapshot.targetDate).toBe("2026-08-26");
     expect(snapshot.published).toEqual([]);
     expect(snapshot.latestPublished).toBeNull();
+    expect(snapshot.publishTime).toBe("07:00");
+    expect(snapshot.publicationDue).toBe(true);
+    expect(snapshot.targetPublicationState).toBeNull();
   });
 
   it("loads published days and identifies the pipeline target day", async () => {
@@ -84,6 +87,42 @@ describe("site content loading", () => {
     });
     expect(snapshot.latestPublished?.metadata.date).toBe("2026-08-26");
     expect(snapshot.targetDay?.status).toBe("published");
+  });
+
+  it("exposes publication timing and the target publication result separately", async () => {
+    const root = await temporaryRoot();
+    const databasePath = join(root, "meta", "tech_briefs.db");
+    await mkdir(join(root, "meta"), { recursive: true });
+    const database = DailyTechDatabase.open({ filename: databasePath });
+    database.saveDay(metadata({ status: "failed", published_at: null }));
+    database.operations.beginPublication({
+      dayDate: "2026-08-26",
+      leaseOwner: "publisher-1",
+      occurredAt: "2026-08-27T04:00:00.000Z",
+      leaseExpiresAt: "2026-08-27T04:10:00.000Z",
+    });
+    database.operations.failPublication(
+      "2026-08-26",
+      "publisher-1",
+      "2026-08-27T04:02:00.000Z",
+      "Publication failed.",
+    );
+    database.close();
+
+    const beforePublication = await loadSiteSnapshot({
+      contentRoot: root,
+      now: new Date("2026-08-27T03:30:00.000Z"),
+    });
+    expect(beforePublication.publicationDue).toBe(false);
+    expect(beforePublication.targetDay?.status).toBe("failed");
+    expect(beforePublication.targetPublicationState).toBe("failed");
+
+    const afterPublication = await loadSiteSnapshot({
+      contentRoot: root,
+      now: new Date("2026-08-27T04:30:00.000Z"),
+    });
+    expect(afterPublication.publicationDue).toBe(true);
+    expect(afterPublication.targetPublicationState).toBe("failed");
   });
 
   it("includes published metadata without eagerly reading its Markdown file", async () => {

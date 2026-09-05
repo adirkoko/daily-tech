@@ -50,6 +50,9 @@ describe("deterministic discovery processing", () => {
     );
 
     expect(result.stories).toHaveLength(1);
+    expect(result.filteredStories).toEqual([
+      expect.objectContaining({ title: duplicate.title, reason: expect.stringContaining("duplicate") }),
+    ]);
     expect(result.stories[0]).toMatchObject({ id: "story-generated" });
     expect(result.stories[0]?.shortSummary).toContain("פרט נוסף שנמצא במקור השני");
     expect(storyIds.create).toHaveBeenCalledOnce();
@@ -90,6 +93,9 @@ describe("deterministic discovery processing", () => {
 
     expect(result.stories).toHaveLength(1);
     expect(result.stories[0]?.id).toBe("story-valid");
+    expect(result.rejectedStories).toEqual([
+      expect.objectContaining({ title: wrongDay.title }),
+    ]);
   });
 
   it("reports index, title, and reason for every story when the whole batch is rejected", () => {
@@ -157,6 +163,9 @@ describe("deterministic discovery processing", () => {
     );
 
     expect(result.stories).toEqual([]);
+    expect(result.filteredStories).toEqual([
+      expect.objectContaining({ title: firstCandidateInput.title, reason: expect.stringContaining("earlier") }),
+    ]);
   });
 });
 

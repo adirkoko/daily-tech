@@ -1,6 +1,7 @@
 import type { PipelineSettings } from "@daily-tech/core";
 import type { SavePipelineSettingsInput } from "@daily-tech/db";
 
+import { invalidateSiteSnapshot } from "../lib/content.js";
 import { openServerDatabase } from "./database.js";
 
 export type AdminPipelineSettingsInput = Omit<SavePipelineSettingsInput, "updatedAt">;
@@ -31,6 +32,7 @@ export async function saveAdminPipelineSettings(
     } catch {
       /* The settings commit remains authoritative if audit logging fails. */
     }
+    invalidateSiteSnapshot();
     return saved;
   } finally {
     database.close();

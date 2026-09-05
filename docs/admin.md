@@ -28,6 +28,10 @@ The editor provides:
   add/remove fields for companies, topics, and development summaries.
 - **Copy** — copy the complete Markdown source, with visible success feedback.
 - **Save** — validate and persist Markdown plus metadata and update `updated_at`.
+- **Retry / regenerate** — retry a failed day, or deliberately run the complete
+  research-and-writing pipeline again for an existing day. The request starts in
+  the background and uses the scheduler's durable generation lease, so a scheduler
+  tick or second click cannot run the same date concurrently.
 - **Delete** — after an explicit confirmation, remove the Markdown and metadata
   record together. The day becomes unavailable in both calendars.
 
@@ -39,6 +43,30 @@ Save runs the same deterministic artifact validation used by the pipeline. Files
 changes use a temporary file and a short-lived rollback copy, preventing a database
 failure from leaving partially written content. Administrative save, delete, login,
 and feedback-resolution actions are recorded in the operational log.
+
+Regeneration replaces the existing Markdown and recalculated metadata atomically.
+A previously published day remains published and keeps its original
+`published_at`; its new counts, companies, topics, and developments immediately
+replace the old inputs used by the archive and statistics pages. Other regenerated
+statuses become `ready` for the normal publication flow. Replacement is
+success-only: if research, writing, validation, or persistence fails, the previous
+Markdown and lifecycle metadata remain intact and the failure appears as a System
+ticket. Save and delete are rejected while the date has an active generation lease,
+including requests submitted from a stale browser tab.
+
+If a failed day's scheduled publication attempt had already reached a terminal
+failure, a successful **Retry** reopens that failed publication job and immediately
+runs the normal local publisher. This recovery applies only to failed publication
+jobs; ordinary regeneration does not unexpectedly publish a draft. A metadata row
+whose Markdown file is missing opens a recovery state instead of crashing the
+editor, allowing the operator to rebuild it through the full pipeline.
+
+Each brief page also shows the latest recorded research trace. The three discovery
+cards summarize topics found and the number of candidates found, contributed, or
+removed by validation/deduplication. The Deep Research card shows the final
+selection, making it possible to compare discovery coverage with what survived the
+editorial research pass. These summaries come from bounded structured operational
+logs; they do not add another model request or store full provider responses.
 
 ## Pipeline settings
 

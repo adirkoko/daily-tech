@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import { randomUUID } from "node:crypto";
 
 import { expectedBriefRelativePath, validateBriefArtifact, type BriefStatus, type DayIntensity, type DayMetadata, type ValidationIssue } from "@daily-tech/core";
+import type { DailyTechDatabase } from "@daily-tech/db";
 
 import { invalidateSiteSnapshot } from "../lib/content.js";
 import { getServerConfig } from "./config.js";
@@ -29,12 +30,42 @@ export class AdminContentValidationError extends Error {
   }
 }
 
-export async function loadAdminBrief(date: string): Promise<{ metadata: DayMetadata; markdown: string } | null> {
+export class AdminGenerationInProgressError extends Error {
+  constructor(readonly date: string) {
+    super("לא ניתן לשמור או למחוק את התדריך בזמן שהיצירה מחדש מתבצעת.");
+    this.name = "AdminGenerationInProgressError";
+  }
+}
+
+export function assertBriefMutationAllowed(
+  database: DailyTechDatabase,
+  date: string,
+  now = new Date(),
+): void {
+  const job = database.operations.getScheduledJob("generate", date);
+  if (
+    job?.state === "running" &&
+    job.leaseExpiresAt !== null &&
+    job.leaseExpiresAt > now.toISOString()
+  ) {
+    throw new AdminGenerationInProgressError(date);
+  }
+}
+
+export async function loadAdminBrief(date: string): Promise<{ metadata: DayMetadata; markdown: string | null } | null> {
+  if (expectedBriefRelativePath(date) === null) return null;
   const database = await openServerDatabase();
   try {
     const metadata = database.getDay(date);
     if (metadata === null) return null;
-    return { metadata, markdown: await readFile(filePath(date), "utf8") };
+    try {
+      return { metadata, markdown: await readFile(filePath(date), "utf8") };
+    } catch (error) {
+      if (isMissingFileError(error)) {
+        return { metadata, markdown: null };
+      }
+      throw error;
+    }
   } finally { database.close(); }
 }
 
@@ -44,6 +75,7 @@ export async function saveAdminBrief(input: AdminBriefInput): Promise<DayMetadat
   try { existing = database.getDay(input.date); }
   catch (error) { database.close(); throw error; }
   if (existing === null) { database.close(); throw new Error(`Brief ${input.date} does not exist.`); }
+  assertBriefMutationAllowed(database, input.date);
   const now = new Date().toISOString();
   const metadata: DayMetadata = {
     date: input.date,
@@ -99,6 +131,7 @@ export async function deleteAdminBrief(date: string): Promise<boolean> {
   const backup = `${path}.${randomUUID()}.delete`;
   try {
     if (database.getDay(date) === null) return false;
+    assertBriefMutationAllowed(database, date);
     await rename(path, backup);
     let committed = false;
     try {
@@ -121,6 +154,10 @@ function filePath(date: string): string {
   const relative = expectedBriefRelativePath(date);
   if (relative === null) throw new TypeError("Invalid brief date.");
   return join(getServerConfig().dailyStorageRoot, ...relative.split("/"));
+}
+
+function isMissingFileError(error: unknown): boolean {
+  return error instanceof Error && "code" in error && error.code === "ENOENT";
 }
 
 export function stringList(value: string): readonly string[] {

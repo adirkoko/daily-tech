@@ -23,6 +23,10 @@ transitions. Research receives the date and time zone; stories use `occurredOn`,
 sources use nullable `publishedOn`, and neither field carries invented time-of-day
 precision.
 
+Normal scheduled and CLI runs target the previous day. An authenticated Admin
+regeneration supplies an explicit historical date and builds the same exact Israel
+calendar window; it does not approximate the date through a UTC offset.
+
 ## Stages
 
 ### 1. Light Discovery
@@ -131,6 +135,13 @@ artifact. The run records `run_failed` and creates a System ticket in Admin. Whe
 entire non-empty research batch is rejected, diagnostics include each story's index,
 title, and rejection reason.
 
+Every discovery stage records a compact `research_stage_completed` event containing
+bounded title/topic lists and found, contributed, rejected, and deduplicated counts.
+Deep Research records candidate and final-selection counts. Skipped optional stages
+are recorded as skipped. Admin uses the latest run's events to explain how much each
+pass contributed and what the deterministic safety net removed; logging these
+summaries never adds an AI call and a logging failure does not fail a valid brief.
+
 Transient provider failures are retried by the AI client as documented in
 [`operations.md`](operations.md#provider-reliability).
 
@@ -146,6 +157,14 @@ Manual commands remain available:
 npm run generate
 npm run publish:brief
 ```
+
+From an individual Admin brief page, a failed day can be retried and any existing
+day can be regenerated. The operation uses this same pipeline and the same saved
+settings. It runs in the web service background under the durable generation lease;
+regenerating a published day replaces its content while preserving its published
+lifecycle state and original publication timestamp. The old artifact and metadata
+are retained unless the entire replacement reaches successful persistence. While the
+lease is active, Admin save and delete operations for that date are refused.
 
 To exercise the real provider without opening SQLite or publishing:
 

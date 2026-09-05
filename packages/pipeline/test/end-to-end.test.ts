@@ -70,9 +70,10 @@ describe("daily pipeline end to end", () => {
       });
       expect(result.artifact.metadata.status).toBe("ready");
       const logs = database.operations.listLogs({ runId: "integration-run" });
-      expect(logs).toEqual([
+      expect(logs).toContainEqual(
         expect.objectContaining({ eventType: "run_completed" }),
-      ]);
+      );
+      expect(logs.filter(({ eventType }) => eventType === "research_stage_completed")).toHaveLength(4);
       expect(database.operations.listTickets({ category: "system" })).toHaveLength(0);
     } finally {
       database.close();

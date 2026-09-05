@@ -3,14 +3,27 @@ export const prerender = false;
 import AdminLayout from "../../../layouts/AdminLayout.astro";
 import EditorFormControls from "../../../components/EditorFormControls.astro";
 import { loadAdminBrief } from "../../../server/admin-content.js";
+import { loadAdminBriefGenerationInfo } from "../../../server/admin-research-trace.js";
 
 const date = Astro.params.date ?? "";
 const brief = await loadAdminBrief(date);
 if (!brief) return Astro.redirect("/admin?error=brief-not-found", 303);
 const { metadata, markdown } = brief;
+const unavailable = metadata.status === "failed" || markdown === null;
+const failedGeneration = metadata.status === "failed";
+const unavailableGenerationMode = failedGeneration ? "retry" : "regenerate";
 const csrf = Astro.locals.adminSession!.csrfToken;
 const error = Astro.url.searchParams.get("error");
 const success = Astro.url.searchParams.get("success");
+const generationInfo = await loadAdminBriefGenerationInfo(date);
+const generationRunning = generationInfo.generation.running;
+
+const STAGE_LABELS = {
+  light_discovery: "סריקה רחבה",
+  gap_discovery: "בדיקת פערים",
+  keyword_discovery: "מיקוד אדמין",
+  deep_research: "מחקר עומק וסינון",
+} as const;
 
 const STATUS_OPTIONS = [
   { value: "draft", label: "טיוטה" },
@@ -40,6 +53,38 @@ const statusIndex = Math.max(0, STATUS_OPTIONS.findIndex((option) => option.valu
 const intensityIndex = Math.max(0, INTENSITY_OPTIONS.findIndex((option) => option.value === metadata.day_intensity));
 ---
 <AdminLayout title={`עריכת ${date}`}>
+  {error && <p class="form-error" role="alert">{error}</p>}
+  {success && <p class="form-success" role="status">{success}</p>}
+  {generationRunning && (
+    <div class="generation-running" role="status" data-generation-running>
+      <span class="generation-running-dot" aria-hidden="true"></span>
+      <div><strong>היצירה מתבצעת ברקע</strong><span>העמוד יתרענן אוטומטית כשההרצה תתקדם.</span></div>
+    </div>
+  )}
+  {unavailable ? (
+    <section class="friendly-state friendly-state-error admin-friendly-state" role="status">
+      <div class="friendly-state-glyph" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v4M12 16h.01" /><path d="M10.3 3.6 2.4 17.2A2 2 0 0 0 4.1 20h15.8a2 2 0 0 0 1.7-2.8L13.7 3.6a2 2 0 0 0-3.4 0Z" /></svg>
+      </div>
+      <p class="eyebrow">{failedGeneration ? "התדריך לא הושלם" : "קובץ התדריך חסר"}</p>
+      <h1>{failedGeneration ? "אופס, ההפקה נעצרה בדרך" : "התוכן זקוק לשחזור"}</h1>
+      <p>{failedGeneration
+        ? `לא נוצר תדריך תקין עבור ${date}, ולכן אין עדיין תוכן שאפשר לפרסם. התקלה כבר מופיעה במערכת ההתראות של האדמין.`
+        : `רשומת ${date} קיימת, אבל קובץ ה־Markdown שלה אינו זמין. אפשר ליצור את התוכן מחדש דרך ה־pipeline המלא.`}</p>
+      <div class="friendly-state-actions">
+        <form action={`/api/admin/briefs/${date}/generate`} method="post">
+          <input type="hidden" name="csrf_token" value={csrf} />
+          <input type="hidden" name="mode" value={unavailableGenerationMode} />
+          <button class="button" type="submit" disabled={generationRunning}>
+            {generationRunning ? "מריץ מחדש…" : failedGeneration ? "ניסיון יצירה מחדש" : "שחזור באמצעות יצירה מחדש"}
+          </button>
+        </form>
+        <a class="button" href="/admin/alerts">לצפייה בהתראות</a>
+        <a class="button secondary" href="/admin">חזרה לניהול התדריכים</a>
+      </div>
+    </section>
+  ) : (
+    <>
   <section class="editor" data-editor>
     <header class="editor-topbar">
       <div class="editor-topbar-title">
@@ -47,6 +92,13 @@ const intensityIndex = Math.max(0, INTENSITY_OPTIONS.findIndex((option) => optio
         <h1>{date}</h1>
       </div>
       <div class="editor-topbar-tools">
+        <form action={`/api/admin/briefs/${date}/generate`} method="post" data-regenerate-form>
+          <input type="hidden" name="csrf_token" value={csrf} />
+          <input type="hidden" name="mode" value="regenerate" />
+          <button type="button" class="button secondary editor-regenerate" data-regenerate disabled={generationRunning}>
+            {generationRunning ? "יוצר מחדש…" : "יצירה מחדש"}
+          </button>
+        </form>
         <div class="segmented segmented-sm" data-segmented data-editor-mode aria-label="מצב תצוגה" style="--count:2;--index:0">
           <span class="segmented-thumb" aria-hidden="true"></span>
           <label class="is-active"><input type="radio" name="__mode" value="edit" checked /><span>עריכה</span></label>
@@ -58,9 +110,6 @@ const intensityIndex = Math.max(0, INTENSITY_OPTIONS.findIndex((option) => optio
         </button>
       </div>
     </header>
-
-    {error && <p class="form-error" role="alert">{error}</p>}
-    {success && <p class="form-success" role="status">{success}</p>}
 
     <form class="editor-body" data-editor-form action={`/api/admin/briefs/${date}`} method="post">
       <input type="hidden" name="csrf_token" value={csrf} />
@@ -142,8 +191,8 @@ const intensityIndex = Math.max(0, INTENSITY_OPTIONS.findIndex((option) => optio
       </div>
 
       <div class="editor-footer">
-        <button class="button" name="action" value="save" type="submit">שמירת שינויים</button>
-        <button class="danger-button" name="action" value="delete" type="submit" formnovalidate data-delete>מחיקת התדריך</button>
+        <button class="button" name="action" value="save" type="submit" disabled={generationRunning}>שמירת שינויים</button>
+        <button class="danger-button" name="action" value="delete" type="submit" formnovalidate data-delete disabled={generationRunning}>מחיקת התדריך</button>
       </div>
     </form>
   </section>
@@ -157,6 +206,17 @@ const intensityIndex = Math.max(0, INTENSITY_OPTIONS.findIndex((option) => optio
       <div class="confirm-dialog-actions">
         <button type="submit" value="cancel" class="button secondary">ביטול</button>
         <button type="submit" value="confirm" class="danger-button">מחיקה לצמיתות</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="confirm-dialog" data-regenerate-dialog>
+    <form method="dialog" class="confirm-dialog-body">
+      <h2>יצירת התדריך מחדש</h2>
+      <p>המערכת תריץ מחדש את כל שלבי המחקר והכתיבה עבור {date} ותדרוס את התוכן הנוכחי. אם התדריך כבר פורסם, הוא יישאר מפורסם ונתוני הסטטיסטיקה שלו יעודכנו לתוכן החדש.</p>
+      <div class="confirm-dialog-actions">
+        <button type="submit" value="cancel" class="button secondary">ביטול</button>
+        <button type="submit" value="confirm" class="button">יצירה מחדש</button>
       </div>
     </form>
   </dialog>
@@ -221,6 +281,81 @@ const intensityIndex = Math.max(0, INTENSITY_OPTIONS.findIndex((option) => optio
         dialog.addEventListener("close", () => {
           if (dialog.returnValue === "confirm") form.requestSubmit(deleteButton);
         });
+      }
+    })();
+  </script>
+    </>
+  )}
+
+  <section class="research-trace" aria-labelledby="research-trace-title">
+    <header class="research-trace-head">
+      <div>
+        <p class="eyebrow">שקיפות מחקר</p>
+        <h2 id="research-trace-title">מה כל שלב מצא ומה נשאר</h2>
+      </div>
+      {generationInfo.research && <span>הרצה {generationInfo.research.runId.slice(0, 8)}</span>}
+    </header>
+    {generationInfo.research && generationInfo.research.stages.length > 0 ? (
+      <div class="research-stage-grid">
+        {generationInfo.research.stages.map((stage, index) => (
+          <article class:list={["research-stage-card", { "is-skipped": stage.state === "skipped", "is-failed": stage.state === "failed" }]}>
+            <div class="research-stage-title">
+              <span>{String(index + 1).padStart(2, "0")}</span>
+              <h3>{STAGE_LABELS[stage.key]}</h3>
+            </div>
+            {stage.state === "skipped" ? (
+              <p class="research-stage-empty">השלב לא הופעל בהרצה הזאת.</p>
+            ) : (
+              <>
+                {stage.state === "failed" && <p class="research-stage-failed">השלב נעצר בזמן אימות התוצאות.</p>}
+                <div class="research-stage-metrics">
+                  <span><strong>{stage.foundCount}</strong> נמצאו</span>
+                  <span><strong>{stage.contributedCount}</strong> המשיכו</span>
+                  <span><strong>{stage.filteredCount + stage.rejectedCount}</strong> סוננו</span>
+                </div>
+                <div class="research-stage-block">
+                  <span class="research-stage-label">נושאים</span>
+                  <div class="research-topic-list">
+                    {stage.topics.length > 0
+                      ? stage.topics.slice(0, 8).map((topic) => <span>{topic}</span>)
+                      : <span class="is-empty">לא דווחו נושאים</span>}
+                  </div>
+                </div>
+                {stage.contributedTitles.length > 0 && (
+                  <div class="research-stage-block">
+                    <span class="research-stage-label">המשיכו הלאה</span>
+                    <ul>{stage.contributedTitles.slice(0, 4).map((title) => <li>{title}</li>)}</ul>
+                  </div>
+                )}
+                {stage.filteredTitles.length > 0 && (
+                  <details class="research-filtered">
+                    <summary>מה סונן בשלב הזה</summary>
+                    <ul>{stage.filteredTitles.slice(0, 6).map((title) => <li>{title}</li>)}</ul>
+                  </details>
+                )}
+              </>
+            )}
+          </article>
+        ))}
+      </div>
+    ) : (
+      <p class="research-trace-empty">עדיין אין נתוני מחקר שמורים עבור התדריך הזה. הם יופיעו לאחר ההרצה הבאה.</p>
+    )}
+  </section>
+
+  <script is:inline>
+    (() => {
+      const regenerateForm = document.querySelector("[data-regenerate-form]");
+      const regenerateButton = document.querySelector("[data-regenerate]");
+      const regenerateDialog = document.querySelector("[data-regenerate-dialog]");
+      if (regenerateForm && regenerateButton && regenerateDialog && typeof regenerateDialog.showModal === "function") {
+        regenerateButton.addEventListener("click", () => regenerateDialog.showModal());
+        regenerateDialog.addEventListener("close", () => {
+          if (regenerateDialog.returnValue === "confirm") regenerateForm.requestSubmit();
+        });
+      }
+      if (document.querySelector("[data-generation-running]")) {
+        setTimeout(() => window.location.reload(), 6000);
       }
     })();
   </script>

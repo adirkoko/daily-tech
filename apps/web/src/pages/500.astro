@@ -1,0 +1,18 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+---
+
+<BaseLayout noindex ambient>
+  <section class="shell friendly-state friendly-state-error public-page" role="alert">
+    <div class="friendly-state-glyph" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v4M12 16h.01" /><path d="M10.3 3.6 2.4 17.2A2 2 0 0 0 4.1 20h15.8a2 2 0 0 0 1.7-2.8L13.7 3.6a2 2 0 0 0-3.4 0Z" /></svg>
+    </div>
+    <p class="eyebrow">תקלה זמנית</p>
+    <h1>אופס, משהו השתבש</h1>
+    <p>לא הצלחנו לטעון את העמוד כרגע. אפשר לנסות שוב בעוד רגע או לחזור לעמוד הבית.</p>
+    <div class="friendly-state-actions">
+      <a class="button" href="">ניסיון נוסף</a>
+      <a class="button secondary" href="/">חזרה לעמוד הבית</a>
+    </div>
+  </section>
+</BaseLayout>

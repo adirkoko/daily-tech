@@ -164,6 +164,8 @@ export interface BeginScheduledJobInput {
   readonly leaseOwner: string;
   readonly leaseExpiresAt: string;
   readonly occurredAt: string;
+  /** Explicit operator runs may reopen failed jobs or any terminal job. */
+  readonly restartFinished?: "failed" | "any";
 }
 
 export type BeginScheduledJobResult =
@@ -410,6 +412,14 @@ export class OperationsStore {
     return result.changes;
   }
 
+  getPublicationJob(dayDate: string): PublicationJob | null {
+    assertCalendarDate(dayDate, "dayDate");
+    const row = this.#database
+      .prepare("SELECT * FROM publication_jobs WHERE day_date = ?")
+      .get(dayDate) as PublicationJobRow | undefined;
+    return row === undefined ? null : mapPublicationJob(row);
+  }
+
   beginPublication(input: BeginPublicationInput): BeginPublicationResult {
     assertCalendarDate(input.dayDate, "dayDate");
     assertNonEmpty(input.leaseOwner, "leaseOwner");
@@ -556,7 +566,13 @@ export class OperationsStore {
     this.#database.exec("BEGIN IMMEDIATE");
     try {
       const existing = this.getScheduledJob(input.jobName, input.targetDate);
-      if (existing?.state === "succeeded" || existing?.state === "failed") {
+      const mayRestartFinished =
+        input.restartFinished === "any" ||
+        (input.restartFinished === "failed" && existing?.state === "failed");
+      if (
+        (existing?.state === "succeeded" || existing?.state === "failed") &&
+        !mayRestartFinished
+      ) {
         this.#database.exec("COMMIT");
         return { outcome: "already_finished", job: existing };
       }
@@ -640,13 +656,6 @@ export class OperationsStore {
     return mapFeedbackTicket(row);
   }
 
-  private getPublicationJob(dayDate: string): PublicationJob | null {
-    const row = this.#database
-      .prepare("SELECT * FROM publication_jobs WHERE day_date = ?")
-      .get(dayDate) as PublicationJobRow | undefined;
-    return row === undefined ? null : mapPublicationJob(row);
-  }
-
   private requirePublicationJob(dayDate: string): PublicationJob {
     const job = this.getPublicationJob(dayDate);
     if (job === null) {
@@ -665,7 +674,8 @@ export class OperationsStore {
     return mapAdminSession(row);
   }
 
-  private getScheduledJob(jobName: ScheduledJobName, targetDate: string): ScheduledJob | null {
+  getScheduledJob(jobName: ScheduledJobName, targetDate: string): ScheduledJob | null {
+    validateScheduledJobIdentity(jobName, targetDate);
     const row = this.#database
       .prepare("SELECT * FROM scheduled_jobs WHERE job_name = ? AND target_date = ?")
       .get(jobName, targetDate) as ScheduledJobRow | undefined;

@@ -7,8 +7,9 @@ meaningful touchpoint makes clear that this is a short daily brief.
 ## Navigation
 
 Implemented items: Today, Calendar, Statistics, and Feedback. Search is added later.
-The admin route exists at `/admin` but is deliberately not promoted in public
-navigation.
+The admin route exists at `/admin`. It is kept out of primary navigation and exposed
+only through a deliberately quiet footer shortcut; the Admin header includes an
+explicit return to the public site.
 
 ## Home page
 
@@ -18,13 +19,14 @@ date, and direct actions for reading it or opening the calendar. Two compact met
 show the number of significant developments and the day's intensity. Earlier
 editions are deliberately left to the calendar instead of repeated as a card feed.
 
-- **Today's brief not published yet** — when generation has not finished or the brief
-  is waiting to publish, the page does not link to a broken target. It shows a state
-  such as "Today's update is still in preparation" alongside a link to the last
-  published brief.
-- **Failure** — when generation or research failed and there is no valid brief, the
-  page shows a short note that there was a problem, with no technical detail and no
-  partial file.
+- **Before publication time** — internal generation state is never shown to readers;
+  the latest published edition remains the complete public experience.
+- **Expected edition is late** — only after the configured Israel-time publication
+  threshold, a missing, draft, or ready target receives a short preparation notice.
+- **Failure** — only after that same threshold, a failed target or durable publication
+  job receives a calm failure notice with no technical detail and no partial file.
+  A published target always suppresses both notices, even if an obsolete job record
+  says otherwise.
 
 ## Daily brief page
 
@@ -39,6 +41,11 @@ brief is in [`data-model.md`](data-model.md). Raw HTML is sanitized; source link
 hardened, open in a new tab, and show the source name rather than a long URL where
 possible. Compact navigation to the previous and next published editions appears
 when they exist. Metadata is not shown on the page.
+
+A known failed day returns a friendly unavailable page with HTTP 503 instead of
+attempting to read an artifact that was never created. Unknown addresses receive the
+custom 404 page, while unexpected rendering failures use the matching custom 500
+page. None of these pages exposes internal error details.
 
 ## Calendar and archive
 
@@ -101,8 +108,10 @@ together with the relevant development for each day.
   and failure states.
 - The main archive views and Admin sit above a full-viewport animated faceted mesh.
   Semi-transparent frosted surfaces preserve depth without sacrificing legibility;
-  denser Admin work surfaces use greater opacity. Motion is decorative, remains
-  subtle, and is disabled when the browser requests reduced motion.
+  denser Admin work surfaces use greater opacity. Desktop facets animate internally;
+  on mobile their geometry is frozen and the connected mesh moves as one composited
+  layer. Motion is decorative and is disabled when the browser requests reduced
+  motion.
 
 ## Display mode
 
@@ -121,6 +130,7 @@ A short process-local snapshot caches SQLite metadata and derived page data; Adm
 writes and the embedded scheduler invalidate it immediately, while its configurable
 TTL covers date rollover and out-of-process changes. Markdown is not scanned for
 index pages and is read only when a specific daily edition is requested. A missing
-file therefore fails that request without taking down the home, calendar, or
-statistics pages. Public pages retain minimal browser JavaScript, SEO-friendly HTML,
-and resilience when AI providers are down.
+artifact for a known failed day is handled without an exception; other unexpected
+request failures fall through to the custom 500 page without taking down the home,
+calendar, or statistics pages. Public pages retain minimal browser JavaScript,
+SEO-friendly HTML, and resilience when AI providers are down.

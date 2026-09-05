@@ -94,6 +94,13 @@ text. Expired rows are purged during session creation.
 is the job name (`generate` or `publish`) plus target date. State, attempt count, lease
 owner/expiry, timestamps, and the last error make daily execution restart-safe and
 prevent overlapping service instances from duplicating work.
+The scheduler treats terminal rows as complete. Only an explicit authenticated Admin
+regeneration may restart a finished `generate` row; the attempt count is incremented
+and the same lease rules still apply. A successful Admin retry may also restart a
+failed (never a successful) `publish` row when publication time already passed and
+that scheduled attempt failed. No separate statistics rows exist—statistics are
+recalculated from current `published` day metadata, so replacing a published brief
+updates them without double-counting the date.
 
 ## Pipeline settings
 

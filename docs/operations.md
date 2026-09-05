@@ -37,7 +37,9 @@ takes precedence.
 
 Other 4xx responses and downstream validation failures are not retried. After the
 client exhausts its attempts, the run fails, creates a System ticket, and remains a
-terminal scheduler job. Recovery is manual with `npm run generate -- --run-at=...`.
+terminal scheduler job. An operator can retry that date from its Admin brief page;
+the explicit action safely reopens the finished generation job without changing the
+scheduler's normal once-per-day behavior.
 
 ## Logging
 
@@ -47,8 +49,11 @@ Each generation run records one terminal event:
 - `run_failed` with the failing stage and error message; the same failure also creates
   a System ticket.
 
-The pipeline does not write per-stage events or maintain local token/cost accounting.
-Provider usage remains available through the provider's own reporting.
+In addition, it records bounded `research_stage_completed` summaries for the three
+discovery passes and Deep Research. They contain contribution/filter counts and
+short title/topic lists for Admin visibility, not complete prompts, model responses,
+source contents, or secrets. The pipeline does not maintain local token/cost
+accounting; provider usage remains available through the provider's own reporting.
 
 Operational logs also cover Admin actions, login attempts, feedback handling,
 publication attempts, and scheduler claims/completions/failures. Publication events
@@ -58,6 +63,19 @@ active lease, and failures.
 Logs are stored in `operational_logs` as structured JSON details with indexed run,
 date, severity, and timestamp fields. Feedback and System tickets live in
 `feedback_tickets`; fixed-window counters live in `rate_limit_counters`.
+
+Admin retry/regeneration also records start, completion, or failure events. It uses
+the same `scheduled_jobs` generation lease as the embedded scheduler, preventing two
+service instances or repeated clicks from generating one date concurrently. Manual
+save and delete requests are refused while that lease is active. Regeneration is
+replace-on-success, so a provider or validation failure creates an alert without
+overwriting the existing brief or changing its status.
+
+When **Retry** repairs a day after its scheduled publication job has already failed,
+Admin explicitly reopens only that failed `publish` job and invokes the same local
+publisher used by the scheduler. Publication validation, publication leases, and
+failure tickets therefore remain unchanged; successful generation alone never marks
+a day as published.
 
 For pipeline-specific failure diagnostics, see
 [`pipeline.md`](pipeline.md#failures-and-diagnostics).

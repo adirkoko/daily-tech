@@ -91,6 +91,7 @@ export type {
   PipelineEventType,
   PipelineFailure,
   PipelineLogEvent,
+  PipelineLogValue,
   PipelineLogger,
   PipelineRunResult,
   PipelineStage,
@@ -114,5 +115,5 @@ export type {
   ModelBriefWriterOptions,
 } from "./writing/contracts.js";
 export { renderBriefMarkdown } from "./writing/render-markdown.js";
-export { previousIsraelDayWindow } from "./window.js";
+export { israelDayWindow, previousIsraelDayWindow } from "./window.js";
 export { runPipelineCli } from "./cli.js";

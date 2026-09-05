@@ -1,4 +1,10 @@
 const ISRAEL_TIME_ZONE = "Asia/Jerusalem";
+const israelClockFormatter = new Intl.DateTimeFormat("en-GB", {
+  timeZone: ISRAEL_TIME_ZONE,
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+});
 
 export interface CalendarCell {
   readonly date: string;
@@ -23,6 +29,33 @@ function dateParts(date: Date, timeZone: string): Record<string, string> {
 export function toIsraelDate(date = new Date()): string {
   const parts = dateParts(date, ISRAEL_TIME_ZONE);
   return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
+export function isIsraelTimeAtOrAfter(clockTime: string, date = new Date()): boolean {
+  const match = /^(\d{2}):(\d{2})$/u.exec(clockTime);
+  const targetHour = Number(match?.[1]);
+  const targetMinute = Number(match?.[2]);
+  if (
+    match === null
+    || !Number.isInteger(targetHour)
+    || targetHour > 23
+    || !Number.isInteger(targetMinute)
+    || targetMinute > 59
+  ) {
+    throw new TypeError("clockTime must use 24-hour HH:MM format.");
+  }
+  const parts = Object.fromEntries(
+    israelClockFormatter
+      .formatToParts(date)
+      .filter((part) => part.type !== "literal")
+      .map((part) => [part.type, part.value]),
+  );
+  const hour = Number(parts.hour);
+  const minute = Number(parts.minute);
+  if (!Number.isInteger(hour) || !Number.isInteger(minute)) {
+    throw new Error("Could not resolve the current Israel time.");
+  }
+  return hour * 60 + minute >= targetHour * 60 + targetMinute;
 }
 
 export function addCalendarDays(date: string, amount: number): string {

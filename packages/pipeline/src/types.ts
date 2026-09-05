@@ -27,7 +27,18 @@ export type PipelineStage =
   | "validate"
   | "persist";
 
-export type PipelineEventType = "run_completed" | "run_failed";
+export type PipelineEventType =
+  | "run_completed"
+  | "run_failed"
+  | "research_stage_completed";
+
+export type PipelineLogValue =
+  | null
+  | boolean
+  | number
+  | string
+  | readonly PipelineLogValue[]
+  | { readonly [key: string]: PipelineLogValue };
 
 export interface PipelineLogEvent {
   readonly runId: string;
@@ -35,7 +46,7 @@ export interface PipelineLogEvent {
   readonly type: PipelineEventType;
   readonly stage: PipelineStage;
   readonly occurredAt: string;
-  readonly details?: Readonly<Record<string, string | number | boolean | null>>;
+  readonly details?: Readonly<Record<string, PipelineLogValue>>;
 }
 
 export interface PipelineLogger {

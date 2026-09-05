@@ -1,12 +1,17 @@
 ---
 import BaseLayout from "../layouts/BaseLayout.astro";
 ---
-<BaseLayout noindex>
-  <section class="shell empty-state">
-    <div class="empty-glyph" aria-hidden="true">404</div>
-    <p class="eyebrow">אין כאן מהדורה</p>
-    <h1>העמוד שחיפשת לא נמצא</h1>
-    <p>ייתכן שהקישור השתנה, או שהמהדורה עדיין לא פורסמה.</p>
-    <a class="button" href="/">חזרה לעמוד הבית</a>
+<BaseLayout noindex ambient>
+  <section class="shell friendly-state public-page">
+    <div class="friendly-state-glyph" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9" /><path d="m15.5 8.5-2.1 4.9-4.9 2.1 2.1-4.9 4.9-2.1Z" /></svg>
+    </div>
+    <p class="eyebrow">לא מצאנו את העמוד</p>
+    <h1>אופס, אין כאן שום דבר</h1>
+    <p>יכול להיות שהכתובת השתנתה, שהקישור אינו תקין או שהעמוד כבר לא קיים.</p>
+    <div class="friendly-state-actions">
+      <a class="button" href="/">חזרה לעמוד הבית</a>
+      <a class="button secondary" href="/calendar">לוח המהדורות</a>
+    </div>
   </section>
 </BaseLayout>

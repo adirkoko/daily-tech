@@ -83,9 +83,32 @@ describe("DailyBriefPipeline", () => {
     expect(deps.writer.write).toHaveBeenCalledWith(expect.anything(), expect.anything(), "");
     expect(deps.sink.saveReady).toHaveBeenCalledOnce();
     expect(deps.failures).toEqual([]);
-    expect(deps.events).toEqual([
+    expect(deps.events).toContainEqual(
       expect.objectContaining({ type: "run_completed", stage: "persist" }),
-    ]);
+    );
+    expect(deps.events).toContainEqual(expect.objectContaining({
+      type: "research_stage_completed",
+      stage: "light_discovery",
+      details: expect.objectContaining({ foundCount: 1, contributedCount: 1 }),
+    }));
+  });
+
+  it("runs the exact requested historical Israel date", async () => {
+    const deps = dependencies();
+    const pipeline = new DailyBriefPipeline(deps);
+
+    const result = await pipeline.run({ targetDate: "2026-08-27" });
+
+    expect(result.window).toMatchObject({ date: "2026-08-27" });
+    expect(result.window.start.toISOString()).toBe("2026-08-26T21:00:00.000Z");
+  });
+
+  it("rejects ambiguous run time and explicit date inputs", async () => {
+    const pipeline = new DailyBriefPipeline(dependencies());
+
+    await expect(
+      pipeline.run({ runAt, targetDate: "2026-08-27" }),
+    ).rejects.toThrow("Use either runAt or targetDate, not both.");
   });
 
   it("merges a gap-discovered story into deep research and the final edition", async () => {
@@ -191,6 +214,50 @@ describe("DailyBriefPipeline", () => {
     const deepResearchCall = vi.mocked(deps.researchProvider.deepResearch).mock.calls[0]![0];
     expect(deepResearchCall.candidates).toHaveLength(10);
     expect(deepResearchCall.candidates.every((candidate) => candidate.importance === 5)).toBe(true);
+    expect(deps.events).toContainEqual(expect.objectContaining({
+      type: "research_stage_completed",
+      stage: "deep_research",
+      details: expect.objectContaining({
+        safetyCappedCount: 5,
+        filteredCount: 14,
+        safetyCappedTitles: expect.arrayContaining(["Candidate 14"]),
+      }),
+    }));
+  });
+
+  it("keeps safety-capped candidates visible when deep research validation fails", async () => {
+    const deps = dependencies();
+    const manyCandidates = Array.from({ length: 12 }, (_, index) => ({
+      ...firstCandidateInput,
+      title: `Candidate ${index}`,
+      importance: 5 as const,
+      sources: [{ ...firstCandidateInput.sources[0]!, url: `https://example.com/story-${index}` }],
+    }));
+    vi.mocked(deps.researchProvider.discover).mockResolvedValue({
+      stories: manyCandidates,
+      rejectedStories: [],
+    });
+    vi.mocked(deps.researchProvider.deepResearch).mockResolvedValue({
+      stories: [{ ...firstDeepStoryInput, candidateId: "not-a-candidate" }],
+    });
+    const pipeline = new DailyBriefPipeline(deps, { maximumDiscoveryCandidates: 10 });
+
+    await expect(pipeline.run({ runAt })).rejects.toMatchObject({
+      name: "PipelineRunError",
+      stage: "deep_research",
+    });
+
+    expect(deps.events).toContainEqual(expect.objectContaining({
+      type: "research_stage_completed",
+      stage: "deep_research",
+      details: expect.objectContaining({
+        state: "failed",
+        safetyCappedCount: 2,
+        filteredCount: 2,
+        safetyCappedTitles: ["Candidate 10", "Candidate 11"],
+        filteredTitles: ["Candidate 10", "Candidate 11"],
+      }),
+    }));
   });
 
   it("fails before persistence when the draft crosses the research boundary", async () => {
@@ -212,8 +279,8 @@ describe("DailyBriefPipeline", () => {
     } satisfies Partial<PipelineRunError>);
     expect(deps.sink.saveReady).not.toHaveBeenCalled();
     expect(deps.failures).toHaveLength(1);
-    expect(deps.events).toEqual([
+    expect(deps.events).toContainEqual(
       expect.objectContaining({ type: "run_failed", stage: "draft_validation" }),
-    ]);
+    );
   });
 });

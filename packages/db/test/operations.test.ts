@@ -104,6 +104,7 @@ describe("OperationsStore", () => {
 
   it("leases publication work, blocks overlap, and completes idempotently", () => {
     database.saveDay(createMetadata());
+    expect(database.operations.getPublicationJob("2026-08-27")).toBeNull();
     const first = database.operations.beginPublication({
       dayDate: "2026-08-27",
       leaseOwner: "publisher-1",
@@ -134,6 +135,7 @@ describe("OperationsStore", () => {
       completedAt: "2026-08-28T04:02:00.000Z",
       leaseOwner: null,
     });
+    expect(database.operations.getPublicationJob("2026-08-27")).toEqual(completed);
     expect(
       database.operations.beginPublication({
         dayDate: "2026-08-27",
@@ -232,6 +234,64 @@ describe("OperationsStore", () => {
       occurredAt: "2026-08-28T08:00:00.000Z",
       leaseExpiresAt: "2026-08-28T14:00:00.000Z",
     })).toMatchObject({ outcome: "already_finished", job: { attemptCount: 1 } });
+  });
+
+  it("restarts a finished scheduled job only when explicitly requested", () => {
+    database.operations.beginScheduledJob({
+      jobName: "generate",
+      targetDate: "2026-08-27",
+      leaseOwner: "service-1",
+      occurredAt: "2026-08-28T01:00:00.000Z",
+      leaseExpiresAt: "2026-08-28T07:00:00.000Z",
+    });
+    database.operations.completeScheduledJob(
+      "generate",
+      "2026-08-27",
+      "service-1",
+      "2026-08-28T01:10:00.000Z",
+    );
+
+    const restarted = database.operations.beginScheduledJob({
+      jobName: "generate",
+      targetDate: "2026-08-27",
+      leaseOwner: "admin-1",
+      occurredAt: "2026-08-28T02:00:00.000Z",
+      leaseExpiresAt: "2026-08-28T08:00:00.000Z",
+      restartFinished: "any",
+    });
+
+    expect(restarted).toMatchObject({
+      outcome: "acquired",
+      job: { state: "running", attemptCount: 2, leaseOwner: "admin-1" },
+    });
+    expect(database.operations.getScheduledJob("generate", "2026-08-27")).toEqual(
+      restarted.job,
+    );
+  });
+
+  it("can limit an explicit restart to failed terminal jobs", () => {
+    database.operations.beginScheduledJob({
+      jobName: "publish",
+      targetDate: "2026-08-27",
+      leaseOwner: "publisher-1",
+      occurredAt: "2026-08-28T04:00:00.000Z",
+      leaseExpiresAt: "2026-08-28T10:00:00.000Z",
+    });
+    database.operations.completeScheduledJob(
+      "publish",
+      "2026-08-27",
+      "publisher-1",
+      "2026-08-28T04:10:00.000Z",
+    );
+
+    expect(database.operations.beginScheduledJob({
+      jobName: "publish",
+      targetDate: "2026-08-27",
+      leaseOwner: "admin-publish",
+      occurredAt: "2026-08-28T05:00:00.000Z",
+      leaseExpiresAt: "2026-08-28T11:00:00.000Z",
+      restartFinished: "failed",
+    })).toMatchObject({ outcome: "already_finished", job: { state: "succeeded" } });
   });
 
   it("validates operational inputs before writing", () => {

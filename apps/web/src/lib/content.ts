@@ -1,12 +1,12 @@
 import { access, readFile } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 
-import { expectedBriefRelativePath, type DayMetadata } from "@daily-tech/core";
-import { DailyTechDatabase } from "@daily-tech/db";
+import { DEFAULT_PIPELINE_SETTINGS, expectedBriefRelativePath, type DayMetadata } from "@daily-tech/core";
+import { DailyTechDatabase, type PublicationState } from "@daily-tech/db";
 import { marked } from "marked";
 import sanitizeHtml from "sanitize-html";
 
-import { addCalendarDays, toIsraelDate } from "./dates.js";
+import { addCalendarDays, isIsraelTimeAtOrAfter, toIsraelDate } from "./dates.js";
 
 export interface PublishedBrief {
   readonly metadata: DayMetadata;
@@ -21,6 +21,9 @@ export interface SiteSnapshot {
   readonly published: readonly PublishedBrief[];
   readonly latestPublished: PublishedBrief | null;
   readonly targetDay: DayMetadata | null;
+  readonly publishTime: string;
+  readonly publicationDue: boolean;
+  readonly targetPublicationState: PublicationState | null;
 }
 
 export interface LoadSiteSnapshotOptions {
@@ -77,12 +80,14 @@ function briefFilePath(contentRoot: string, date: string): string {
 export async function loadSiteSnapshot(
   options: LoadSiteSnapshotOptions = {},
 ): Promise<SiteSnapshot> {
+  const now = options.now ?? new Date();
   const contentRoot = resolve(options.contentRoot ?? defaultContentRoot());
   const databasePath = join(contentRoot, "meta", "tech_briefs.db");
-  const currentDate = toIsraelDate(options.now);
+  const currentDate = toIsraelDate(now);
   const targetDate = addCalendarDays(currentDate, -1);
 
   if (!(await pathExists(databasePath))) {
+    const publishTime = DEFAULT_PIPELINE_SETTINGS.publishTime;
     return {
       contentRoot,
       currentDate,
@@ -91,6 +96,9 @@ export async function loadSiteSnapshot(
       published: [],
       latestPublished: null,
       targetDay: null,
+      publishTime,
+      publicationDue: isIsraelTimeAtOrAfter(publishTime, now),
+      targetPublicationState: null,
     };
   }
 
@@ -100,8 +108,12 @@ export async function loadSiteSnapshot(
     migrate: false,
   });
   let days: readonly DayMetadata[];
+  let publishTime: string;
+  let targetPublicationState: PublicationState | null;
   try {
     days = listAllDays(database);
+    publishTime = database.pipelineSettings.get().publishTime;
+    targetPublicationState = database.operations.getPublicationJob(targetDate)?.state ?? null;
   } finally {
     database.close();
   }
@@ -124,6 +136,9 @@ export async function loadSiteSnapshot(
     published,
     latestPublished: published[0] ?? null,
     targetDay: days.find((day) => day.date === targetDate) ?? null,
+    publishTime,
+    publicationDue: isIsraelTimeAtOrAfter(publishTime, now),
+    targetPublicationState,
   };
 }
 

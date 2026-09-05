@@ -90,8 +90,24 @@ describe("standalone site service", () => {
       published_at: "2026-08-27T04:00:00.000Z",
       updated_at: null,
     };
+    const failedDay: DayMetadata = {
+      ...day,
+      date: "2026-08-25",
+      summary: "הפקת המהדורה נכשלה.",
+      status: "failed",
+      published_at: null,
+    };
+    const missingFileDay: DayMetadata = {
+      ...day,
+      date: "2026-08-24",
+      summary: "רשומה ללא קובץ לצורך בדיקת התאוששות.",
+      status: "ready",
+      published_at: null,
+    };
     const database = DailyTechDatabase.open({ filename: databasePath });
     database.saveDay(day);
+    database.saveDay(failedDay);
+    database.saveDay(missingFileDay);
     database.operations.createTicket({
       title: "Fixture system failure",
       category: "system",
@@ -139,10 +155,21 @@ describe("standalone site service", () => {
         scheduler: "disabled",
       });
       const dailyHtml = await (await fetchWhenReady(`${origin}/daily/${day.date}`)).text();
+      const failedDaily = await fetch(`${origin}/daily/${failedDay.date}`);
+      const failedDailyHtml = await failedDaily.text();
       const monthHtml = await (await fetch(`${origin}/calendar`)).text();
       expect(dailyHtml).toContain("מהדורת אינטגרציה בטוחה");
       expect(dailyHtml).toContain("noopener noreferrer");
       expect(dailyHtml).not.toContain("alert('bad')");
+      expect(failedDaily.status).toBe(503);
+      expect(failedDaily.headers.get("retry-after")).toBe("3600");
+      expect(failedDailyHtml).toContain("אופס, משהו השתבש בדרך");
+      const missingPage = await fetch(`${origin}/this-page-does-not-exist`);
+      expect(missingPage.status).toBe(404);
+      expect(await missingPage.text()).toContain("אופס, אין כאן שום דבר");
+      const errorPage = await fetch(`${origin}/500`);
+      expect(errorPage.status).toBe(500);
+      expect(await errorPage.text()).toContain("אופס, משהו השתבש");
       // The calendar always server-renders the *current* Israel month, and the fixture
       // day (2026-08-26) will not generally fall inside it — the client reads every
       // published day from this embedded data blob to render any month on demand, so
@@ -209,6 +236,36 @@ describe("standalone site service", () => {
       // dashboard also only server-renders the current Israel month.
       expect(dashboardHtml).toContain(`"date":"${day.date}"`);
       expect(dashboardHtml).toContain('"hrefBase":"/admin/briefs"');
+      const failedEditor = await fetch(`${origin}/admin/briefs/${failedDay.date}`, { headers: adminHeaders });
+      const failedEditorHtml = await failedEditor.text();
+      expect(failedEditor.status).toBe(200);
+      expect(failedEditorHtml).toContain("אופס, ההפקה נעצרה בדרך");
+      expect(failedEditorHtml).toContain(`/api/admin/briefs/${failedDay.date}/generate`);
+      expect(failedEditorHtml).toContain('name="mode" value="retry"');
+      expect(failedEditorHtml).toContain("עדיין אין נתוני מחקר שמורים");
+      const missingFileEditor = await fetch(
+        `${origin}/admin/briefs/${missingFileDay.date}`,
+        { headers: adminHeaders },
+      );
+      const missingFileEditorHtml = await missingFileEditor.text();
+      expect(missingFileEditor.status).toBe(200);
+      expect(missingFileEditorHtml).toContain("התוכן זקוק לשחזור");
+      expect(missingFileEditorHtml).toContain('name="mode" value="regenerate"');
+      const publishedEditorHtml = await (
+        await fetch(`${origin}/admin/briefs/${day.date}`, { headers: adminHeaders })
+      ).text();
+      expect(publishedEditorHtml).toContain('name="mode" value="regenerate"');
+
+      const rejectedGeneration = await fetch(
+        `${origin}/api/admin/briefs/${failedDay.date}/generate`,
+        {
+          method: "POST",
+          redirect: "manual",
+          headers: { ...adminHeaders, ...forwardedHeaders, Origin: publicOrigin },
+          body: new URLSearchParams({ csrf_token: "invalid", mode: "retry" }),
+        },
+      );
+      expect(rejectedGeneration.status).toBe(403);
 
       const feedbackHtml = await (await fetch(`${origin}/admin/feedback`, { headers: adminHeaders })).text();
       expect(feedbackHtml).toContain("Integration feedback");

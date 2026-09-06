@@ -57,7 +57,7 @@ const dayMonth = (value: string): string =>
       <span class="article-meta-separator" aria-hidden="true"></span>
       <IntensityBadge level={day.day_intensity} />
     </div>
-    <div class="article-body" set:html={html}></div>
+    <div class="article-body article-glass" set:html={html}></div>
   </article>
 
   {(older || newer) && (

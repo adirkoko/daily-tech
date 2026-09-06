@@ -107,11 +107,13 @@ together with the relevant development for each day.
   headings and accents; semantic status colours remain reserved for success, warning,
   and failure states.
 - The main archive views and Admin sit above a full-viewport animated faceted mesh.
-  Semi-transparent frosted surfaces preserve depth without sacrificing legibility;
-  denser Admin work surfaces use greater opacity. Desktop facets animate internally;
-  on mobile their geometry is frozen and the connected mesh moves as one composited
-  layer. Motion is decorative and is disabled when the browser requests reduced
-  motion.
+  Cards share one frosted-glass material in both display modes, with controlled
+  variants for prominent, regular, secondary, interactive, inset, and semantic
+  surfaces. The variants change depth and emphasis without changing the underlying
+  material or reducing text contrast. Desktop facets animate internally; on mobile
+  their geometry is frozen, the connected mesh moves as one composited layer, and
+  glass sampling is replaced by a more opaque equivalent for rendering performance.
+  Motion is decorative and is disabled when the browser requests reduced motion.
 
 ## Display mode
 

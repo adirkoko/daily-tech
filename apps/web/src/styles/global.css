@@ -26,18 +26,18 @@
   --calendar-data-outline: #312e81;
   --calendar-today-outline: var(--contrast);
   --shadow: 0 20px 55px rgba(67, 56, 202, 0.1);
-  --glass-surface: color-mix(in srgb, var(--paper-raised) 64%, transparent);
-  --glass-surface-strong: color-mix(in srgb, var(--paper-raised) 76%, transparent);
-  --glass-surface-muted: color-mix(in srgb, var(--paper-raised) 46%, transparent);
-  --glass-surface-inset: color-mix(in srgb, var(--paper-raised) 38%, transparent);
-  --glass-sheen: rgba(255, 255, 255, 0.22);
-  --glass-highlight: rgba(255, 255, 255, 0.18);
+  --glass-surface: color-mix(in srgb, var(--paper-raised) 42%, transparent);
+  --glass-surface-strong: color-mix(in srgb, var(--paper-raised) 54%, transparent);
+  --glass-surface-muted: color-mix(in srgb, var(--paper-raised) 30%, transparent);
+  --glass-surface-inset: color-mix(in srgb, var(--paper-raised) 24%, transparent);
+  --glass-sheen: transparent;
+  --glass-highlight: rgba(255, 255, 255, 0.14);
   --glass-border: color-mix(in srgb, var(--accent) 14%, var(--line));
   --glass-border-strong: color-mix(in srgb, var(--accent) 24%, var(--line));
   --glass-shadow: 0 16px 40px rgba(17, 24, 39, 0.065);
   --glass-shadow-elevated: 0 24px 64px rgba(17, 24, 39, 0.105);
-  --glass-blur: 20px;
-  --glass-blur-strong: 24px;
+  --glass-blur: 14px;
+  --glass-blur-strong: 18px;
   --glass-saturation: 136%;
   --glass-saturation-strong: 145%;
   /* Compatibility aliases for inner controls while the card material is centralized below. */
@@ -90,7 +90,7 @@
   --glass-surface-strong: color-mix(in srgb, var(--paper-raised) 84%, transparent);
   --glass-surface-muted: color-mix(in srgb, var(--paper-raised) 56%, transparent);
   --glass-surface-inset: color-mix(in srgb, var(--paper-raised) 48%, transparent);
-  --glass-sheen: rgba(255, 255, 255, 0.075);
+  --glass-sheen: transparent;
   --glass-highlight: rgba(255, 255, 255, 0.11);
   --glass-border: color-mix(in srgb, var(--accent) 13%, var(--line));
   --glass-border-strong: color-mix(in srgb, var(--accent) 23%, var(--line));
@@ -137,19 +137,19 @@ body {
   stroke-width: .65;
   vector-effect: non-scaling-stroke;
   mix-blend-mode: multiply;
-  opacity: .1;
+  opacity: .12;
 }
-.mesh-facet.mesh-facet-deep { opacity: .16; filter: drop-shadow(3px 5px 3px rgba(10, 13, 30, .12)); }
+.mesh-facet.mesh-facet-deep { opacity: .19; filter: drop-shadow(3px 5px 3px rgba(10, 13, 30, .13)); }
 .geometry-violet { fill: url(#mesh-fill-violet); color: var(--geometry-violet); }
 .geometry-indigo { fill: url(#mesh-fill-indigo); color: var(--geometry-indigo); }
 .geometry-blue { fill: url(#mesh-fill-blue); color: var(--geometry-blue); }
 .geometry-warm { fill: url(#mesh-fill-warm); color: var(--contrast); }
 .mesh-stop-highlight { stop-color: #fff; stop-opacity: .55; }
 .mesh-stop-shadow { stop-color: #080b1c; stop-opacity: .58; }
-.mesh-stop-indigo { stop-color: var(--geometry-indigo); stop-opacity: .9; }
-.mesh-stop-blue { stop-color: var(--geometry-blue); stop-opacity: .9; }
-.mesh-stop-violet { stop-color: var(--geometry-violet); stop-opacity: .9; }
-.mesh-stop-warm { stop-color: var(--contrast); stop-opacity: .82; }
+.mesh-stop-indigo { stop-color: var(--geometry-indigo); stop-opacity: .94; }
+.mesh-stop-blue { stop-color: var(--geometry-blue); stop-opacity: .94; }
+.mesh-stop-violet { stop-color: var(--geometry-violet); stop-opacity: .94; }
+.mesh-stop-warm { stop-color: var(--contrast); stop-opacity: .86; }
 .mesh-stop-tone-shadow { stop-opacity: .42; }
 .mesh-phase-a { animation: mesh-facet-a 7.3s ease-in-out infinite alternate; }
 .mesh-phase-b { animation: mesh-facet-b 11.1s ease-in-out infinite alternate; }
@@ -157,6 +157,8 @@ body {
 .mesh-phase-d { animation: mesh-facet-d 17.3s ease-in-out infinite alternate; }
 :root[data-theme="dark"] .mesh-facet { mix-blend-mode: normal; opacity: .13; }
 :root[data-theme="dark"] .mesh-facet.mesh-facet-deep { opacity: .2; filter: drop-shadow(3px 5px 4px rgba(0, 0, 0, .2)); }
+:root[data-theme="dark"] :is(.mesh-stop-indigo, .mesh-stop-blue, .mesh-stop-violet) { stop-opacity: .9; }
+:root[data-theme="dark"] .mesh-stop-warm { stop-opacity: .82; }
 .has-site-ambient main,
 .has-site-ambient .site-footer { position: relative; z-index: 1; }
 .public-page { position: relative; }
@@ -375,7 +377,7 @@ main { min-height: calc(100vh - 170px); }
 .day-card { min-height: 260px; display: flex; flex-direction: column; padding: 1.4rem; border: 1px solid var(--line); border-radius: 1.25rem; background: var(--paper-raised); text-decoration: none; transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease; }
 .day-card:hover { transform: translateY(-3px); border-color: var(--accent); box-shadow: var(--shadow); }
 .day-card h3 { margin: 1.2rem 0 .65rem; font-size: 1.22rem; line-height: 1.25; letter-spacing: -.025em; }
-.day-card p { margin: 0; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.day-card p { margin: 0; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .day-card-footer { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-block-start: auto; padding-block-start: 1.25rem; color: var(--muted); font-size: .85rem; }
 .intensity { display: inline-flex; align-items: center; gap: .4rem; color: var(--muted); font-size: .78rem; font-weight: 700; }
 .intensity::before { content: ""; width: .48rem; height: .48rem; border-radius: 50%; background: var(--intensity-color, var(--accent)); }
@@ -2212,6 +2214,15 @@ label { display: grid; gap: .4rem; font-weight: 700; }
 .settings-hero { --glass-tint: color-mix(in srgb, var(--accent-soft) 34%, transparent); }
 .inbox-hero { --glass-tint: color-mix(in srgb, var(--inbox-soft, var(--accent-soft)) 44%, transparent); }
 .inbox-row.is-open { --glass-tint: color-mix(in srgb, var(--inbox-soft, var(--accent-soft)) 30%, transparent); }
+:root:not([data-theme="dark"]) .home-hero-content {
+  --glass-local-surface: color-mix(in srgb, var(--paper-raised) 47%, transparent);
+}
+:root:not([data-theme="dark"]) .calendar-widget:not(.is-admin-calendar) {
+  --glass-local-surface: color-mix(in srgb, var(--paper-raised) 36%, transparent);
+}
+:root:not([data-theme="dark"]) .calendar-widget:not(.is-admin-calendar) .calendar-board {
+  background: color-mix(in srgb, var(--paper-raised) 24%, transparent);
+}
 .glass-surface--accent { --glass-tint: color-mix(in srgb, var(--accent-soft) 38%, transparent); }
 .glass-surface--success { --glass-tint: color-mix(in srgb, #22c55e 10%, transparent); }
 .glass-surface--warning { --glass-tint: color-mix(in srgb, #f59e0b 11%, transparent); }
@@ -2553,10 +2564,10 @@ label { display: grid; gap: .4rem; font-weight: 700; }
    live backdrop sampling while the browser chrome changes the viewport. */
 @media (max-width: 820px), (hover: none) and (pointer: coarse) {
   :root {
-    --glass-surface: color-mix(in srgb, var(--paper-raised) 78%, transparent);
-    --glass-surface-strong: color-mix(in srgb, var(--paper-raised) 87%, transparent);
-    --glass-surface-muted: color-mix(in srgb, var(--paper-raised) 68%, transparent);
-    --glass-surface-inset: color-mix(in srgb, var(--paper-raised) 70%, transparent);
+    --glass-surface: color-mix(in srgb, var(--paper-raised) 55%, transparent);
+    --glass-surface-strong: color-mix(in srgb, var(--paper-raised) 68%, transparent);
+    --glass-surface-muted: color-mix(in srgb, var(--paper-raised) 44%, transparent);
+    --glass-surface-inset: color-mix(in srgb, var(--paper-raised) 48%, transparent);
     --glass-shadow: 0 11px 28px color-mix(in srgb, var(--ink) 5%, transparent);
     --glass-shadow-elevated: 0 16px 40px color-mix(in srgb, var(--ink) 8%, transparent);
   }
@@ -2565,6 +2576,12 @@ label { display: grid; gap: .4rem; font-weight: 700; }
     --glass-surface-strong: color-mix(in srgb, var(--paper-raised) 93%, transparent);
     --glass-surface-muted: color-mix(in srgb, var(--paper-raised) 78%, transparent);
     --glass-surface-inset: color-mix(in srgb, var(--paper-raised) 82%, transparent);
+  }
+  :root:not([data-theme="dark"]) .home-hero-content {
+    --glass-local-surface: color-mix(in srgb, var(--paper-raised) 58%, transparent);
+  }
+  :root:not([data-theme="dark"]) .calendar-widget:not(.is-admin-calendar) {
+    --glass-local-surface: color-mix(in srgb, var(--paper-raised) 50%, transparent);
   }
   .site-ambient {
     inset: auto -6vw auto;
@@ -2605,8 +2622,8 @@ label { display: grid; gap: .4rem; font-weight: 700; }
     filter: none;
     mix-blend-mode: normal;
   }
-  .mesh-facet { opacity: .105; }
-  .mesh-facet.mesh-facet-deep { opacity: .155; }
+  .mesh-facet { opacity: .12; }
+  .mesh-facet.mesh-facet-deep { opacity: .18; }
   :root[data-theme="dark"] .mesh-facet { opacity: .12; }
   :root[data-theme="dark"] .mesh-facet.mesh-facet-deep { opacity: .18; }
 

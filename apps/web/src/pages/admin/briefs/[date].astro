@@ -17,6 +17,19 @@ const error = Astro.url.searchParams.get("error");
 const success = Astro.url.searchParams.get("success");
 const generationInfo = await loadAdminBriefGenerationInfo(date);
 const generationRunning = generationInfo.generation.running;
+const requestedAttemptValue = Astro.url.searchParams.get("generation_attempt");
+const requestedAttempt = requestedAttemptValue !== null && /^\d+$/u.test(requestedAttemptValue)
+  ? Number(requestedAttemptValue)
+  : null;
+const generationFinished =
+  requestedAttempt !== null &&
+  requestedAttempt === generationInfo.generation.attemptCount &&
+  !generationRunning &&
+  (generationInfo.generation.state === "succeeded" || generationInfo.generation.state === "failed");
+const generationSucceeded = generationFinished && generationInfo.generation.state === "succeeded";
+const generationFailureMessage = unavailable
+  ? "הניסיון הסתיים ללא תדריך חדש. חוזרים למצב התוכן הנוכחי, שממנו אפשר לנסות שוב."
+  : "הניסיון הסתיים ללא תוכן חדש. חוזרים לתדריך האחרון שנשמר.";
 
 const STAGE_LABELS = {
   light_discovery: "סריקה רחבה",
@@ -24,6 +37,17 @@ const STAGE_LABELS = {
   keyword_discovery: "מיקוד אדמין",
   deep_research: "מחקר עומק וסינון",
 } as const;
+
+const RESEARCH_FILTER_REASON_LABELS: Readonly<Record<string, string>> = {
+  insufficient_evidence: "אין די ראיות",
+  outside_window: "מחוץ לחלון הזמן",
+  duplicate: "כפילות",
+  below_importance_threshold: "מתחת לרף החשיבות",
+  lower_priority_than_selected: "עדיפות נמוכה ביחס לנבחרים",
+  no_eligible_citation: "אין citation מאומת",
+  safety_cap: "מגבלת בטיחות למספר המועמדים",
+  other: "סיבה אחרת",
+};
 
 const STATUS_OPTIONS = [
   { value: "draft", label: "טיוטה" },
@@ -53,15 +77,31 @@ const statusIndex = Math.max(0, STATUS_OPTIONS.findIndex((option) => option.valu
 const intensityIndex = Math.max(0, INTENSITY_OPTIONS.findIndex((option) => option.value === metadata.day_intensity));
 ---
 <AdminLayout title={`עריכת ${date}`}>
-  {error && <p class="form-error" role="alert">{error}</p>}
-  {success && <p class="form-success" role="status">{success}</p>}
-  {generationRunning && (
-    <div class="generation-running" role="status" data-generation-running>
-      <span class="generation-running-dot" aria-hidden="true"></span>
-      <div><strong>היצירה מתבצעת ברקע</strong><span>העמוד יתרענן אוטומטית כשההרצה תתקדם.</span></div>
-    </div>
-  )}
-  {unavailable ? (
+  {!generationRunning && !generationFinished && error && <p class="form-error" role="alert">{error}</p>}
+  {!generationRunning && !generationFinished && success && <p class="form-success" role="status">{success}</p>}
+  {generationRunning ? (
+    <section class="friendly-state admin-friendly-state generation-state" role="status" aria-live="polite" data-generation-active>
+      <div class="friendly-state-glyph generation-state-glyph" aria-hidden="true">
+        <span class="generation-running-dot"></span>
+      </div>
+      <h1>היצירה מתבצעת ברקע</h1>
+      <p>העמוד יתרענן אוטומטית כשההרצה תתקדם.</p>
+    </section>
+  ) : generationFinished ? (
+    <section class:list={["friendly-state", "admin-friendly-state", "generation-state", { "friendly-state-error": !generationSucceeded }]} role="status" aria-live="polite" data-generation-finished>
+      <div class="friendly-state-glyph" aria-hidden="true">
+        {generationSucceeded ? (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 4 4L19 6" /></svg>
+        ) : (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v4M12 16h.01" /><path d="M10.3 3.6 2.4 17.2A2 2 0 0 0 4.1 20h15.8a2 2 0 0 0 1.7-2.8L13.7 3.6a2 2 0 0 0-3.4 0Z" /></svg>
+        )}
+      </div>
+      <h1>{generationSucceeded ? "היצירה הושלמה בהצלחה" : "היצירה נכשלה"}</h1>
+      <p>{generationSucceeded
+        ? "התדריך המעודכן מוכן. עוברים כעת לתוכן החדש."
+        : generationFailureMessage}</p>
+    </section>
+  ) : unavailable ? (
     <section class="friendly-state friendly-state-error admin-friendly-state" role="status">
       <div class="friendly-state-glyph" aria-hidden="true">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v4M12 16h.01" /><path d="M10.3 3.6 2.4 17.2A2 2 0 0 0 4.1 20h15.8a2 2 0 0 0 1.7-2.8L13.7 3.6a2 2 0 0 0-3.4 0Z" /></svg>
@@ -287,6 +327,7 @@ const intensityIndex = Math.max(0, INTENSITY_OPTIONS.findIndex((option) => optio
     </>
   )}
 
+  {!unavailable && !generationRunning && !generationFinished && (
   <section class="research-trace" aria-labelledby="research-trace-title">
     <header class="research-trace-head">
       <div>
@@ -330,7 +371,16 @@ const intensityIndex = Math.max(0, INTENSITY_OPTIONS.findIndex((option) => optio
                 {stage.filteredTitles.length > 0 && (
                   <details class="research-filtered">
                     <summary>מה סונן בשלב הזה</summary>
-                    <ul>{stage.filteredTitles.slice(0, 6).map((title) => <li>{title}</li>)}</ul>
+                    <ul>{stage.filteredTitles.slice(0, 6).map((title, filteredIndex) => (
+                      <li>
+                        <span>{title}</span>
+                        {stage.filteredReasons[filteredIndex] && (
+                          <small class="research-filter-reason">
+                            {RESEARCH_FILTER_REASON_LABELS[stage.filteredReasons[filteredIndex]!] ?? stage.filteredReasons[filteredIndex]}
+                          </small>
+                        )}
+                      </li>
+                    ))}</ul>
                   </details>
                 )}
               </>
@@ -342,6 +392,7 @@ const intensityIndex = Math.max(0, INTENSITY_OPTIONS.findIndex((option) => optio
       <p class="research-trace-empty">עדיין אין נתוני מחקר שמורים עבור התדריך הזה. הם יופיעו לאחר ההרצה הבאה.</p>
     )}
   </section>
+  )}
 
   <script is:inline>
     (() => {
@@ -354,8 +405,19 @@ const intensityIndex = Math.max(0, INTENSITY_OPTIONS.findIndex((option) => optio
           if (regenerateDialog.returnValue === "confirm") regenerateForm.requestSubmit();
         });
       }
-      if (document.querySelector("[data-generation-running]")) {
-        setTimeout(() => window.location.reload(), 6000);
+      if (document.querySelector("[data-generation-active]")) {
+        setTimeout(() => window.location.reload(), 3000);
+      }
+      if (document.querySelector("[data-generation-finished]")) {
+        const cleanUrl = new URL(window.location.href);
+        cleanUrl.searchParams.delete("generation_attempt");
+        setTimeout(() => window.location.replace(cleanUrl.pathname + cleanUrl.search + cleanUrl.hash), 1800);
+      } else if (!document.querySelector("[data-generation-active]")) {
+        const cleanUrl = new URL(window.location.href);
+        if (cleanUrl.searchParams.has("generation_attempt")) {
+          cleanUrl.searchParams.delete("generation_attempt");
+          window.history.replaceState({}, "", cleanUrl.pathname + cleanUrl.search + cleanUrl.hash);
+        }
       }
     })();
   </script>

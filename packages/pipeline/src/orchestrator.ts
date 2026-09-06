@@ -272,6 +272,7 @@ export class DailyBriefPipeline {
           this.#dependencies.researchProvider.deepResearch({
             context,
             candidates: boundedCandidates,
+            minimumImportance: this.#minimumImportance,
             maximumStories: settings.maximumStories,
             editorialInstructions: settings.editorialInstructions,
           }),
@@ -282,6 +283,7 @@ export class DailyBriefPipeline {
             deepBatch,
             boundedCandidates,
             context,
+            this.#minimumImportance,
             settings.maximumStories,
           );
         } catch (error) {
@@ -293,13 +295,18 @@ export class DailyBriefPipeline {
             rejectedCount: error instanceof ResearchProcessingError
               ? error.rejectedStories.length
               : 0,
+            rejectedSourceCount: deepBatch.rejectedSources?.length ?? 0,
             rejectedTitles: error instanceof ResearchProcessingError
               ? error.rejectedStories.slice(0, 30).map(({ title }) => title ?? "<missing>")
+              : [],
+            rejectedReasons: error instanceof ResearchProcessingError
+              ? error.rejectedStories.slice(0, 30).map(({ reason }) => reason)
               : [],
             safetyCappedCount: safetyCappedCandidates.length,
             safetyCappedTitles: safetyCappedCandidates.slice(0, 30).map(({ title }) => title),
             filteredCount: safetyCappedCandidates.length,
             filteredTitles: safetyCappedCandidates.slice(0, 30).map(({ title }) => title),
+            filteredReasons: safetyCappedCandidates.slice(0, 30).map(() => "safety_cap"),
             topics: uniqueStrings(boundedCandidates.flatMap(({ topics }) => topics)).slice(0, 40),
           });
           throw error;
@@ -311,16 +318,23 @@ export class DailyBriefPipeline {
           researchedCandidateCount: boundedCandidates.length,
           selectedCount: stories.length,
           rejectedCount: deepResult.rejectedStories.length,
-          notSelectedCount: deepResult.notSelectedStories.length,
+          rejectedSourceCount: deepBatch.rejectedSources?.length ?? 0,
+          excludedCount: deepResult.excludedCandidates.length,
           safetyCappedCount: safetyCappedCandidates.length,
           safetyCappedTitles: safetyCappedCandidates.slice(0, 30).map(({ title }) => title),
-          filteredCount: deepResult.notSelectedStories.length + safetyCappedCandidates.length,
+          filteredCount: deepResult.excludedCandidates.length + safetyCappedCandidates.length,
           selectedTitles: stories.slice(0, 30).map(({ title }) => title),
           rejectedTitles: deepResult.rejectedStories.slice(0, 30).map(({ title }) => title ?? "<missing>"),
-          notSelectedTitles: deepResult.notSelectedStories.slice(0, 30).map(({ title }) => title),
+          rejectedReasons: deepResult.rejectedStories.slice(0, 30).map(({ reason }) => reason),
+          excludedTitles: deepResult.excludedCandidates.slice(0, 30).map(({ candidate }) => candidate.title),
+          excludedReasons: deepResult.excludedCandidates.slice(0, 30).map(({ reason }) => reason),
           filteredTitles: [
-            ...deepResult.notSelectedStories.map(({ title }) => title),
+            ...deepResult.excludedCandidates.map(({ candidate }) => candidate.title),
             ...safetyCappedCandidates.map(({ title }) => title),
+          ].slice(0, 30),
+          filteredReasons: [
+            ...deepResult.excludedCandidates.map(({ reason }) => reason),
+            ...safetyCappedCandidates.map(() => "safety_cap"),
           ].slice(0, 30),
           topics: uniqueStrings(stories.flatMap(({ topics }) => topics)).slice(0, 40),
         });
@@ -408,10 +422,14 @@ export class DailyBriefPipeline {
 }
 
 function discoveryDetails(
-  batch: { readonly stories: readonly { readonly title: string; readonly topics: readonly string[] }[]; readonly rejectedStories: readonly unknown[] },
+  batch: {
+    readonly stories: readonly { readonly title: string; readonly topics: readonly string[] }[];
+    readonly rejectedStories: readonly unknown[];
+    readonly rejectedSources?: readonly unknown[];
+  },
   result: {
     readonly stories: readonly { readonly title: string; readonly topics: readonly string[] }[];
-    readonly rejectedStories: readonly { readonly title: string | null }[];
+    readonly rejectedStories: readonly { readonly title: string | null; readonly reason: string }[];
     readonly filteredStories: readonly { readonly title: string | null; readonly reason: string }[];
   },
 ): NonNullable<PipelineLogEvent["details"]> {
@@ -420,10 +438,12 @@ function discoveryDetails(
     foundCount: batch.stories.length + batch.rejectedStories.length,
     contributedCount: result.stories.length,
     rejectedCount: result.rejectedStories.length,
+    rejectedSourceCount: batch.rejectedSources?.length ?? 0,
     filteredCount: result.filteredStories.length,
     foundTitles: batch.stories.slice(0, 30).map(({ title }) => title),
     contributedTitles: result.stories.slice(0, 30).map(({ title }) => title),
     rejectedTitles: result.rejectedStories.slice(0, 30).map(({ title }) => title ?? "<missing>"),
+    rejectedReasons: result.rejectedStories.slice(0, 30).map(({ reason }) => reason),
     filteredTitles: result.filteredStories.slice(0, 30).map(({ title }) => title ?? "<missing>"),
     filteredReasons: result.filteredStories.slice(0, 30).map(({ reason }) => reason),
     topics: uniqueStrings(batch.stories.flatMap(({ topics }) => topics)).slice(0, 40),
@@ -431,7 +451,11 @@ function discoveryDetails(
 }
 
 function failedDiscoveryDetails(
-  batch: { readonly stories: readonly { readonly title: string; readonly topics: readonly string[] }[]; readonly rejectedStories: readonly { readonly title: string | null }[] },
+  batch: {
+    readonly stories: readonly { readonly title: string; readonly topics: readonly string[] }[];
+    readonly rejectedStories: readonly { readonly title: string | null; readonly reason: string }[];
+    readonly rejectedSources?: readonly unknown[];
+  },
   error: unknown,
 ): NonNullable<PipelineLogEvent["details"]> {
   const rejected = error instanceof ResearchProcessingError
@@ -442,10 +466,12 @@ function failedDiscoveryDetails(
     foundCount: batch.stories.length + batch.rejectedStories.length,
     contributedCount: 0,
     rejectedCount: rejected.length,
+    rejectedSourceCount: batch.rejectedSources?.length ?? 0,
     filteredCount: 0,
     foundTitles: batch.stories.slice(0, 30).map(({ title }) => title),
     contributedTitles: [],
     rejectedTitles: rejected.slice(0, 30).map(({ title }) => title ?? "<missing>"),
+    rejectedReasons: rejected.slice(0, 30).map(({ reason }) => reason),
     filteredTitles: [],
     topics: uniqueStrings(batch.stories.flatMap(({ topics }) => topics)).slice(0, 40),
   };

@@ -6,10 +6,12 @@ import {
   representedByExistingStory,
   sameHighConfidenceEvent,
 } from "./deduplication.js";
+import { canonicalizeUrl } from "./citation-validation.js";
 import type {
   CandidateStory,
   CandidateStoryInput,
   DeepResearchBatch,
+  DeepResearchExclusionReason,
   DeepResearchedStory,
   DeepResearchedStoryInput,
   DiscoveryBatch,
@@ -164,6 +166,7 @@ export function validateStoryEvidence(
     throw new TypeError("Event-date evidence does not match occurredOn.");
   }
   if (story.sources.length === 0) throw new TypeError("Story must include sources.");
+  validateEvidenceSourceIsRetained(story);
 }
 
 function assignIds(
@@ -189,19 +192,24 @@ function assignIds(
 export interface ProcessedDeepResearch {
   readonly stories: readonly DeepResearchedStory[];
   readonly rejectedStories: readonly RejectedResearchStory[];
-  readonly notSelectedStories: readonly CandidateStory[];
+  readonly excludedCandidates: readonly {
+    readonly candidate: CandidateStory;
+    readonly reason: DeepResearchExclusionReason;
+  }[];
 }
 
 /**
  * Ties each returned dossier back to the candidate it investigated. A candidateId
  * that does not match a supplied candidate, or is reused across two dossiers, is a
- * contract violation code can catch objectively — which candidates the model chose
- * to keep at all is its call, not checked here.
+ * contract violation code can catch objectively. Every supplied candidate must be
+ * accounted for exactly once as selected, rejected during parsing/validation, or
+ * explicitly excluded by the model.
  */
 export function finalizeDeepResearchBatch(
   batch: DeepResearchBatch,
   candidates: readonly CandidateStory[],
   context: PipelineContext,
+  minimumImportance: Importance,
   maximumStories: number,
 ): ProcessedDeepResearch {
   if (batch.stories.length > maximumStories) {
@@ -211,9 +219,21 @@ export function finalizeDeepResearchBatch(
   }
 
   const candidatesById = new Map(candidates.map((candidate) => [candidate.id, candidate]));
-  const seenCandidateIds = new Set<string>();
+  const accountedCandidateIds = new Set<string>();
   const accepted: DeepResearchedStory[] = [];
-  const rejected: RejectedResearchStory[] = [];
+  const rejected: RejectedResearchStory[] = [...(batch.rejectedStories ?? [])];
+
+  for (const rejectedStory of batch.rejectedStories ?? []) {
+    const candidateId = rejectedStory.candidateId;
+    if (candidateId === undefined || candidateId === null || !candidatesById.has(candidateId)) continue;
+    if (accountedCandidateIds.has(candidateId)) {
+      throw new ResearchProcessingError(
+        `Deep research returned candidateId more than once: ${candidateId}.`,
+        rejected,
+      );
+    }
+    accountedCandidateIds.add(candidateId);
+  }
 
   batch.stories.forEach((story, index) => {
     try {
@@ -221,31 +241,70 @@ export function finalizeDeepResearchBatch(
       if (candidate === undefined) {
         throw new TypeError(`candidateId does not match a supplied candidate: ${story.candidateId}`);
       }
-      if (seenCandidateIds.has(story.candidateId)) {
+      if (accountedCandidateIds.has(story.candidateId)) {
         throw new TypeError(`candidateId was returned more than once: ${story.candidateId}`);
       }
-      validateDeepStoryEvidence(story, context);
-      seenCandidateIds.add(story.candidateId);
+      validateDeepStoryEvidence(story, context, minimumImportance);
+      accountedCandidateIds.add(story.candidateId);
       accepted.push({ ...story, id: candidate.id });
     } catch (error) {
+      if (candidatesById.has(story.candidateId)) accountedCandidateIds.add(story.candidateId);
       rejected.push({
         index,
         title: typeof story.title === "string" ? story.title : null,
+        candidateId: story.candidateId,
         reason: error instanceof Error ? error.message : "Unknown evidence validation failure.",
       });
     }
   });
 
-  assertNotEntirelyRejected(batch.stories.length, accepted.length, "deep research", rejected);
-  const returnedCandidateIds = new Set(batch.stories.map(({ candidateId }) => candidateId));
+  const excludedCandidates = batch.excludedCandidates.map((excluded) => {
+    const candidate = candidatesById.get(excluded.candidateId);
+    if (candidate === undefined) {
+      throw new ResearchProcessingError(
+        `Deep research excluded unknown candidateId: ${excluded.candidateId}.`,
+        rejected,
+      );
+    }
+    if (accountedCandidateIds.has(excluded.candidateId)) {
+      throw new ResearchProcessingError(
+        `Deep research returned candidateId more than once: ${excluded.candidateId}.`,
+        rejected,
+      );
+    }
+    accountedCandidateIds.add(excluded.candidateId);
+    return { candidate, reason: excluded.reason };
+  });
+
+  const unaccounted = candidates.filter(({ id }) => !accountedCandidateIds.has(id));
+  if (unaccounted.length > 0) {
+    throw new ResearchProcessingError(
+      `Deep research did not account for candidateIds: ${unaccounted.map(({ id }) => id).join(", ")}.`,
+      rejected,
+    );
+  }
+
+  assertNotEntirelyRejected(
+    batch.stories.length + (batch.rejectedStories?.length ?? 0),
+    accepted.length,
+    "deep research",
+    rejected,
+  );
   return {
     stories: accepted,
     rejectedStories: rejected,
-    notSelectedStories: candidates.filter(({ id }) => !returnedCandidateIds.has(id)),
+    excludedCandidates,
   };
 }
 
-function validateDeepStoryEvidence(story: DeepResearchedStoryInput, context: PipelineContext): void {
+function validateDeepStoryEvidence(
+  story: DeepResearchedStoryInput,
+  context: PipelineContext,
+  minimumImportance: Importance,
+): void {
+  if (story.importance < minimumImportance) {
+    throw new TypeError("Deep-researched story did not meet the configured importance threshold.");
+  }
   if (!isCalendarDate(story.occurredOn) || story.occurredOn !== context.window.date) {
     throw new TypeError("Story occurredOn is outside the research calendar date.");
   }
@@ -253,6 +312,17 @@ function validateDeepStoryEvidence(story: DeepResearchedStoryInput, context: Pip
     throw new TypeError("Event-date evidence does not match occurredOn.");
   }
   if (story.sources.length === 0) throw new TypeError("Story must include sources.");
+  validateEvidenceSourceIsRetained(story);
+}
+
+function validateEvidenceSourceIsRetained(
+  story: Pick<CandidateStoryInput, "sources" | "eventDateEvidence">,
+): void {
+  const retainedSourceUrls = new Set(story.sources.map(({ url }) => canonicalizeUrl(url)));
+  const evidenceSourceUrl = canonicalizeUrl(story.eventDateEvidence.sourceUrl);
+  if (!retainedSourceUrls.has(evidenceSourceUrl)) {
+    throw new TypeError("Event-date evidence must reference a retained story source.");
+  }
 }
 
 /**

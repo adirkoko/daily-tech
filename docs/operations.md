@@ -51,9 +51,11 @@ Each generation run records one terminal event:
 
 In addition, it records bounded `research_stage_completed` summaries for the three
 discovery passes and Deep Research. They contain contribution/filter counts and
-short title/topic lists for Admin visibility, not complete prompts, model responses,
-source contents, or secrets. The pipeline does not maintain local token/cost
-accounting; provider usage remains available through the provider's own reporting.
+short title/topic lists for Admin visibility. Deep Research also records bounded
+exclusion reasons for candidates it investigated but did not select. These events do
+not contain complete prompts, model responses, source contents, or secrets. The
+pipeline does not maintain local token/cost accounting; provider usage remains
+available through the provider's own reporting.
 
 Operational logs also cover Admin actions, login attempts, feedback handling,
 publication attempts, and scheduler claims/completions/failures. Publication events

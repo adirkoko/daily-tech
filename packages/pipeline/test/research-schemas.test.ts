@@ -1,28 +1,70 @@
 import { describe, expect, it } from "vitest";
 
-import { WEB_DEEP_RESEARCH_PROMPT, WEB_FOCUSED_DISCOVERY_PROMPT, WEB_LIGHT_DISCOVERY_PROMPT } from "../src/research/prompts.js";
+import {
+  WEB_DEEP_RESEARCH_PROMPT,
+  WEB_FOCUSED_DISCOVERY_PROMPT,
+  WEB_LIGHT_DISCOVERY_PROMPT,
+} from "../src/research/prompts.js";
 import {
   buildDeepResearchResponseSchema,
-  DISCOVERY_RESPONSE_SCHEMA,
-  FOCUSED_DISCOVERY_RESPONSE_SCHEMA,
+  buildDiscoveryResponseSchema,
+  buildFocusedDiscoveryResponseSchema,
 } from "../src/research/schemas.js";
 
-describe("discovery date contract", () => {
+interface ArraySchema {
+  readonly maxItems?: number;
+  readonly items: ObjectSchema;
+}
+
+interface ObjectSchema {
+  readonly required: readonly string[];
+  readonly properties: Readonly<Record<string, unknown>>;
+}
+
+interface ResponseSchema {
+  readonly required: readonly string[];
+  readonly properties: Readonly<Record<string, ArraySchema>>;
+}
+
+function asResponseSchema(schema: Readonly<Record<string, unknown>>): ResponseSchema {
+  return schema as unknown as ResponseSchema;
+}
+
+function candidateStorySchema(property: "stories" | "missingStories"): ObjectSchema {
+  const schema = property === "stories"
+    ? buildDiscoveryResponseSchema(20)
+    : buildFocusedDiscoveryResponseSchema(20);
+  return asResponseSchema(schema).properties[property]!.items;
+}
+
+describe("web-research contracts", () => {
+  it("uses provider-backed URLs and permits source-level rejection only when evidence survives", () => {
+    for (const prompt of [
+      WEB_LIGHT_DISCOVERY_PROMPT,
+      WEB_FOCUSED_DISCOVERY_PROMPT,
+      WEB_DEEP_RESEARCH_PROMPT,
+    ]) {
+      expect(prompt).toContain("machine-readable provider citations/sources");
+      expect(prompt).toContain("never return a URL from memory, prior knowledge");
+      expect(prompt).toContain("Omit any sources[] entry whose URL is not eligible");
+      expect(prompt).toContain("eventDateEvidence.sourceUrl points to an eligible source that remains");
+      expect(prompt).toContain("Otherwise omit the entire story");
+    }
+  });
+
   it("uses the same date-only source schema for light and focused discovery", () => {
-    const lightSource = DISCOVERY_RESPONSE_SCHEMA.properties.stories
-      .items.properties.sources.items;
-    const focusedSource = FOCUSED_DISCOVERY_RESPONSE_SCHEMA.properties.missingStories
-      .items.properties.sources.items;
+    const lightSource = candidateStorySchema("stories").properties.sources as ArraySchema;
+    const focusedSource = candidateStorySchema("missingStories").properties.sources as ArraySchema;
 
     expect(focusedSource).toEqual(lightSource);
-    expect(lightSource.required).toEqual([
+    expect(lightSource.items.required).toEqual([
       "url",
       "title",
       "publisher",
       "publishedOn",
       "type",
     ]);
-    expect(lightSource.properties.publishedOn).toMatchObject({
+    expect(lightSource.items.properties.publishedOn).toMatchObject({
       anyOf: [
         {
           type: "string",
@@ -34,8 +76,13 @@ describe("discovery date contract", () => {
     });
   });
 
-  it("keeps the candidate shape light — no occurredAt, no deep-research fields", () => {
-    const story = DISCOVERY_RESPONSE_SCHEMA.properties.stories.items;
+  it("keeps discovery candidates shallow and enforces each call's hard limit in JSON Schema", () => {
+    const narrow = asResponseSchema(buildDiscoveryResponseSchema(4));
+    const wide = asResponseSchema(buildFocusedDiscoveryResponseSchema(11));
+    const story = narrow.properties.stories!.items;
+
+    expect(narrow.properties.stories!.maxItems).toBe(4);
+    expect(wide.properties.missingStories!.maxItems).toBe(11);
     expect(story.required).toEqual([
       "title", "shortSummary", "category", "importance",
       "occurredOn", "eventDateEvidence", "companies", "topics", "sources",
@@ -43,92 +90,92 @@ describe("discovery date contract", () => {
     expect(story.properties).not.toHaveProperty("occurredAt");
     expect(story.properties).not.toHaveProperty("pricing");
     expect(story.properties).not.toHaveProperty("technicalDetails");
-    const source = story.properties.sources.items;
-    expect(source.required).not.toContain("publishedAt");
-    expect(source.properties).not.toHaveProperty("publishedAt");
   });
 
-  it("gives light and focused discovery the same date-only, no-conversion instructions", () => {
-    for (const prompt of [WEB_LIGHT_DISCOVERY_PROMPT, WEB_FOCUSED_DISCOVERY_PROMPT]) {
-      expect(prompt).toContain("occurredOn must be the exact calendar date of the supplied research window");
-      expect(prompt).toContain("not converted or guessed from a different time zone");
-      expect(prompt).toContain("If you cannot confidently place the event on that exact date, do not return the story at all");
-      expect(prompt).toContain("publishedOn describes the source, not the event, and cannot replace eventDateEvidence");
+  it("defines event dates in Israel time and allows reliable time-zone conversion", () => {
+    for (const prompt of [
+      WEB_LIGHT_DISCOVERY_PROMPT,
+      WEB_FOCUSED_DISCOVERY_PROMPT,
+      WEB_DEEP_RESEARCH_PROMPT,
+    ]) {
+      expect(prompt).toContain("event's calendar date in Asia/Jerusalem");
+      expect(prompt).toContain("reliably converting an explicit source timestamp from another time zone");
+      expect(prompt).toContain("never substitute an article's publication date");
+      expect(prompt).toContain("publishedOn is source metadata, not event-date evidence");
     }
   });
 
-  it("gives light and focused discovery the same source priority, tracked areas, and importance rubric", () => {
-    for (const prompt of [WEB_LIGHT_DISCOVERY_PROMPT, WEB_FOCUSED_DISCOVERY_PROMPT]) {
-      expect(prompt).toContain("official company blogs and newsrooms");
-      expect(prompt).toContain("official documentation");
-      expect(prompt).toContain("GitHub and release-notes pages");
-      expect(prompt).toContain("This is guidance, not an exhaustive whitelist");
-      expect(prompt).toContain("OpenAI, Google, Anthropic, Microsoft, Apple, Meta, NVIDIA, Amazon, xAI, Hugging Face");
-      expect(prompt).toContain("something available now ranks higher than something only announced or promised");
+  it("uses broad primary-source authority rather than requiring company confirmation", () => {
+    for (const prompt of [WEB_LIGHT_DISCOVERY_PROMPT, WEB_DEEP_RESEARCH_PROMPT]) {
+      expect(prompt).toContain("regulatory notices and filings");
+      expect(prompt).toContain("court records");
+      expect(prompt).toContain("research papers");
+      expect(prompt).toContain("security advisories");
+      expect(prompt).toContain("standards-body publications");
+      expect(prompt).toContain("can establish a fact even when a company has not published its own announcement");
+      expect(prompt).toContain('anonymous "sources say" reports');
     }
-    expect(WEB_LIGHT_DISCOVERY_PROMPT).toContain("run at least one dedicated search per supplied category");
-    expect(WEB_FOCUSED_DISCOVERY_PROMPT).toContain("Search broadly before concluding nothing is missing");
   });
 
-  it("tells light discovery to return full coverage, not a pre-curated brief-sized subset", () => {
-    // Curating final size is later work (selection stays with the model during deep
-    // research, then the writer) — discovery pre-narrowing to a guessed brief size was
-    // the original cause of the model converging on a small, inconsistent story count.
-    expect(WEB_LIGHT_DISCOVERY_PROMPT).toContain('Do not stop early because you feel you already have "enough for a brief."');
-    expect(WEB_LIGHT_DISCOVERY_PROMPT).toContain("Deciding the edition's final size and composition happens later, downstream");
-  });
-
-  it("keeps light discovery shallow: a short factual summary, not full analysis", () => {
-    expect(WEB_LIGHT_DISCOVERY_PROMPT).toContain("a shortSummary of one or two factual sentences");
-    expect(WEB_LIGHT_DISCOVERY_PROMPT).toContain("Do not write extended analysis");
-  });
-
-  it("makes focus keywords attention, never an inclusion requirement", () => {
-    expect(WEB_FOCUSED_DISCOVERY_PROMPT).toContain("a keyword only earns your attention, never a requirement to return something for it");
-    expect(WEB_FOCUSED_DISCOVERY_PROMPT).toContain("do not invent, pad, or lower your bar to produce an entry just because a keyword is being watched");
-  });
-
-  it("rejects unconfirmed third-party reports in both light and focused discovery", () => {
-    for (const prompt of [WEB_LIGHT_DISCOVERY_PROMPT, WEB_FOCUSED_DISCOVERY_PROMPT]) {
-      expect(prompt).toContain("Do not include a deal, acquisition, partnership, or other claim whose only basis is an unconfirmed third-party report");
-      expect(prompt).toContain("If none of the parties directly involved have confirmed it, it does not qualify");
+  it("defines a concrete 1-5 importance rubric in all research stages", () => {
+    for (const prompt of [
+      WEB_LIGHT_DISCOVERY_PROMPT,
+      WEB_FOCUSED_DISCOVERY_PROMPT,
+      WEB_DEEP_RESEARCH_PROMPT,
+    ]) {
+      expect(prompt).toContain("1 — routine, narrow, incremental");
+      expect(prompt).toContain("3 — meaningful to a defined technology audience");
+      expect(prompt).toContain("5 — exceptional, field-shaping development");
+      expect(prompt).toContain("Return only items at or above minimumImportance");
     }
+  });
+
+  it("keeps light discovery broad but shallow and makes Techmeme optional", () => {
+    expect(WEB_LIGHT_DISCOVERY_PROMPT).toContain("Be broad across the landscape, but shallow per candidate");
+    expect(WEB_LIGHT_DISCOVERY_PROMPT).toContain("not as a requirement to issue one mechanical query per category");
+    expect(WEB_LIGHT_DISCOVERY_PROMPT).toContain("Techmeme may be used as an optional discovery aid");
+    expect(WEB_LIGHT_DISCOVERY_PROMPT).toContain("maximumCandidatesPerCall is a hard upper limit");
+    expect(WEB_LIGHT_DISCOVERY_PROMPT).toContain("preserving sensible coverage across materially different areas");
+  });
+
+  it("keeps focused discovery narrow and keywords attention-only", () => {
+    expect(WEB_FOCUSED_DISCOVERY_PROMPT).toContain("answer only this question");
+    expect(WEB_FOCUSED_DISCOVERY_PROMPT).toContain("A keyword is never an inclusion requirement");
+    expect(WEB_FOCUSED_DISCOVERY_PROMPT).toContain("perform an adaptive cross-domain scan broad enough to detect significant omissions");
+    expect(WEB_FOCUSED_DISCOVERY_PROMPT).toContain("do not reduce the general gap check to one narrow follow-up query");
+    expect(WEB_FOCUSED_DISCOVERY_PROMPT).toContain("Do not critique the existing stories, draft, wording, structure, metadata, or editorial choices");
+    expect(WEB_FOCUSED_DISCOVERY_PROMPT).toContain('{"missingStories":[]}');
   });
 });
 
-/** `buildDeepResearchResponseSchema` deliberately returns a widened
- *  `Readonly<Record<string, unknown>>` (it crosses into the AI client as a plain
- *  JSON Schema object) — this local shape is only for introspecting it in tests. */
-interface JsonSchemaObjectShape {
-  readonly properties: {
-    readonly stories: {
-      readonly maxItems: number;
-      readonly items: { readonly required: readonly string[]; readonly properties: Record<string, unknown> };
-    };
-  };
-}
-
-function asSchemaShape(schema: Readonly<Record<string, unknown>>): JsonSchemaObjectShape {
-  return schema as unknown as JsonSchemaObjectShape;
-}
-
 describe("deep research response schema", () => {
-  it("bakes the operator's maximumStories in as the schema-level ceiling", () => {
-    const schema = asSchemaShape(buildDeepResearchResponseSchema(8));
-    expect(schema.properties.stories.maxItems).toBe(8);
+  it("enforces maximumStories and requires explicit exclusions", () => {
+    const schema = asResponseSchema(buildDeepResearchResponseSchema(8));
+    expect(schema.required).toEqual(["stories", "excludedCandidates"]);
+    expect(schema.properties.stories!.maxItems).toBe(8);
+    expect(schema.properties.excludedCandidates!.items.required).toEqual(["candidateId", "reason"]);
+    expect(
+      (schema.properties.excludedCandidates!.items.properties.reason as { readonly enum: readonly string[] }).enum,
+    ).toEqual([
+      "insufficient_evidence",
+      "outside_window",
+      "duplicate",
+      "below_importance_threshold",
+      "lower_priority_than_selected",
+      "no_eligible_citation",
+      "other",
+    ]);
   });
 
-  it("produces an independent ceiling per call — building again does not mutate the previous schema", () => {
-    const narrow = asSchemaShape(buildDeepResearchResponseSchema(3));
-    const wide = asSchemaShape(buildDeepResearchResponseSchema(12));
-
-    expect(narrow.properties.stories.maxItems).toBe(3);
-    expect(wide.properties.stories.maxItems).toBe(12);
+  it("produces independent limits without mutating an earlier schema", () => {
+    const narrow = asResponseSchema(buildDeepResearchResponseSchema(3));
+    const wide = asResponseSchema(buildDeepResearchResponseSchema(12));
+    expect(narrow.properties.stories!.maxItems).toBe(3);
+    expect(wide.properties.stories!.maxItems).toBe(12);
   });
 
-  it("requires the full dossier shape, not the light candidate shape", () => {
-    const schema = asSchemaShape(buildDeepResearchResponseSchema(8));
-    const story = schema.properties.stories.items;
+  it("requires the full dossier shape", () => {
+    const story = asResponseSchema(buildDeepResearchResponseSchema(8)).properties.stories!.items;
     expect(story.required).toEqual([
       "candidateId", "title", "whatHappened", "whatChangedFromBefore", "technicalDetails",
       "capabilities", "pricing", "availability", "rollout", "supportedUsersOrPlatforms",
@@ -139,8 +186,10 @@ describe("deep research response schema", () => {
     expect(story.properties).not.toHaveProperty("shortSummary");
   });
 
-  it("tells the model the ceiling is guidance for selection, never a quota to pad toward", () => {
-    expect(WEB_DEEP_RESEARCH_PROMPT).toContain("a guidance ceiling, maximumStories, on how many candidates are worth a place");
-    expect(WEB_DEEP_RESEARCH_PROMPT).toContain("Never pad the list to reach maximumStories when fewer candidates actually deserve full research");
+  it("makes the story ceiling hard and accounts for every candidate exactly once", () => {
+    expect(WEB_DEEP_RESEARCH_PROMPT).toContain("maximumStories is a hard upper limit, not a target");
+    expect(WEB_DEEP_RESEARCH_PROMPT).toContain("Every supplied candidateId must appear exactly once");
+    expect(WEB_DEEP_RESEARCH_PROMPT).toContain("either in stories or in excludedCandidates");
+    expect(WEB_DEEP_RESEARCH_PROMPT).toContain("Stop researching a candidate once its event, event date, central claims, and necessary context are adequately verified");
   });
 });

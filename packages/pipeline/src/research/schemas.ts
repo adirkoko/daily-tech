@@ -47,6 +47,19 @@ const categorySchema = {
   enum: ["ai", "developer_tools", "cloud", "open_source", "hardware", "robotics", "consumer_tech", "other"],
 } as const;
 
+const exclusionReasonSchema = {
+  type: "string",
+  enum: [
+    "insufficient_evidence",
+    "outside_window",
+    "duplicate",
+    "below_importance_threshold",
+    "lower_priority_than_selected",
+    "no_eligible_citation",
+    "other",
+  ],
+} as const;
+
 /** The light shape used by discovery, gap, and admin-keyword-focused research. */
 const candidateStorySchema = {
   type: "object",
@@ -68,23 +81,17 @@ const candidateStorySchema = {
   },
 } as const;
 
-export const DISCOVERY_RESPONSE_SCHEMA = {
-  type: "object",
-  additionalProperties: false,
-  required: ["stories"],
-  properties: {
-    stories: { type: "array", items: candidateStorySchema },
-  },
-} as const;
+export function buildDiscoveryResponseSchema(
+  maximumCandidates: number,
+): Readonly<Record<string, unknown>> {
+  return buildCandidateResponseSchema("stories", maximumCandidates);
+}
 
-export const FOCUSED_DISCOVERY_RESPONSE_SCHEMA = {
-  type: "object",
-  additionalProperties: false,
-  required: ["missingStories"],
-  properties: {
-    missingStories: { type: "array", items: candidateStorySchema },
-  },
-} as const;
+export function buildFocusedDiscoveryResponseSchema(
+  maximumCandidates: number,
+): Readonly<Record<string, unknown>> {
+  return buildCandidateResponseSchema("missingStories", maximumCandidates);
+}
 
 /** The rich dossier Deep Research produces for each candidate it keeps. */
 const deepResearchedStorySchema = {
@@ -130,12 +137,50 @@ const deepResearchedStorySchema = {
 export function buildDeepResearchResponseSchema(
   maximumStories: number,
 ): Readonly<Record<string, unknown>> {
+  assertNonNegativeInteger(maximumStories, "maximumStories");
   return {
     type: "object",
     additionalProperties: false,
-    required: ["stories"],
+    required: ["stories", "excludedCandidates"],
     properties: {
       stories: { type: "array", maxItems: maximumStories, items: deepResearchedStorySchema },
+      excludedCandidates: {
+        type: "array",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          required: ["candidateId", "reason"],
+          properties: {
+            candidateId: { type: "string" },
+            reason: exclusionReasonSchema,
+          },
+        },
+      },
     },
   } as const;
+}
+
+function buildCandidateResponseSchema(
+  property: "stories" | "missingStories",
+  maximumCandidates: number,
+): Readonly<Record<string, unknown>> {
+  assertNonNegativeInteger(maximumCandidates, "maximumCandidates");
+  return {
+    type: "object",
+    additionalProperties: false,
+    required: [property],
+    properties: {
+      [property]: {
+        type: "array",
+        maxItems: maximumCandidates,
+        items: candidateStorySchema,
+      },
+    },
+  } as const;
+}
+
+function assertNonNegativeInteger(value: number, name: string): void {
+  if (!Number.isInteger(value) || value < 0) {
+    throw new RangeError(`${name} must be a non-negative integer.`);
+  }
 }

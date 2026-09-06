@@ -98,6 +98,31 @@ describe("deterministic discovery processing", () => {
     ]);
   });
 
+  it("rejects a story when event-date evidence does not reference a retained source", () => {
+    const detachedEvidence = {
+      ...secondCandidateInput,
+      eventDateEvidence: {
+        ...secondCandidateInput.eventDateEvidence,
+        sourceUrl: "https://example.com/source-that-was-removed",
+      },
+    };
+
+    const result = finalizeDiscoveryBatch(
+      { stories: [firstCandidateInput, detachedEvidence], rejectedStories: [] },
+      context,
+      3,
+      ids("story-valid"),
+    );
+
+    expect(result.stories).toHaveLength(1);
+    expect(result.rejectedStories).toEqual([
+      expect.objectContaining({
+        title: detachedEvidence.title,
+        reason: expect.stringContaining("retained story source"),
+      }),
+    ]);
+  });
+
   it("reports index, title, and reason for every story when the whole batch is rejected", () => {
     const wrongDay = {
       ...firstCandidateInput,
@@ -174,9 +199,13 @@ describe("deterministic deep-research processing", () => {
 
   it("reuses the candidate's own id as the final story id — never a new one", () => {
     const result = finalizeDeepResearchBatch(
-      { stories: [firstDeepStoryInput] },
+      {
+        stories: [firstDeepStoryInput],
+        excludedCandidates: [{ candidateId: "story-2", reason: "lower_priority_than_selected" }],
+      },
       candidates,
       context,
+      3,
       8,
     );
 
@@ -185,9 +214,13 @@ describe("deterministic deep-research processing", () => {
 
   it("never sorts or truncates to a target count — a response under maximumStories is accepted as-is", () => {
     const result = finalizeDeepResearchBatch(
-      { stories: [firstDeepStoryInput] },
+      {
+        stories: [firstDeepStoryInput],
+        excludedCandidates: [{ candidateId: "story-2", reason: "lower_priority_than_selected" }],
+      },
       candidates,
       context,
+      3,
       8,
     );
 
@@ -196,9 +229,10 @@ describe("deterministic deep-research processing", () => {
 
   it("refuses a response that exceeds maximumStories rather than truncating it", () => {
     expect(() => finalizeDeepResearchBatch(
-      { stories: [firstDeepStoryInput, secondDeepStoryInput] },
+      { stories: [firstDeepStoryInput, secondDeepStoryInput], excludedCandidates: [] },
       candidates,
       context,
+      3,
       1,
     )).toThrow(ResearchProcessingError);
   });
@@ -207,9 +241,13 @@ describe("deterministic deep-research processing", () => {
     const unknownCandidateId = { ...secondDeepStoryInput, candidateId: "story-does-not-exist" };
 
     const result = finalizeDeepResearchBatch(
-      { stories: [firstDeepStoryInput, unknownCandidateId] },
+      {
+        stories: [firstDeepStoryInput, unknownCandidateId],
+        excludedCandidates: [{ candidateId: "story-2", reason: "insufficient_evidence" }],
+      },
       candidates,
       context,
+      3,
       8,
     );
 
@@ -220,9 +258,13 @@ describe("deterministic deep-research processing", () => {
     const duplicateCandidateId = { ...secondDeepStoryInput, candidateId: firstDeepStoryInput.candidateId };
 
     const result = finalizeDeepResearchBatch(
-      { stories: [firstDeepStoryInput, duplicateCandidateId] },
+      {
+        stories: [firstDeepStoryInput, duplicateCandidateId],
+        excludedCandidates: [{ candidateId: "story-2", reason: "duplicate" }],
+      },
       candidates,
       context,
+      3,
       8,
     );
 
@@ -237,29 +279,86 @@ describe("deterministic deep-research processing", () => {
     };
 
     const result = finalizeDeepResearchBatch(
-      { stories: [firstDeepStoryInput, wrongDay] },
+      { stories: [firstDeepStoryInput, wrongDay], excludedCandidates: [] },
       candidates,
       context,
+      3,
       8,
     );
 
     expect(result.stories).toEqual([{ ...firstDeepStoryInput, id: "story-1" }]);
   });
 
+  it("reapplies the importance threshold after deep research", () => {
+    const tooMinor = { ...secondDeepStoryInput, importance: 2 as const };
+    const result = finalizeDeepResearchBatch(
+      { stories: [firstDeepStoryInput, tooMinor], excludedCandidates: [] },
+      candidates,
+      context,
+      3,
+      8,
+    );
+
+    expect(result.stories).toEqual([{ ...firstDeepStoryInput, id: "story-1" }]);
+    expect(result.rejectedStories).toEqual([
+      expect.objectContaining({
+        candidateId: "story-2",
+        reason: expect.stringContaining("importance threshold"),
+      }),
+    ]);
+  });
+
   it("fails closed when every dossier in a non-empty batch is rejected", () => {
     const unknownCandidateId = { ...firstDeepStoryInput, candidateId: "story-does-not-exist" };
 
     expect(() => finalizeDeepResearchBatch(
-      { stories: [unknownCandidateId] },
+      { stories: [unknownCandidateId], excludedCandidates: [] },
       candidates,
       context,
+      3,
       8,
     )).toThrow(ResearchProcessingError);
   });
 
   it("accepts an empty batch as a valid quiet result — no candidate was worth a dossier", () => {
-    const result = finalizeDeepResearchBatch({ stories: [] }, candidates, context, 8);
+    const result = finalizeDeepResearchBatch({
+      stories: [],
+      excludedCandidates: [
+        { candidateId: "story-1", reason: "below_importance_threshold" },
+        { candidateId: "story-2", reason: "insufficient_evidence" },
+      ],
+    }, candidates, context, 3, 8);
 
     expect(result.stories).toEqual([]);
+    expect(result.excludedCandidates).toEqual([
+      { candidate: firstCandidate, reason: "below_importance_threshold" },
+      { candidate: secondCandidate, reason: "insufficient_evidence" },
+    ]);
+  });
+
+  it("fails closed when the model does not account for every supplied candidate", () => {
+    expect(() => finalizeDeepResearchBatch(
+      { stories: [firstDeepStoryInput], excludedCandidates: [] },
+      candidates,
+      context,
+      3,
+      8,
+    )).toThrow(/did not account for candidateIds: story-2/u);
+  });
+
+  it("fails closed when a candidate appears in both stories and excludedCandidates", () => {
+    expect(() => finalizeDeepResearchBatch(
+      {
+        stories: [firstDeepStoryInput],
+        excludedCandidates: [
+          { candidateId: "story-1", reason: "duplicate" },
+          { candidateId: "story-2", reason: "insufficient_evidence" },
+        ],
+      },
+      candidates,
+      context,
+      3,
+      8,
+    )).toThrow(/candidateId more than once: story-1/u);
   });
 });

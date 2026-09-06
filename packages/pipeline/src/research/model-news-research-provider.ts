@@ -7,11 +7,13 @@ import {
 } from "../ai/contracts.js";
 import { CitationIndex, canonicalizeUrl } from "./citation-validation.js";
 import {
+  DEEP_RESEARCH_EXCLUSION_REASONS,
   EVENT_DATE_EVIDENCE_KINDS,
   RESEARCH_CATEGORIES,
   SOURCE_TYPES,
   type CandidateStoryInput,
   type DeepResearchBatch,
+  type DeepResearchExclusionReason,
   type DeepResearchedStoryInput,
   type DeepResearchRequest,
   type DiscoveryBatch,
@@ -21,6 +23,7 @@ import {
   type LightDiscoveryRequest,
   type NewsResearchProvider,
   type RejectedResearchStory,
+  type RejectedResearchSource,
   type ResearchCategory,
   type ResearchSource,
   type SourceType,
@@ -31,9 +34,9 @@ import {
   WEB_LIGHT_DISCOVERY_PROMPT,
 } from "./prompts.js";
 import {
-  DISCOVERY_RESPONSE_SCHEMA,
-  FOCUSED_DISCOVERY_RESPONSE_SCHEMA,
+  buildDiscoveryResponseSchema,
   buildDeepResearchResponseSchema,
+  buildFocusedDiscoveryResponseSchema,
 } from "./schemas.js";
 
 /** Deep research investigates several candidates with several searches each, in one
@@ -75,7 +78,7 @@ export class ModelNewsResearchProvider implements NewsResearchProvider {
         scope: request.scope,
       },
       schemaName: "daily_tech_light_discovery",
-      schema: DISCOVERY_RESPONSE_SCHEMA,
+      schema: buildDiscoveryResponseSchema(request.scope.maximumCandidatesPerCall),
     });
     return parseDiscoveryBatch(result, "stories", request.scope.maximumCandidatesPerCall);
   }
@@ -86,12 +89,12 @@ export class ModelNewsResearchProvider implements NewsResearchProvider {
       input: {
         window: serializeWindow(request.context),
         minimumImportance: request.minimumImportance,
-        maximumMissingStories: request.maximumCandidatesPerCall,
+        maximumCandidatesPerCall: request.maximumCandidatesPerCall,
         existingStories: request.existingStories,
         focusKeywords: request.focusKeywords ?? [],
       },
       schemaName: "daily_tech_focused_discovery",
-      schema: FOCUSED_DISCOVERY_RESPONSE_SCHEMA,
+      schema: buildFocusedDiscoveryResponseSchema(request.maximumCandidatesPerCall),
     });
     return parseDiscoveryBatch(result, "missingStories", request.maximumCandidatesPerCall);
   }
@@ -101,6 +104,7 @@ export class ModelNewsResearchProvider implements NewsResearchProvider {
       instructions: WEB_DEEP_RESEARCH_PROMPT,
       input: {
         window: serializeWindow(request.context),
+        minimumImportance: request.minimumImportance,
         maximumStories: request.maximumStories,
         editorialInstructions: request.editorialInstructions,
         candidates: request.candidates,
@@ -135,13 +139,24 @@ function parseDiscoveryBatch(
     }
     const stories: CandidateStoryInput[] = [];
     const rejectedStories: RejectedResearchStory[] = [];
+    const rejectedSources: RejectedResearchSource[] = [];
     rawStories.forEach((rawStory, index) => {
+      const title = extractTitle(rawStory);
       try {
-        stories.push(parseCandidateStory(rawStory, `${property}[${index}]`, citations));
+        stories.push(parseCandidateStory(
+          rawStory,
+          `${property}[${index}]`,
+          citations,
+          (source) => rejectedSources.push({
+            storyIndex: index,
+            storyTitle: title,
+            ...source,
+          }),
+        ));
       } catch (error) {
         rejectedStories.push({
           index,
-          title: extractTitle(rawStory),
+          title,
           reason: errorMessage(error),
         });
       }
@@ -152,7 +167,7 @@ function parseDiscoveryBatch(
         { rejectedStories },
       );
     }
-    return { stories, rejectedStories };
+    return { stories, rejectedStories, rejectedSources };
   });
 }
 
@@ -160,15 +175,14 @@ function parseCandidateStory(
   value: unknown,
   path: string,
   citations: CitationIndex,
+  onRejectedSource: (source: RejectedSourceDetail) => void,
 ): CandidateStoryInput {
   const record = asRecord(value, path);
   const occurredOn = asString(record.occurredOn, `${path}.occurredOn`);
   if (!isCalendarDate(occurredOn)) {
     throw new TypeError(`${path}.occurredOn must use YYYY-MM-DD format.`);
   }
-  const sources = asArray(record.sources, `${path}.sources`).map((source, index) =>
-    parseSource(source, `${path}.sources[${index}]`, citations),
-  );
+  const sources = parseSources(record.sources, `${path}.sources`, citations, onRejectedSource);
   if (sources.length === 0) throw new TypeError(`${path}.sources cannot be empty.`);
   const eventDateEvidence = parseEventDateEvidence(
     record.eventDateEvidence,
@@ -205,15 +219,31 @@ function parseDeepResearchBatch(
         `stories exceeds the configured maximum of ${maximumStories}.`,
       );
     }
+    const excludedCandidates = asArray(
+      root.excludedCandidates,
+      "excludedCandidates",
+    ).map((value, index) => parseExcludedCandidate(value, `excludedCandidates[${index}]`));
     const stories: DeepResearchedStoryInput[] = [];
     const rejectedStories: RejectedResearchStory[] = [];
+    const rejectedSources: RejectedResearchSource[] = [];
     rawStories.forEach((rawStory, index) => {
+      const title = extractTitle(rawStory);
       try {
-        stories.push(parseDeepStory(rawStory, `stories[${index}]`, citations));
+        stories.push(parseDeepStory(
+          rawStory,
+          `stories[${index}]`,
+          citations,
+          (source) => rejectedSources.push({
+            storyIndex: index,
+            storyTitle: title,
+            ...source,
+          }),
+        ));
       } catch (error) {
         rejectedStories.push({
           index,
-          title: extractTitle(rawStory),
+          title,
+          candidateId: extractCandidateId(rawStory),
           reason: errorMessage(error),
         });
       }
@@ -224,7 +254,7 @@ function parseDeepResearchBatch(
         { rejectedStories },
       );
     }
-    return { stories };
+    return { stories, excludedCandidates, rejectedStories, rejectedSources };
   });
 }
 
@@ -232,15 +262,14 @@ function parseDeepStory(
   value: unknown,
   path: string,
   citations: CitationIndex,
+  onRejectedSource: (source: RejectedSourceDetail) => void,
 ): DeepResearchedStoryInput {
   const record = asRecord(value, path);
   const occurredOn = asString(record.occurredOn, `${path}.occurredOn`);
   if (!isCalendarDate(occurredOn)) {
     throw new TypeError(`${path}.occurredOn must use YYYY-MM-DD format.`);
   }
-  const sources = asArray(record.sources, `${path}.sources`).map((source, index) =>
-    parseSource(source, `${path}.sources[${index}]`, citations),
-  );
+  const sources = parseSources(record.sources, `${path}.sources`, citations, onRejectedSource);
   if (sources.length === 0) throw new TypeError(`${path}.sources cannot be empty.`);
   const eventDateEvidence = parseEventDateEvidence(
     record.eventDateEvidence,
@@ -305,6 +334,61 @@ function parseEventDateEvidence(
   };
 }
 
+interface RejectedSourceDetail {
+  readonly sourceIndex: number;
+  readonly url: string | null;
+  readonly reason: string;
+}
+
+function parseSources(
+  value: unknown,
+  path: string,
+  citations: CitationIndex,
+  onRejectedSource: (source: RejectedSourceDetail) => void,
+): readonly ResearchSource[] {
+  const accepted: ResearchSource[] = [];
+  const rejected: RejectedSourceDetail[] = [];
+  const rawSources = asArray(value, path);
+  rawSources.forEach((source, index) => {
+    try {
+      accepted.push(parseSource(source, `${path}[${index}]`, citations));
+    } catch (error) {
+      const issue = {
+        sourceIndex: index,
+        url: extractUrl(source),
+        reason: errorMessage(error),
+      };
+      rejected.push(issue);
+      onRejectedSource(issue);
+    }
+  });
+  if (rawSources.length > 0 && accepted.length === 0) {
+    throw new TypeError(
+      `${path} has no valid sources after source validation: ${rejected
+        .map(({ sourceIndex, url, reason }) =>
+          `index=${sourceIndex}; url=${url === null ? "<missing>" : JSON.stringify(url)}; reason=${reason}`
+        )
+        .join(" | ")}`,
+    );
+  }
+  return accepted;
+}
+
+function parseExcludedCandidate(
+  value: unknown,
+  path: string,
+): DeepResearchBatch["excludedCandidates"][number] {
+  const record = asRecord(value, path);
+  return {
+    candidateId: asString(record.candidateId, `${path}.candidateId`),
+    reason: asEnum(
+      record.reason,
+      DEEP_RESEARCH_EXCLUSION_REASONS,
+      `${path}.reason`,
+    ) as DeepResearchExclusionReason,
+  };
+}
+
 function parseSource(
   value: unknown,
   path: string,
@@ -331,6 +415,18 @@ function extractTitle(value: unknown): string | null {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
   const title = (value as Record<string, unknown>).title;
   return typeof title === "string" ? title : null;
+}
+
+function extractCandidateId(value: unknown): string | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
+  const candidateId = (value as Record<string, unknown>).candidateId;
+  return typeof candidateId === "string" ? candidateId : null;
+}
+
+function extractUrl(value: unknown): string | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
+  const url = (value as Record<string, unknown>).url;
+  return typeof url === "string" ? url : null;
 }
 
 function asRecord(value: unknown, path: string): Record<string, unknown> {

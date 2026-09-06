@@ -35,7 +35,7 @@ function dependencies(): DailyBriefPipelineDependencies & {
   const researchProvider: NewsResearchProvider = {
     discover: vi.fn().mockResolvedValue({ stories: [firstCandidateInput], rejectedStories: [] }),
     findGaps: vi.fn().mockResolvedValue({ stories: [], rejectedStories: [] }),
-    deepResearch: vi.fn().mockResolvedValue({ stories: [firstDeepStoryInput] }),
+    deepResearch: vi.fn().mockResolvedValue({ stories: [firstDeepStoryInput], excludedCandidates: [] }),
   };
   const writer: BriefWriter = {
     write: vi.fn().mockResolvedValue(oneItemDraft),
@@ -77,7 +77,11 @@ describe("DailyBriefPipeline", () => {
     expect(deps.researchProvider.findGaps).toHaveBeenCalledOnce();
     expect(deps.researchProvider.deepResearch).toHaveBeenCalledOnce();
     expect(deps.researchProvider.deepResearch).toHaveBeenCalledWith(
-      expect.objectContaining({ maximumStories: DEFAULT_PIPELINE_SETTINGS.maximumStories, editorialInstructions: "" }),
+      expect.objectContaining({
+        minimumImportance: 3,
+        maximumStories: DEFAULT_PIPELINE_SETTINGS.maximumStories,
+        editorialInstructions: "",
+      }),
     );
     expect(deps.writer.write).toHaveBeenCalledOnce();
     expect(deps.writer.write).toHaveBeenCalledWith(expect.anything(), expect.anything(), "");
@@ -119,6 +123,7 @@ describe("DailyBriefPipeline", () => {
     });
     vi.mocked(deps.researchProvider.deepResearch).mockResolvedValue({
       stories: [firstDeepStoryInput, secondDeepStoryInput],
+      excludedCandidates: [],
     });
     vi.mocked(deps.writer.write).mockResolvedValue(twoItemDraft);
     const pipeline = new DailyBriefPipeline(deps);
@@ -197,16 +202,27 @@ describe("DailyBriefPipeline", () => {
 
   it("bounds a pathological candidate count before deep research, keeping the most important ones", async () => {
     const deps = dependencies();
-    const manyCandidates = Array.from({ length: 45 }, (_, index) => ({
-      ...firstCandidateInput,
-      title: `Candidate ${index}`,
-      importance: (index < 15 ? 5 : 2) as 1 | 2 | 3 | 4 | 5,
-      sources: [{ ...firstCandidateInput.sources[0]!, url: `https://example.com/story-${index}` }],
-    }));
+    const manyCandidates = Array.from({ length: 45 }, (_, index) => {
+      const sourceUrl = `https://example.com/story-${index}`;
+      return {
+        ...firstCandidateInput,
+        title: `Candidate ${index}`,
+        importance: (index < 15 ? 5 : 2) as 1 | 2 | 3 | 4 | 5,
+        eventDateEvidence: { ...firstCandidateInput.eventDateEvidence, sourceUrl },
+        sources: [{ ...firstCandidateInput.sources[0]!, url: sourceUrl }],
+      };
+    });
     vi.mocked(deps.researchProvider.discover).mockResolvedValue({
       stories: manyCandidates,
       rejectedStories: [],
     });
+    vi.mocked(deps.researchProvider.deepResearch).mockImplementation(async ({ candidates }) => ({
+      stories: [firstDeepStoryInput],
+      excludedCandidates: candidates.slice(1).map(({ id }) => ({
+        candidateId: id,
+        reason: "lower_priority_than_selected" as const,
+      })),
+    }));
     const pipeline = new DailyBriefPipeline(deps, { maximumDiscoveryCandidates: 10 });
 
     await pipeline.run({ runAt });
@@ -227,18 +243,23 @@ describe("DailyBriefPipeline", () => {
 
   it("keeps safety-capped candidates visible when deep research validation fails", async () => {
     const deps = dependencies();
-    const manyCandidates = Array.from({ length: 12 }, (_, index) => ({
-      ...firstCandidateInput,
-      title: `Candidate ${index}`,
-      importance: 5 as const,
-      sources: [{ ...firstCandidateInput.sources[0]!, url: `https://example.com/story-${index}` }],
-    }));
+    const manyCandidates = Array.from({ length: 12 }, (_, index) => {
+      const sourceUrl = `https://example.com/story-${index}`;
+      return {
+        ...firstCandidateInput,
+        title: `Candidate ${index}`,
+        importance: 5 as const,
+        eventDateEvidence: { ...firstCandidateInput.eventDateEvidence, sourceUrl },
+        sources: [{ ...firstCandidateInput.sources[0]!, url: sourceUrl }],
+      };
+    });
     vi.mocked(deps.researchProvider.discover).mockResolvedValue({
       stories: manyCandidates,
       rejectedStories: [],
     });
     vi.mocked(deps.researchProvider.deepResearch).mockResolvedValue({
       stories: [{ ...firstDeepStoryInput, candidateId: "not-a-candidate" }],
+      excludedCandidates: [],
     });
     const pipeline = new DailyBriefPipeline(deps, { maximumDiscoveryCandidates: 10 });
 

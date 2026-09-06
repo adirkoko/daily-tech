@@ -54,6 +54,11 @@ Markdown and lifecycle metadata remain intact and the failure appears as a Syste
 ticket. Save and delete are rejected while the date has an active generation lease,
 including requests submitted from a stale browser tab.
 
+While generation is active, the editor, prior failure state, and research trace are
+replaced by one focused progress state. The initiating browser briefly confirms the
+terminal success or failure and then returns to the content that is actually stored;
+on failure this means the previous brief when one exists.
+
 If a failed day's scheduled publication attempt had already reached a terminal
 failure, a successful **Retry** reopens that failed publication job and immediately
 runs the normal local publisher. This recovery applies only to failed publication
@@ -63,10 +68,11 @@ editor, allowing the operator to rebuild it through the full pipeline.
 
 Each brief page also shows the latest recorded research trace. The three discovery
 cards summarize topics found and the number of candidates found, contributed, or
-removed by validation/deduplication. The Deep Research card shows the final
-selection, making it possible to compare discovery coverage with what survived the
-editorial research pass. These summaries come from bounded structured operational
-logs; they do not add another model request or store full provider responses.
+removed by validation/deduplication. The Deep Research card shows the final selection
+and concise exclusion reasons, making it possible to compare discovery coverage with
+what survived the editorial research pass. These summaries come from bounded
+structured operational logs; they do not add another model request or store full
+provider responses.
 
 ## Pipeline settings
 

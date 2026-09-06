@@ -242,7 +242,7 @@ describe("standalone site service", () => {
       expect(failedEditorHtml).toContain("אופס, ההפקה נעצרה בדרך");
       expect(failedEditorHtml).toContain(`/api/admin/briefs/${failedDay.date}/generate`);
       expect(failedEditorHtml).toContain('name="mode" value="retry"');
-      expect(failedEditorHtml).toContain("עדיין אין נתוני מחקר שמורים");
+      expect(failedEditorHtml).not.toContain("שקיפות מחקר");
       const missingFileEditor = await fetch(
         `${origin}/admin/briefs/${missingFileDay.date}`,
         { headers: adminHeaders },
@@ -255,6 +255,66 @@ describe("standalone site service", () => {
         await fetch(`${origin}/admin/briefs/${day.date}`, { headers: adminHeaders })
       ).text();
       expect(publishedEditorHtml).toContain('name="mode" value="regenerate"');
+
+      const generationDatabase = DailyTechDatabase.open({ filename: databasePath });
+      generationDatabase.operations.beginScheduledJob({
+        jobName: "generate",
+        targetDate: day.date,
+        leaseOwner: "integration-generation",
+        occurredAt: "2026-09-06T10:00:00.000Z",
+        leaseExpiresAt: "2099-09-06T16:00:00.000Z",
+      });
+      generationDatabase.close();
+      const runningEditorHtml = await (
+        await fetch(`${origin}/admin/briefs/${day.date}?generation_attempt=1`, { headers: adminHeaders })
+      ).text();
+      expect(runningEditorHtml).toContain("היצירה מתבצעת ברקע");
+      expect(runningEditorHtml).not.toContain("שקיפות מחקר");
+      expect(runningEditorHtml).not.toContain("Markdown");
+
+      const completedGenerationDatabase = DailyTechDatabase.open({ filename: databasePath });
+      completedGenerationDatabase.operations.completeScheduledJob(
+        "generate",
+        day.date,
+        "integration-generation",
+        "2026-09-06T10:01:00.000Z",
+      );
+      completedGenerationDatabase.close();
+      const completedEditorHtml = await (
+        await fetch(`${origin}/admin/briefs/${day.date}?generation_attempt=1`, { headers: adminHeaders })
+      ).text();
+      expect(completedEditorHtml).toContain("היצירה הושלמה בהצלחה");
+      expect(completedEditorHtml).not.toContain("שקיפות מחקר");
+      expect(completedEditorHtml).not.toContain("Markdown");
+
+      const failedGenerationDatabase = DailyTechDatabase.open({ filename: databasePath });
+      failedGenerationDatabase.operations.beginScheduledJob({
+        jobName: "generate",
+        targetDate: day.date,
+        leaseOwner: "integration-failed-generation",
+        occurredAt: "2026-09-06T11:00:00.000Z",
+        leaseExpiresAt: "2099-09-06T17:00:00.000Z",
+        restartFinished: "any",
+      });
+      failedGenerationDatabase.operations.failScheduledJob(
+        "generate",
+        day.date,
+        "integration-failed-generation",
+        "2026-09-06T11:01:00.000Z",
+        "Integration regeneration failed.",
+      );
+      failedGenerationDatabase.close();
+      const failedGenerationEditorHtml = await (
+        await fetch(`${origin}/admin/briefs/${day.date}?generation_attempt=2`, { headers: adminHeaders })
+      ).text();
+      expect(failedGenerationEditorHtml).toContain("היצירה נכשלה");
+      expect(failedGenerationEditorHtml).toContain("חוזרים לתדריך האחרון שנשמר");
+      expect(failedGenerationEditorHtml).not.toContain("שקיפות מחקר");
+      expect(failedGenerationEditorHtml).not.toContain("Markdown");
+      const restoredEditorHtml = await (
+        await fetch(`${origin}/admin/briefs/${day.date}`, { headers: adminHeaders })
+      ).text();
+      expect(restoredEditorHtml).toContain("Markdown");
 
       const rejectedGeneration = await fetch(
         `${origin}/api/admin/briefs/${failedDay.date}/generate`,

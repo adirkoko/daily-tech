@@ -26,9 +26,20 @@ export const EVENT_DATE_EVIDENCE_KINDS = [
   "release_effective_date",
 ] as const;
 
+export const DEEP_RESEARCH_EXCLUSION_REASONS = [
+  "insufficient_evidence",
+  "outside_window",
+  "duplicate",
+  "below_importance_threshold",
+  "lower_priority_than_selected",
+  "no_eligible_citation",
+  "other",
+] as const;
+
 export type ResearchCategory = (typeof RESEARCH_CATEGORIES)[number];
 export type SourceType = (typeof SOURCE_TYPES)[number];
 export type EventDateEvidenceKind = (typeof EVENT_DATE_EVIDENCE_KINDS)[number];
+export type DeepResearchExclusionReason = (typeof DEEP_RESEARCH_EXCLUSION_REASONS)[number];
 export type Importance = 1 | 2 | 3 | 4 | 5;
 
 export interface ResearchSource {
@@ -50,6 +61,16 @@ export interface EventDateEvidence {
 export interface RejectedResearchStory {
   readonly index: number;
   readonly title: string | null;
+  readonly reason: string;
+  /** Present when a malformed Deep Research story still carried a readable ID. */
+  readonly candidateId?: string | null;
+}
+
+export interface RejectedResearchSource {
+  readonly storyIndex: number;
+  readonly storyTitle: string | null;
+  readonly sourceIndex: number;
+  readonly url: string | null;
   readonly reason: string;
 }
 
@@ -82,6 +103,7 @@ export interface CandidateStory extends CandidateStoryInput {
 export interface DiscoveryBatch {
   readonly stories: readonly CandidateStoryInput[];
   readonly rejectedStories: readonly RejectedResearchStory[];
+  readonly rejectedSources?: readonly RejectedResearchSource[];
 }
 
 export interface NewsDiscoveryScope {
@@ -150,15 +172,24 @@ export interface DeepResearchedStory extends DeepResearchedStoryInput {
 
 export interface DeepResearchBatch {
   readonly stories: readonly DeepResearchedStoryInput[];
+  readonly excludedCandidates: readonly ExcludedResearchCandidate[];
+  readonly rejectedStories?: readonly RejectedResearchStory[];
+  readonly rejectedSources?: readonly RejectedResearchSource[];
+}
+
+export interface ExcludedResearchCandidate {
+  readonly candidateId: string;
+  readonly reason: DeepResearchExclusionReason;
 }
 
 export interface DeepResearchRequest {
   readonly context: PipelineContext;
   readonly candidates: readonly CandidateStory[];
+  readonly minimumImportance: Importance;
   /**
-   * Guidance ceiling on how many candidates are worth a place in the edition.
-   * The model chooses which ones, up to this many; code only refuses a response
-   * that exceeds it. Never used to pre-select candidates in code.
+   * Hard upper limit on how many candidates may appear in the edition. The model
+   * chooses which ones within that bound; code and JSON Schema both enforce it.
+   * Never used to pre-select candidates in code.
    */
   readonly maximumStories: number;
   /** "" when the operator has not set any editorial guidance. */

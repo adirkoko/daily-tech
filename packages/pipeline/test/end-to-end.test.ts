@@ -33,7 +33,7 @@ describe("daily pipeline end to end", () => {
     const researchProvider: NewsResearchProvider = {
       discover: vi.fn().mockResolvedValue({ stories: [firstCandidateInput], rejectedStories: [] }),
       findGaps: vi.fn().mockResolvedValue({ stories: [], rejectedStories: [] }),
-      deepResearch: vi.fn().mockResolvedValue({ stories: [firstDeepStoryInput] }),
+      deepResearch: vi.fn().mockResolvedValue({ stories: [firstDeepStoryInput], excludedCandidates: [] }),
     };
     const writer: BriefWriter = {
       write: vi.fn().mockResolvedValue(oneItemDraft),

@@ -88,15 +88,19 @@ confirmation, semantic deduplication, and editorial judgment remain explicit mod
 instructions rather than heuristic validators.
 
 Validation fails closed at the narrowest safe boundary. A broken provider response or
-missing citation set fails the research request; an invalid individual story is
-discarded while valid siblings continue.
+missing citation set fails the research request. An invalid source is removed while
+the rest of its story remains eligible, but only when at least one valid source remains
+and the event-date evidence still references one of those retained sources. Otherwise
+the story is discarded while valid siblings continue.
 
 ## The research domain is date-only
 
 Stories use `occurredOn`; sources use nullable `publishedOn`. Both represent calendar
-dates, never inferred timestamps. Source publication metadata does not establish the
-event date, so each story carries separate event-date evidence. A story is omitted
-when the event cannot be placed confidently inside the requested Israel date.
+dates rather than invented time-of-day precision. An explicit source timestamp may be
+reliably converted to the `Asia/Jerusalem` calendar date. Source publication metadata
+does not establish the event date, so each story carries separate event-date evidence.
+A story is omitted when the event cannot be placed confidently inside the requested
+Israel date.
 
 ## Structured writing output and deterministic rendering
 
@@ -111,6 +115,10 @@ A broad discovery pass finds candidate developments. Optional general-gap and
 Admin-keyword passes expand that set before one Deep Research request builds the
 full dossiers. The writer then makes one editorial pass over accepted dossiers.
 
+The general gap pass remains an adaptive cross-domain omission check. The
+Admin-keyword pass narrows additional attention without turning a keyword into an
+inclusion requirement. Both share the same bounded candidate and evidence contract.
+
 Running omission checks before Deep Research gives every candidate the same research
 depth and avoids patching an already-written draft through a revision loop.
 
@@ -123,11 +131,13 @@ tier for events that already happened.
 
 ## Models make editorial selections within bounded requests
 
-Deep Research chooses which candidates justify a dossier, up to the operator's
-`maximumStories` ceiling. The writer separately decides which accepted dossiers
-belong in the edition. Code enforces response bounds but does not replace either
-editorial choice with ranking heuristics. A larger internal candidate cap exists only
-to bound pathological request sizes.
+Deep Research chooses which candidates justify a dossier, under the operator's hard
+`maximumStories` ceiling. It must account for every input candidate as either selected
+or explicitly excluded with a bounded reason. The writer separately decides which
+accepted dossiers belong in the edition. Code enforces the partition, source/date
+boundaries, importance threshold, and response bounds but does not replace editorial
+judgment with ranking heuristics. A larger internal candidate cap exists only to bound
+pathological request sizes.
 
 ## Pipeline settings live in SQLite
 

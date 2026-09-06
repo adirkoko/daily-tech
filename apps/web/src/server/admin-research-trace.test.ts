@@ -32,6 +32,9 @@ describe("latestResearchTrace", () => {
           topics: ["Agents", "Cloud"],
           contributedTitles: ["נמצא פער"],
           filteredTitles: ["כפילות"],
+          filteredReasons: ["duplicate"],
+          rejectedTitles: ["מקור שבור"],
+          rejectedReasons: ["No eligible citation remained."],
         },
       }),
       log({ id: 2, details: { stage: "light_discovery", state: "completed", foundCount: 4 } }),
@@ -49,6 +52,8 @@ describe("latestResearchTrace", () => {
           filteredCount: 1,
           rejectedCount: 1,
           topics: ["Agents", "Cloud"],
+          filteredTitles: ["כפילות", "מקור שבור"],
+          filteredReasons: ["duplicate", "No eligible citation remained."],
         },
       ],
     });

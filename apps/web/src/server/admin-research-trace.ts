@@ -20,6 +20,7 @@ export interface AdminResearchStage {
   readonly foundTitles: readonly string[];
   readonly contributedTitles: readonly string[];
   readonly filteredTitles: readonly string[];
+  readonly filteredReasons: readonly string[];
 }
 
 export interface AdminResearchTrace {
@@ -29,6 +30,7 @@ export interface AdminResearchTrace {
 }
 
 export interface AdminGenerationState {
+  readonly state: ScheduledJob["state"] | null;
   readonly running: boolean;
   readonly attemptCount: number;
   readonly lastError: string | null;
@@ -89,6 +91,7 @@ export function latestResearchTrace(
 
 function generationState(job: ScheduledJob | null): AdminGenerationState {
   return {
+    state: job?.state ?? null,
     running: job?.state === "running" && job.leaseExpiresAt !== null && job.leaseExpiresAt > new Date().toISOString(),
     attemptCount: job?.attemptCount ?? 0,
     lastError: job?.lastError ?? null,
@@ -110,13 +113,17 @@ function parseStage(
     foundCount: numberValue(details.foundCount ?? details.candidateCount),
     contributedCount: numberValue(details.contributedCount ?? details.selectedCount),
     rejectedCount: numberValue(details.rejectedCount),
-    filteredCount: numberValue(details.filteredCount ?? details.notSelectedCount),
+    filteredCount: numberValue(details.filteredCount),
     topics: stringArray(details.topics),
     foundTitles: stringArray(details.foundTitles),
     contributedTitles: stringArray(details.contributedTitles ?? details.selectedTitles),
     filteredTitles: [
-      ...stringArray(details.filteredTitles ?? details.notSelectedTitles),
+      ...stringArray(details.filteredTitles),
       ...stringArray(details.rejectedTitles),
+    ],
+    filteredReasons: [
+      ...stringArray(details.filteredReasons),
+      ...stringArray(details.rejectedReasons),
     ],
   };
 }

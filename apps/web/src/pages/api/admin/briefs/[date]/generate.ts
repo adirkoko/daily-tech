@@ -31,12 +31,12 @@ export const POST: APIRoute = async (context) => {
     if (result.outcome === "invalid_state") {
       return redirectWith(target, "error", "ניסיון חוזר זמין רק לתדריך שנכשל.");
     }
-    const verb = mode === "retry" ? "הניסיון החוזר" : "היצירה מחדש";
-    return redirectWith(
-      target,
-      "success",
-      `${verb} התחיל ברקע. אפשר לרענן את הדף כדי לראות את ההתקדמות.`,
-    );
+    const location = new URL(target, "http://internal");
+    location.searchParams.set("generation_attempt", String(result.attemptCount));
+    return new Response(null, {
+      status: 303,
+      headers: { Location: `${location.pathname}${location.search}` },
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return redirectWith(target, "error", message.slice(0, 500));

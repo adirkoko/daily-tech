@@ -16,7 +16,7 @@ const rangeDays = STATISTICS_RANGE_DAYS[selectedRange];
 const rangeStart = addCalendarDays(snapshot.currentDate, -rangeDays);
 const rangeEnd = addCalendarDays(snapshot.currentDate, -1);
 const selectedDays = selectTrailingDays(
-  snapshot.published.map((brief) => brief.metadata),
+  snapshot.days,
   snapshot.currentDate,
   selectedRange,
 );

@@ -78,14 +78,6 @@ export function createQuietDayDraft(): BriefDraft {
     developments: [],
     worthWatching: [],
     bottomLine: summary,
-    metadata: {
-      summary,
-      significant_items: 0,
-      worth_watching_items: 0,
-      day_intensity: "minimal",
-      companies: [],
-      topics: [],
-      developments: [],
-    },
+    metadata: { summary },
   };
 }

@@ -44,7 +44,10 @@ changes use a temporary file and a short-lived rollback copy, preventing a datab
 failure from leaving partially written content. Administrative save, delete, login,
 and feedback-resolution actions are recorded in the operational log.
 
-Regeneration replaces the existing Markdown and recalculated metadata atomically.
+Regeneration replaces the existing Markdown and deterministically recalculated
+metadata atomically. Counts and development titles come from the final draft,
+companies and topics only from research dossiers referenced by final items, and the
+source count only from citations shown in the resulting brief.
 A previously published day remains published and keeps its original
 `published_at`; its new counts, companies, topics, and developments immediately
 replace the old inputs used by the archive and statistics pages. Other regenerated

@@ -1,5 +1,3 @@
-import { isDayIntensity } from "@daily-tech/core";
-
 import { parseJsonResult, type AiCompletion } from "../ai/contracts.js";
 import type { DeepResearchedStory } from "../research/contracts.js";
 import type { PipelineContext } from "../types.js";
@@ -9,8 +7,8 @@ import type {
   DraftDevelopment,
   DraftSourceCitation,
   DraftWorthWatchingItem,
-  GeneratedDayMetadata,
   ModelBriefWriterOptions,
+  WriterMetadata,
 } from "./contracts.js";
 import { DRAFT_PROMPT } from "./prompts.js";
 import { BRIEF_DRAFT_RESPONSE_SCHEMA } from "./schemas.js";
@@ -78,28 +76,15 @@ export class ModelBriefWriter implements BriefWriter {
 function parseDraft(completion: AiCompletion): BriefDraft {
   return parseJsonResult(completion.content, (value): BriefDraft => {
     const record = asRecord(value, "brief response");
+    assertOnlyKeys(
+      record,
+      ["day_overview", "developments", "worth_watching", "bottom_line", "metadata"],
+      "brief response",
+    );
     const metadata = asRecord(record.metadata, "metadata");
-    if (!isDayIntensity(metadata.day_intensity)) {
-      throw validationError(
-        "metadata.day_intensity",
-        metadata.day_intensity,
-        "one of minimal|low|medium|high|extreme",
-      );
-    }
-    const parsedMetadata: GeneratedDayMetadata = {
+    assertOnlyKeys(metadata, ["summary"], "metadata");
+    const parsedMetadata: WriterMetadata = {
       summary: asString(metadata.summary, "metadata.summary"),
-      significant_items: asNonNegativeInteger(
-        metadata.significant_items,
-        "metadata.significant_items",
-      ),
-      worth_watching_items: asNonNegativeInteger(
-        metadata.worth_watching_items,
-        "metadata.worth_watching_items",
-      ),
-      day_intensity: metadata.day_intensity,
-      companies: asStringArray(metadata.companies, "metadata.companies"),
-      topics: asStringArray(metadata.topics, "metadata.topics"),
-      developments: asStringArray(metadata.developments, "metadata.developments"),
     };
     return {
       dayOverview: asString(record.day_overview, "day_overview"),
@@ -117,6 +102,15 @@ function parseDraft(completion: AiCompletion): BriefDraft {
 
 function asDevelopment(value: unknown, path: string): DraftDevelopment {
   const record = asRecord(value, path);
+  assertOnlyKeys(record, [
+    "storyIds",
+    "title",
+    "whatChanged",
+    "whyItMatters",
+    "whatToDoWithIt",
+    "availability",
+    "sources",
+  ], path);
   return {
     storyIds: asStringArray(record.storyIds, `${path}.storyIds`),
     title: asString(record.title, `${path}.title`),
@@ -132,6 +126,7 @@ function asDevelopment(value: unknown, path: string): DraftDevelopment {
 
 function asWorthWatchingItem(value: unknown, path: string): DraftWorthWatchingItem {
   const record = asRecord(value, path);
+  assertOnlyKeys(record, ["storyIds", "title", "note", "sources"], path);
   return {
     storyIds: asStringArray(record.storyIds, `${path}.storyIds`),
     title: asString(record.title, `${path}.title`),
@@ -144,6 +139,7 @@ function asWorthWatchingItem(value: unknown, path: string): DraftWorthWatchingIt
 
 function asSourceCitation(value: unknown, path: string): DraftSourceCitation {
   const record = asRecord(value, path);
+  assertOnlyKeys(record, ["url", "label"], path);
   return {
     url: asString(record.url, `${path}.url`),
     label: asString(record.label, `${path}.label`),
@@ -168,6 +164,22 @@ function asRecord(value: unknown, path: string): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
+function assertOnlyKeys(
+  record: Readonly<Record<string, unknown>>,
+  allowedKeys: readonly string[],
+  path: string,
+): void {
+  const allowed = new Set(allowedKeys);
+  const unexpected = Object.keys(record).find((key) => !allowed.has(key));
+  if (unexpected !== undefined) {
+    throw validationError(
+      `${path}.${unexpected}`,
+      record[unexpected],
+      "no additional properties",
+    );
+  }
+}
+
 function asString(value: unknown, path: string): string {
   if (typeof value !== "string" || value.trim().length === 0) {
     throw validationError(path, value, "non-empty string");
@@ -183,13 +195,6 @@ function asStringArray(value: unknown, path: string): readonly string[] {
 function asArray(value: unknown, path: string): readonly unknown[] {
   if (!Array.isArray(value)) throw validationError(path, value, "array");
   return value;
-}
-
-function asNonNegativeInteger(value: unknown, path: string): number {
-  if (!Number.isInteger(value) || (value as number) < 0) {
-    throw validationError(path, value, "non-negative integer");
-  }
-  return value as number;
 }
 
 function validationError(

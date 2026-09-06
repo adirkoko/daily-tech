@@ -65,6 +65,16 @@ describe("archive statistics", () => {
     expect(result.topCompanies).toHaveLength(10);
     expect(result.topCompanies.find((item) => item.name === "OpenAI")?.count).toBe(1);
   });
+
+  it("groups company and topic labels consistently across case and Unicode variants", () => {
+    const result = calculateStatistics([
+      day({ companies: ["OpenAI"], topics: ["AI Models"] }),
+      day({ date: "2026-08-26", companies: [" openai "], topics: ["ai models"] }),
+    ]);
+
+    expect(result.topCompanies).toEqual([{ name: "OpenAI", count: 2 }]);
+    expect(result.topTopics).toEqual([{ name: "AI Models", count: 2 }]);
+  });
 });
 
 describe("statistics ranges", () => {
@@ -83,6 +93,16 @@ describe("statistics ranges", () => {
     ], "2026-08-30", "month");
 
     expect(selected.map((item) => item.date)).toEqual(["2026-07-31", "2026-08-29"]);
+  });
+
+  it("excludes non-published rows even when they still carry previous metadata", () => {
+    const selected = selectTrailingDays([
+      day({ date: "2026-08-29" }),
+      day({ date: "2026-08-28", status: "failed", published_at: null }),
+      day({ date: "2026-08-27", status: "ready", published_at: null }),
+    ], "2026-08-30", "month");
+
+    expect(selected.map((item) => item.date)).toEqual(["2026-08-29"]);
   });
 
   it("uses a rolling 365-day window instead of a calendar year", () => {

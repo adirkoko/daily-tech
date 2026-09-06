@@ -109,14 +109,16 @@ export {
   DraftResearchBoundaryError,
   validateDraftAgainstStories,
 } from "./writing/draft-validation.js";
+export { deriveFinalEditionMetadata } from "./writing/final-metadata.js";
+export type { FinalEditionMetadata } from "./writing/final-metadata.js";
 export type {
   BriefDraft,
   BriefWriter,
   DraftDevelopment,
   DraftSourceCitation,
   DraftWorthWatchingItem,
-  GeneratedDayMetadata,
   ModelBriefWriterOptions,
+  WriterMetadata,
 } from "./writing/contracts.js";
 export { renderBriefMarkdown } from "./writing/render-markdown.js";
 export { israelDayWindow, previousIsraelDayWindow } from "./window.js";

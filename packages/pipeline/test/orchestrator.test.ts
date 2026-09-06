@@ -137,6 +137,32 @@ describe("DailyBriefPipeline", () => {
     expect(deepResearchCall.candidates.map((candidate) => candidate.id)).toEqual(["story-1", "story-2"]);
   });
 
+  it("persists metadata only for dossiers the final draft actually uses", async () => {
+    const deps = dependencies();
+    vi.mocked(deps.researchProvider.findGaps).mockResolvedValue({
+      stories: [secondCandidateInput],
+      rejectedStories: [],
+    });
+    vi.mocked(deps.researchProvider.deepResearch).mockResolvedValue({
+      stories: [firstDeepStoryInput, secondDeepStoryInput],
+      excludedCandidates: [],
+    });
+    vi.mocked(deps.writer.write).mockResolvedValue(oneItemDraft);
+    const pipeline = new DailyBriefPipeline(deps);
+
+    const result = await pipeline.run({ runAt });
+
+    expect(result.artifact.metadata).toMatchObject({
+      significant_items: 1,
+      worth_watching_items: 0,
+      day_intensity: "low",
+      companies: ["OpenAI"],
+      topics: ["AI models"],
+      developments: [oneItemDraft.developments[0]!.title],
+      source_count: 1,
+    });
+  });
+
   it("runs admin-keyword-focused discovery only when keywords are configured and enabled", async () => {
     const deps = dependencies();
     const settings: PipelineSettings = {

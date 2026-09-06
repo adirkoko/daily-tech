@@ -44,14 +44,14 @@ not duplicated inside the Markdown source.
 ```yaml
 date: 2026-08-27          # unique day id, matches the file name
 summary: ...              # 1-2 sentences; used on home, calendar, SEO, share cards
-significant_items: 9      # number of meaningful developments in the brief
-worth_watching_items: 1   # number of items in the "Worth watching" section
-day_intensity: high       # drives the calendar heatmap and quality checks
-companies: [...]           # companies appearing in the brief
-topics: [...]              # main topics
-developments: [...]        # short digests, for search / filtering / statistics
+significant_items: 9      # final numbered developments; derived from the draft
+worth_watching_items: 1   # final "Worth watching" items; derived from the draft
+day_intensity: extreme    # derived from the total final item count
+companies: [...]           # central companies from stories used by final items
+topics: [...]              # central topics from stories used by final items
+developments: [...]        # final numbered development titles
 status: published          # lifecycle state
-source_count: 40           # distinct sources in the accepted research set
+source_count: 18           # distinct URLs actually cited in the final brief
 created_at: ...
 published_at: ...
 updated_at: ...            # last manual edit
@@ -59,6 +59,16 @@ updated_at: ...            # last manual edit
 
 Timestamps are ISO 8601 UTC values. `published_at` and `updated_at` are `null` until
 the corresponding event occurs.
+
+The writing model authors only `summary`, because it requires semantic editorial
+judgment. All other content metadata is rebuilt deterministically after the final
+selection: counts and development titles come from the returned draft, companies and
+topics come only from dossiers referenced by those final items, and `source_count`
+counts canonical URLs actually displayed. Rejected candidates, omitted dossiers,
+and uncited research sources cannot contribute.
+
+Intensity follows the final item total (`significant_items + worth_watching_items`):
+zero is `minimal`, 1–2 `low`, 3–5 `medium`, 6–8 `high`, and 9 or more `extreme`.
 
 ### Allowed values
 
@@ -99,8 +109,9 @@ regeneration may restart a finished `generate` row; the attempt count is increme
 and the same lease rules still apply. A successful Admin retry may also restart a
 failed (never a successful) `publish` row when publication time already passed and
 that scheduled attempt failed. No separate statistics rows exist—statistics are
-recalculated from current `published` day metadata, so replacing a published brief
-updates them without double-counting the date.
+recalculated from current `published` day metadata, so failed, ready, and draft rows
+do not contribute. Replacing a published brief updates the same row without
+double-counting the date; deleting it removes it from the next calculation.
 
 ## Pipeline settings
 

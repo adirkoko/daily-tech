@@ -140,12 +140,6 @@ export const oneItemDraft: BriefDraft = {
   bottomLine: "יום שקט יחסית עם התפתחות אחת משמעותית מ-OpenAI.",
   metadata: {
     summary: "יום עם התפתחות חשובה אחת.",
-    significant_items: 1,
-    worth_watching_items: 0,
-    day_intensity: "medium",
-    companies: ["OpenAI"],
-    topics: ["AI models"],
-    developments: ["מודל חדש הושק"],
   },
 };
 
@@ -156,12 +150,6 @@ export const twoItemDraft: BriefDraft = {
   bottomLine: "יום פעיל בתחום מודלי ה-AI וכלי הפיתוח.",
   metadata: {
     summary: "יום עם שתי התפתחויות חשובות.",
-    significant_items: 2,
-    worth_watching_items: 0,
-    day_intensity: "high",
-    companies: ["OpenAI", "Google"],
-    topics: ["AI models", "Developer tools"],
-    developments: ["מודל חדש הושק", "כלי פיתוח קיבל עדכון"],
   },
 };
 
@@ -170,7 +158,13 @@ export const validArtifact: BriefArtifact = {
   content: renderBriefMarkdown("2026-08-27", oneItemDraft),
   metadata: {
     date: "2026-08-27",
-    ...oneItemDraft.metadata,
+    summary: oneItemDraft.metadata.summary,
+    significant_items: 1,
+    worth_watching_items: 0,
+    day_intensity: "low",
+    companies: ["OpenAI"],
+    topics: ["AI models"],
+    developments: ["מודל חדש הושק"],
     status: "ready",
     source_count: 1,
     created_at: "2026-08-28T01:00:00.000Z",

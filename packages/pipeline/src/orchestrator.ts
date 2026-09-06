@@ -38,7 +38,11 @@ import type {
   PipelineStage,
 } from "./types.js";
 import type { BriefDraft, BriefWriter } from "./writing/contracts.js";
-import { createQuietDayDraft, validateDraftAgainstStories } from "./writing/draft-validation.js";
+import {
+  createQuietDayDraft,
+  validateDraftAgainstStories,
+} from "./writing/draft-validation.js";
+import { deriveFinalEditionMetadata } from "./writing/final-metadata.js";
 import { renderBriefMarkdown } from "./writing/render-markdown.js";
 import { israelDayWindow, previousIsraelDayWindow } from "./window.js";
 
@@ -402,11 +406,11 @@ export class DailyBriefPipeline {
   ): BriefArtifact {
     const relativePath = expectedBriefRelativePath(context.window.date);
     if (relativePath === null) throw new Error(`Cannot build a path for ${context.window.date}.`);
+    const editionMetadata = deriveFinalEditionMetadata(draft, stories);
     const metadata: DayMetadata = {
       date: context.window.date,
-      ...draft.metadata,
+      ...editionMetadata,
       status: "ready",
-      source_count: countUniqueSources(stories),
       created_at: createdAt,
       published_at: null,
       updated_at: null,
@@ -479,10 +483,6 @@ function failedDiscoveryDetails(
 
 function uniqueStrings(values: readonly string[]): readonly string[] {
   return [...new Map(values.map((value) => [value.normalize("NFKC").toLocaleLowerCase("he-IL"), value])).values()];
-}
-
-function countUniqueSources(stories: readonly DeepResearchedStory[]): number {
-  return new Set(stories.flatMap(({ sources }) => sources.map(({ url }) => url))).size;
 }
 
 function boundedInteger(value: number, minimum: number, maximum: number, name: string): number {

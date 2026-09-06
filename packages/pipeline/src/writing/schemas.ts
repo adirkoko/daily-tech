@@ -1,8 +1,4 @@
 const nonEmptyString = { type: "string", minLength: 1 } as const;
-const nonEmptyStringArray = {
-  type: "array",
-  items: nonEmptyString,
-} as const;
 const nullableNonEmptyString = {
   anyOf: [nonEmptyString, { type: "null" }],
 } as const;
@@ -70,26 +66,9 @@ export const BRIEF_DRAFT_RESPONSE_SCHEMA = {
     metadata: {
       type: "object",
       additionalProperties: false,
-      required: [
-        "summary",
-        "significant_items",
-        "worth_watching_items",
-        "day_intensity",
-        "companies",
-        "topics",
-        "developments",
-      ],
+      required: ["summary"],
       properties: {
         summary: nonEmptyString,
-        significant_items: { type: "integer", minimum: 0 },
-        worth_watching_items: { type: "integer", minimum: 0 },
-        day_intensity: {
-          type: "string",
-          enum: ["minimal", "low", "medium", "high", "extreme"],
-        },
-        companies: nonEmptyStringArray,
-        topics: nonEmptyStringArray,
-        developments: nonEmptyStringArray,
       },
     },
   },

@@ -130,6 +130,20 @@ describe("web-research contracts", () => {
     }
   });
 
+  it("keeps company and topic metadata scoped to each event across all research passes", () => {
+    for (const prompt of [
+      WEB_LIGHT_DISCOVERY_PROMPT,
+      WEB_FOCUSED_DISCOVERY_PROMPT,
+      WEB_DEEP_RESEARCH_PROMPT,
+    ]) {
+      expect(prompt).toContain("classification metadata for the event itself");
+      expect(prompt).toContain("never names mentioned only in passing");
+      expect(prompt).toContain("merely because they published a source");
+      expect(prompt).toContain("Prefer the parent company");
+      expect(prompt).toContain("short, established English topic categories");
+    }
+  });
+
   it("keeps light discovery broad but shallow and makes Techmeme optional", () => {
     expect(WEB_LIGHT_DISCOVERY_PROMPT).toContain("Be broad across the landscape, but shallow per candidate");
     expect(WEB_LIGHT_DISCOVERY_PROMPT).toContain("not as a requirement to issue one mechanical query per category");

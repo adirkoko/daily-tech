@@ -1,17 +1,9 @@
-import type { DayIntensity } from "@daily-tech/core";
-
 import type { AiCompletionClient } from "../ai/contracts.js";
 import type { DeepResearchedStory } from "../research/contracts.js";
 import type { PipelineContext } from "../types.js";
 
-export interface GeneratedDayMetadata {
+export interface WriterMetadata {
   readonly summary: string;
-  readonly significant_items: number;
-  readonly worth_watching_items: number;
-  readonly day_intensity: DayIntensity;
-  readonly companies: readonly string[];
-  readonly topics: readonly string[];
-  readonly developments: readonly string[];
 }
 
 /** A source the writer chose to cite; both fields are its own editorial choice. */
@@ -50,7 +42,7 @@ export interface BriefDraft {
   readonly developments: readonly DraftDevelopment[];
   readonly worthWatching: readonly DraftWorthWatchingItem[];
   readonly bottomLine: string;
-  readonly metadata: GeneratedDayMetadata;
+  readonly metadata: WriterMetadata;
 }
 
 export interface BriefWriter {

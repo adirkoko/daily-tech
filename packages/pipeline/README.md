@@ -15,6 +15,8 @@ and persistence. The full stage contract is documented in
 - `AiWebResearchClient` owns provider web-search tools, structured output, and
   machine-readable citations.
 - `BriefWriter` writes only from accepted `DeepResearchedStory[]` and cannot search.
+- Persisted counts, intensity, companies, topics, development titles, and source
+  count are derived from the writer's final selection rather than authored twice.
 - `@daily-tech/core` validates the final Markdown and metadata artifact.
 - External research, writing, persistence, logging, and failure reporting are
   dependency-injected for tests.

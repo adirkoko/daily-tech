@@ -32,21 +32,33 @@ export function selectTrailingDays(
   range: StatisticsRange,
 ): readonly DayMetadata[] {
   const startDate = addCalendarDays(currentDate, -STATISTICS_RANGE_DAYS[range]);
-  return days.filter((day) => day.date >= startDate && day.date < currentDate);
+  return days.filter(
+    (day) => day.status === "published" && day.date >= startDate && day.date < currentDate,
+  );
 }
 
-function topValues(days: readonly DayMetadata[], field: "companies" | "topics"): readonly NamedCount[] {
-  const counts = new Map<string, number>();
+function topValues(
+  days: readonly DayMetadata[],
+  field: "companies" | "topics",
+): readonly NamedCount[] {
+  const counts = new Map<string, NamedCount>();
   for (const day of days) {
-    for (const value of new Set(day[field])) {
-      counts.set(value, (counts.get(value) ?? 0) + 1);
+    const dayValues = new Map(
+      day[field].map((value) => [normalizeLabel(value), value.trim()] as const),
+    );
+    for (const [key, name] of dayValues) {
+      const current = counts.get(key);
+      counts.set(key, { name: current?.name ?? name, count: (current?.count ?? 0) + 1 });
     }
   }
 
-  return [...counts]
-    .map(([name, count]) => ({ name, count }))
+  return [...counts.values()]
     .sort((left, right) => right.count - left.count || left.name.localeCompare(right.name, "he"))
     .slice(0, 10);
+}
+
+function normalizeLabel(value: string): string {
+  return value.trim().normalize("NFKC").toLocaleLowerCase("en-US");
 }
 
 export function calculateStatistics(days: readonly DayMetadata[]): ArchiveStatistics {

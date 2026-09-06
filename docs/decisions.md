@@ -102,12 +102,16 @@ does not establish the event date, so each story carries separate event-date evi
 A story is omitted when the event cannot be placed confidently inside the requested
 Israel date.
 
-## Structured writing output and deterministic rendering
+## Structured writing output and deterministic edition metadata
 
-The writer returns structured brief content and metadata rather than opaque Markdown.
-It retains editorial control over selection, grouping, order, wording, and which
-verified sources to cite. Code verifies story/source boundaries and renders the final
-Markdown structure consistently; it does not make editorial decisions.
+The writer returns structured brief content and a semantic summary rather than opaque
+Markdown or a second, independently authored metadata representation. It retains
+editorial control over selection, grouping, order, wording, and which verified
+sources to cite. After verifying story/source boundaries, code derives counts,
+intensity, entities, topics, development titles, and displayed-source count from the
+final selection and renders the Markdown consistently. This prevents omitted
+research or stale model fields from affecting archive and statistics data without
+moving editorial selection into heuristics.
 
 ## Discovery precedes deep research and writing
 

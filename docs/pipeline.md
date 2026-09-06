@@ -96,9 +96,10 @@ final story ID.
 ### 5. Draft
 
 One non-search model request turns `DeepResearchedStory[]` into structured Hebrew
-content and metadata. The writer controls selection, grouping, order, and wording,
-but may use only facts and URLs present in the referenced dossiers. Optional
-editorial instructions can affect emphasis without overriding that factual boundary.
+content. The writer controls selection, grouping, order, wording, cited sources, and
+the short semantic teaser, but may use only facts and URLs present in the referenced
+dossiers. Optional editorial instructions can affect emphasis without overriding
+that factual boundary.
 
 When Deep Research returns no stories, code creates the quiet-day draft without a
 writing request.
@@ -106,8 +107,11 @@ writing request.
 ### 6. Validation and persistence
 
 Draft validation checks that every referenced story ID exists and every cited URL
-belongs to the referenced dossiers. Code then renders deterministic Markdown and
-validates the final Markdown/metadata artifact with `@daily-tech/core`.
+belongs to the referenced dossiers. Code then derives counts, intensity, companies,
+topics, development titles, and the unique displayed-source count from the final
+items only. A dossier omitted by the writer and a source not cited in the rendered
+edition therefore cannot enter persisted metadata. Code renders deterministic
+Markdown and validates the final Markdown/metadata artifact with `@daily-tech/core`.
 
 The accepted artifact is written to the content store with `status=ready`. If the
 metadata write fails, the combined sink restores the previous Markdown state.

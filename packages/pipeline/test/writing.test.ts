@@ -5,12 +5,13 @@ import {
   DraftResearchBoundaryError,
   ModelBriefWriter,
   createQuietDayDraft,
+  deriveFinalEditionMetadata,
   validateDraftAgainstStories,
   type AiCompletionClient,
   type BriefDraft,
   type PipelineContext,
 } from "../src/index.js";
-import { firstDeepStory, oneItemDraft } from "./fixtures.js";
+import { firstDeepStory, oneItemDraft, secondDeepStory } from "./fixtures.js";
 
 const context: PipelineContext = {
   runId: "run-1",
@@ -46,14 +47,9 @@ describe("writing boundary", () => {
     expect(prompt).toContain("only factual source of truth");
     expect(prompt).toContain("numbers, dates, quotations, product names");
     expect(prompt).toContain("Every source you cite must be one of the sources belonging to the stories you reference");
-    // Metadata must scope to the returned edition, not every story the writer reviewed —
-    // this is what keeps daily_brief_companies/topics matching the actual rendered content.
-    expect(prompt).toContain("never a company, topic, or story you reviewed and chose to leave out");
-    // Companies/topics must be the actual subject of an item, not anything mentioned
-    // in passing — including a source's own publisher name.
-    expect(prompt).toContain("never a name mentioned only in passing, as background context, as a comparison, or solely because it published one of the sources");
-    expect(prompt).toContain("metadata.companies and metadata.topics are English, not Hebrew");
-    expect(prompt).toContain("metadata.developments stays in the brief's own language (Hebrew)");
+    expect(prompt).toContain("summary only");
+    expect(prompt).toContain("never a story you reviewed and left out");
+    expect(prompt).toContain("Code derives those fields deterministically");
     // day_overview (rendered as "תמצית היום") and metadata.summary (the short site
     // teaser) must stay distinct fields with distinct jobs.
     expect(prompt).toContain('shown to the reader as "תמצית היום"');
@@ -70,9 +66,9 @@ describe("writing boundary", () => {
         properties: {
           metadata: {
             properties: {
-              significant_items: { type: "integer", minimum: 0 },
-              worth_watching_items: { type: "integer", minimum: 0 },
+              summary: { type: "string", minLength: 1 },
             },
+            required: ["summary"],
           },
         },
       },
@@ -111,7 +107,7 @@ describe("writing boundary", () => {
 
   it("reports the exact path, value, type, and expectation for draft validation", async () => {
     const complete = vi.fn<AiCompletionClient["complete"]>().mockResolvedValue({
-      content: JSON.stringify(draftResponseJson(oneItemDraft, { significant_items: "1" })),
+      content: JSON.stringify(draftResponseJson(oneItemDraft, { summary: 1 })),
       model: "writer",
     });
     const writer = new ModelBriefWriter({ client: { complete } });
@@ -120,14 +116,29 @@ describe("writing boundary", () => {
 
     await expect(promise).rejects.toBeInstanceOf(DraftResponseValidationError);
     await expect(promise).rejects.toMatchObject({
-      path: "metadata.significant_items",
-      receivedValue: "1",
-      receivedType: "string",
-      expected: "non-negative integer",
+      path: "metadata.summary",
+      receivedValue: 1,
+      receivedType: "number",
+      expected: "non-empty string",
     });
     await expect(promise).rejects.toThrow(
-      'path=metadata.significant_items; value="1"; type=string; expected=non-negative integer',
+      "path=metadata.summary; value=1; type=number; expected=non-empty string",
     );
+  });
+
+  it("rejects legacy model-authored metadata fields outside the current schema", async () => {
+    const complete = vi.fn<AiCompletionClient["complete"]>().mockResolvedValue({
+      content: JSON.stringify(draftResponseJson(oneItemDraft, { significant_items: 1 })),
+      model: "writer",
+    });
+    const writer = new ModelBriefWriter({ client: { complete } });
+
+    await expect(writer.write(context, [firstDeepStory], "")).rejects.toMatchObject({
+      path: "metadata.significant_items",
+      receivedValue: 1,
+      receivedType: "number",
+      expected: "no additional properties",
+    });
   });
 
   it("rejects an unknown story id and a source outside the referenced stories, naming each issue", () => {
@@ -162,11 +173,63 @@ describe("writing boundary", () => {
     const draft = createQuietDayDraft();
     expect(draft.developments).toEqual([]);
     expect(draft.worthWatching).toEqual([]);
-    expect(draft.metadata).toMatchObject({
+    expect(deriveFinalEditionMetadata(draft, [])).toMatchObject({
       significant_items: 0,
       worth_watching_items: 0,
       day_intensity: "minimal",
     });
     expect(() => validateDraftAgainstStories(draft, [])).not.toThrow();
+  });
+
+  it("derives persisted metadata only from final items and their cited stories", () => {
+    const draft: BriefDraft = {
+      ...oneItemDraft,
+      developments: [{
+        ...oneItemDraft.developments[0]!,
+        sources: [
+          { url: "https://example.com/model/", label: "OpenAI" },
+          { url: "https://example.com/model#details", label: "OpenAI duplicate" },
+        ],
+      }],
+    };
+
+    expect(deriveFinalEditionMetadata(draft, [firstDeepStory, {
+      ...firstDeepStory,
+      id: "unused-story",
+      companies: ["Excluded Company"],
+      topics: ["Excluded topic"],
+      sources: [{ ...firstDeepStory.sources[0]!, url: "https://example.com/unused" }],
+    }])).toEqual({
+      summary: oneItemDraft.metadata.summary,
+      significant_items: 1,
+      worth_watching_items: 0,
+      day_intensity: "low",
+      companies: ["OpenAI"],
+      topics: ["AI models"],
+      developments: [oneItemDraft.developments[0]!.title],
+      source_count: 1,
+    });
+  });
+
+  it("includes worth-watching references in entity and displayed-source metadata", () => {
+    const draft: BriefDraft = {
+      ...oneItemDraft,
+      worthWatching: [{
+        storyIds: [secondDeepStory.id],
+        title: "עדכון שכדאי לעקוב אחריו",
+        note: "השלב הבא עדיין תלוי בהשלמת ההשקה.",
+        sources: [{ url: secondDeepStory.sources[0]!.url, label: "Google" }],
+      }],
+    };
+
+    expect(deriveFinalEditionMetadata(draft, [firstDeepStory, secondDeepStory])).toMatchObject({
+      significant_items: 1,
+      worth_watching_items: 1,
+      day_intensity: "low",
+      companies: ["OpenAI", "Google"],
+      topics: ["AI models", "Developer tools"],
+      developments: [oneItemDraft.developments[0]!.title],
+      source_count: 2,
+    });
   });
 });

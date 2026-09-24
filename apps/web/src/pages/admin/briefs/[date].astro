@@ -36,6 +36,9 @@ const generationFinished =
   !generationRunning &&
   (generationInfo.generation.state === "succeeded" || generationInfo.generation.state === "failed");
 const generationSucceeded = generationFinished && generationInfo.generation.state === "succeeded";
+const generationSuccessMessage = initialCreationAttempt
+  ? "התדריך החדש מוכן. עוברים כעת לתוכן שנוצר."
+  : "התדריך המעודכן מוכן. עוברים כעת לתוכן החדש.";
 const generationFailureMessage = initialCreationAttempt || missingBrief
   ? "הניסיון הסתיים ללא תדריך חדש. חוזרים ליום הריק, וממנו אפשר לנסות שוב."
   : unavailable
@@ -105,14 +108,20 @@ const intensityIndex = Math.max(0, INTENSITY_OPTIONS.findIndex((option) => optio
   {!generationRunning && !generationFinished && error && <p class="form-error" role="alert">{error}</p>}
   {!generationRunning && !generationFinished && success && <p class="form-success" role="status">{success}</p>}
   {generationRunning ? (
-    <section class="friendly-state admin-friendly-state generation-state" role="status" aria-live="polite" data-generation-active>
+    <section
+      class="friendly-state admin-friendly-state generation-state"
+      role="status"
+      aria-live="polite"
+      data-generation-active
+      data-generation-endpoint={`/api/admin/briefs/${date}/generation`}
+      data-success-message={generationSuccessMessage}
+      data-failure-message={generationFailureMessage}
+    >
       <div class="friendly-state-glyph generation-state-glyph" aria-hidden="true">
         <span class="generation-running-dot"></span>
       </div>
       <h1>היצירה מתבצעת ברקע</h1>
-      <p>{activeStageLabel === null
-        ? "ה־pipeline מתחיל כעת. העמוד יתרענן אוטומטית כשההרצה תתקדם."
-        : <>שלב נוכחי: <strong>{activeStageLabel}</strong>. העמוד יתרענן אוטומטית.</>}</p>
+      <p>שלב נוכחי: <strong data-generation-stage>{activeStageLabel ?? "מתחיל…"}</strong>. המצב מתעדכן אוטומטית.</p>
       {generationInfo.generation.startedAt !== null && (
         <p
           class="generation-elapsed"
@@ -132,9 +141,7 @@ const intensityIndex = Math.max(0, INTENSITY_OPTIONS.findIndex((option) => optio
       </div>
       <h1>{generationSucceeded ? "היצירה הושלמה בהצלחה" : "היצירה נכשלה"}</h1>
       <p>{generationSucceeded
-        ? initialCreationAttempt
-          ? "התדריך החדש מוכן. עוברים כעת לתוכן שנוצר."
-          : "התדריך המעודכן מוכן. עוברים כעת לתוכן החדש."
+        ? generationSuccessMessage
         : generationFailureMessage}</p>
     </section>
   ) : unavailable ? (
@@ -447,8 +454,26 @@ const intensityIndex = Math.max(0, INTENSITY_OPTIONS.findIndex((option) => optio
           if (regenerateDialog.returnValue === "confirm") regenerateForm.requestSubmit();
         });
       }
-      if (document.querySelector("[data-generation-active]")) {
-        const elapsed = document.querySelector("[data-generation-elapsed]");
+      const activeGeneration = document.querySelector("[data-generation-active]");
+      if (activeGeneration instanceof HTMLElement) {
+        const elapsed = activeGeneration.querySelector("[data-generation-elapsed]");
+        const stage = activeGeneration.querySelector("[data-generation-stage]");
+        const title = activeGeneration.querySelector("h1");
+        const description = activeGeneration.querySelector("p:not(.generation-elapsed)");
+        const glyph = activeGeneration.querySelector(".friendly-state-glyph");
+        const stageLabels = {
+          initialize: "אתחול",
+          light_discovery: "סריקה רחבה",
+          gap_discovery: "בדיקת פערים",
+          keyword_discovery: "מיקוד אדמין",
+          deep_research: "מחקר עומק וסינון",
+          draft: "כתיבת התדריך",
+          draft_validation: "בדיקת הטיוטה",
+          validate: "בדיקה סופית",
+          persist: "שמירת התדריך",
+        };
+        let elapsedTimer;
+        let pollTimer;
         const updateElapsed = () => {
           if (!(elapsed instanceof HTMLElement)) return;
           const startedAt = elapsed.dataset.startedAt;
@@ -460,8 +485,64 @@ const intensityIndex = Math.max(0, INTENSITY_OPTIONS.findIndex((option) => optio
           elapsed.textContent = `זמן שחלף: ${hours > 0 ? `${hours} שעות ו־` : ""}${minutes} דקות`;
         };
         updateElapsed();
-        setInterval(updateElapsed, 1000);
-        setTimeout(() => window.location.reload(), 3000);
+        elapsedTimer = window.setInterval(updateElapsed, 1000);
+
+        const finishGeneration = (succeeded) => {
+          window.clearInterval(elapsedTimer);
+          window.clearTimeout(pollTimer);
+          activeGeneration.removeAttribute("data-generation-active");
+          activeGeneration.setAttribute("data-generation-finished", "");
+          activeGeneration.classList.toggle("friendly-state-error", !succeeded);
+          if (elapsed instanceof HTMLElement) elapsed.remove();
+          if (title instanceof HTMLElement) {
+            title.textContent = succeeded ? "היצירה הושלמה בהצלחה" : "היצירה נכשלה";
+          }
+          if (description instanceof HTMLElement) {
+            description.textContent = succeeded
+              ? activeGeneration.dataset.successMessage ?? "התוכן החדש מוכן."
+              : activeGeneration.dataset.failureMessage ?? "ההרצה הסתיימה ללא תוכן חדש.";
+          }
+          if (glyph instanceof HTMLElement) {
+            glyph.classList.remove("generation-state-glyph");
+            glyph.innerHTML = succeeded
+              ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"></path></svg>'
+              : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v4M12 16h.01"></path><path d="M10.3 3.6 2.4 17.2A2 2 0 0 0 4.1 20h15.8a2 2 0 0 0 1.7-2.8L13.7 3.6a2 2 0 0 0-3.4 0Z"></path></svg>';
+          }
+          const cleanUrl = new URL(window.location.href);
+          cleanUrl.searchParams.delete("generation_attempt");
+          cleanUrl.searchParams.delete("generation_mode");
+          window.setTimeout(
+            () => window.location.replace(cleanUrl.pathname + cleanUrl.search + cleanUrl.hash),
+            1800,
+          );
+        };
+
+        const pollGeneration = async () => {
+          try {
+            const endpoint = activeGeneration.dataset.generationEndpoint;
+            if (!endpoint) throw new Error("Missing generation status endpoint.");
+            const response = await fetch(endpoint, {
+              headers: { Accept: "application/json" },
+              cache: "no-store",
+              credentials: "same-origin",
+            });
+            if (!response.ok) throw new Error(`Generation status returned ${response.status}.`);
+            const generation = await response.json();
+            if (generation.running === true) {
+              if (stage instanceof HTMLElement && typeof generation.activeStage === "string") {
+                stage.textContent = stageLabels[generation.activeStage] ?? "מתקדם…";
+              }
+              pollTimer = window.setTimeout(pollGeneration, 3000);
+              return;
+            }
+            finishGeneration(generation.state === "succeeded");
+          } catch {
+            // A temporary network error must not turn a live generation into a
+            // failure in the UI. Keep the page stable and try again shortly.
+            pollTimer = window.setTimeout(pollGeneration, 5000);
+          }
+        };
+        pollTimer = window.setTimeout(pollGeneration, 3000);
       }
       if (document.querySelector("[data-generation-finished]")) {
         const cleanUrl = new URL(window.location.href);

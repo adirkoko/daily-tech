@@ -71,6 +71,9 @@ including requests submitted from a stale browser tab.
 While generation is active, the editor, prior failure state, and research trace are
 replaced by one focused progress state. It shows the current pipeline stage and
 elapsed time from bounded operational events; this does not add any model calls.
+The browser polls a small authenticated, non-cacheable status endpoint and updates
+that state in place, so the page and its ambient animation are not repeatedly
+reloaded while generation is running.
 The initiating browser briefly confirms the terminal success or failure and then
 returns to the content that is actually stored; on failure this means the previous
 brief when one exists.

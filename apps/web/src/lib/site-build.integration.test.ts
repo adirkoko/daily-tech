@@ -291,6 +291,18 @@ describe("standalone site service", () => {
         occurredAt: "2026-09-06T10:00:01.000Z",
       });
       generationDatabase.close();
+      const runningGenerationResponse = await fetch(
+        `${origin}/api/admin/briefs/${day.date}/generation`,
+        { headers: adminHeaders },
+      );
+      expect(runningGenerationResponse.status).toBe(200);
+      expect(runningGenerationResponse.headers.get("cache-control")).toBe("no-store");
+      await expect(runningGenerationResponse.json()).resolves.toMatchObject({
+        state: "running",
+        running: true,
+        attemptCount: 1,
+        activeStage: "deep_research",
+      });
       const runningEditorHtml = await (
         await fetch(`${origin}/admin/briefs/${day.date}?generation_attempt=1`, { headers: adminHeaders })
       ).text();
@@ -308,6 +320,11 @@ describe("standalone site service", () => {
         "2026-09-06T10:01:00.000Z",
       );
       completedGenerationDatabase.close();
+      await expect(
+        (await fetch(`${origin}/api/admin/briefs/${day.date}/generation`, {
+          headers: adminHeaders,
+        })).json(),
+      ).resolves.toMatchObject({ state: "succeeded", running: false });
       const completedEditorHtml = await (
         await fetch(`${origin}/admin/briefs/${day.date}?generation_attempt=1`, { headers: adminHeaders })
       ).text();

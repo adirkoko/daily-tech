@@ -1560,6 +1560,10 @@ label { display: grid; gap: .4rem; font-weight: 700; }
   text-align: start;
   font: inherit;
 }
+.chip-list[data-chip-name="developments"] .chip-input {
+  direction: rtl;
+  text-align: right;
+}
 .chip-input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-color: var(--accent); }
 .chip-remove {
   display: grid;

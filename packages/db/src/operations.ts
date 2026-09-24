@@ -616,6 +616,42 @@ export class OperationsStore {
     }
   }
 
+  /**
+   * Extends a live scheduled-job lease without allowing an expired or replaced
+   * owner to resurrect it. The owner check makes this safe when another process
+   * has already reclaimed the job after expiry.
+   */
+  renewScheduledJobLease(
+    jobName: ScheduledJobName,
+    targetDate: string,
+    leaseOwner: string,
+    leaseExpiresAt: string,
+    occurredAt: string,
+  ): boolean {
+    validateScheduledJobIdentity(jobName, targetDate);
+    assertNonEmpty(leaseOwner, "leaseOwner");
+    assertTimestamp(leaseExpiresAt, "leaseExpiresAt");
+    assertTimestamp(occurredAt, "occurredAt");
+    if (leaseExpiresAt <= occurredAt) {
+      throw new RangeError("leaseExpiresAt must be later than occurredAt.");
+    }
+
+    return this.#database.prepare(`
+      UPDATE scheduled_jobs
+      SET lease_expires_at = ?, updated_at = ?
+      WHERE job_name = ? AND target_date = ?
+        AND state = 'running' AND lease_owner = ?
+        AND lease_expires_at > ?
+    `).run(
+      leaseExpiresAt,
+      occurredAt,
+      jobName,
+      targetDate,
+      leaseOwner,
+      occurredAt,
+    ).changes === 1;
+  }
+
   completeScheduledJob(
     jobName: ScheduledJobName,
     targetDate: string,

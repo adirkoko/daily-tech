@@ -1,7 +1,7 @@
 import type { OperationalLog } from "@daily-tech/db";
 import { describe, expect, it } from "vitest";
 
-import { latestResearchTrace } from "./admin-research-trace.js";
+import { latestPipelineProgress, latestResearchTrace } from "./admin-research-trace.js";
 
 function log(overrides: Partial<OperationalLog>): OperationalLog {
   return {
@@ -66,5 +66,39 @@ describe("latestResearchTrace", () => {
     ]);
 
     expect(trace).toMatchObject({ runId: "run-new", stages: [] });
+  });
+
+  it("reports only the latest valid stage started during the active attempt", () => {
+    const progress = latestPipelineProgress([
+      log({
+        id: 4,
+        eventType: "stage_started",
+        occurredAt: "2026-08-28T01:04:00.000Z",
+        details: { stage: "draft" },
+      }),
+      log({
+        id: 3,
+        eventType: "stage_started",
+        occurredAt: "2026-08-28T01:03:00.000Z",
+        details: { stage: "deep_research" },
+      }),
+      log({
+        id: 2,
+        eventType: "stage_started",
+        occurredAt: "2026-08-28T01:02:00.000Z",
+        details: { stage: "unknown_stage" },
+      }),
+      log({
+        id: 1,
+        eventType: "stage_started",
+        occurredAt: "2026-08-27T23:59:00.000Z",
+        details: { stage: "persist" },
+      }),
+    ], "2026-08-28T01:00:00.000Z");
+
+    expect(progress).toEqual({
+      stage: "draft",
+      occurredAt: "2026-08-28T01:04:00.000Z",
+    });
   });
 });

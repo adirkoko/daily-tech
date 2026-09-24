@@ -1,4 +1,5 @@
 import type { JsonValue, OperationalLog, ScheduledJob } from "@daily-tech/db";
+import type { PipelineStage } from "@daily-tech/pipeline";
 
 import { openServerDatabase } from "./database.js";
 
@@ -34,6 +35,9 @@ export interface AdminGenerationState {
   readonly running: boolean;
   readonly attemptCount: number;
   readonly lastError: string | null;
+  readonly startedAt: string | null;
+  readonly activeStage: PipelineStage | null;
+  readonly activeStageStartedAt: string | null;
 }
 
 export interface AdminBriefGenerationInfo {
@@ -56,7 +60,7 @@ export async function loadAdminBriefGenerationInfo(
     const job = database.operations.getScheduledJob("generate", date);
     const logs = database.operations.listLogs({ briefDate: date, limit: 500 });
     return {
-      generation: generationState(job),
+      generation: generationState(job, logs),
       research: latestResearchTrace(logs),
     };
   } finally {
@@ -70,6 +74,7 @@ export function latestResearchTrace(
   const latest = logs.find(
     (log) => log.runId !== null && (
       log.eventType === "research_stage_completed" ||
+      log.eventType === "stage_started" ||
       log.eventType === "run_completed" ||
       log.eventType === "run_failed"
     ),
@@ -89,13 +94,52 @@ export function latestResearchTrace(
   };
 }
 
-function generationState(job: ScheduledJob | null): AdminGenerationState {
+function generationState(
+  job: ScheduledJob | null,
+  logs: readonly OperationalLog[],
+): AdminGenerationState {
+  const running = job?.state === "running" &&
+    job.leaseExpiresAt !== null &&
+    job.leaseExpiresAt > new Date().toISOString();
+  const progress = running && job !== null
+    ? latestPipelineProgress(logs, job.startedAt)
+    : null;
   return {
     state: job?.state ?? null,
-    running: job?.state === "running" && job.leaseExpiresAt !== null && job.leaseExpiresAt > new Date().toISOString(),
+    running,
     attemptCount: job?.attemptCount ?? 0,
     lastError: job?.lastError ?? null,
+    startedAt: job?.startedAt ?? null,
+    activeStage: progress?.stage ?? null,
+    activeStageStartedAt: progress?.occurredAt ?? null,
   };
+}
+
+const PIPELINE_STAGES: readonly PipelineStage[] = [
+  "initialize",
+  "light_discovery",
+  "gap_discovery",
+  "keyword_discovery",
+  "deep_research",
+  "draft",
+  "draft_validation",
+  "validate",
+  "persist",
+];
+
+export function latestPipelineProgress(
+  logs: readonly OperationalLog[],
+  startedAt: string,
+): { readonly stage: PipelineStage; readonly occurredAt: string } | null {
+  const event = logs.find((log) =>
+    log.eventType === "stage_started" &&
+    log.occurredAt >= startedAt &&
+    typeof log.details.stage === "string" &&
+    PIPELINE_STAGES.includes(log.details.stage as PipelineStage)
+  );
+  return event === undefined
+    ? null
+    : { stage: event.details.stage as PipelineStage, occurredAt: event.occurredAt };
 }
 
 function parseStage(

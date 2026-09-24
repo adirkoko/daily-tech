@@ -49,6 +49,20 @@ const STAGE_LABELS = {
   deep_research: "מחקר עומק וסינון",
 } as const;
 
+const PIPELINE_STAGE_LABELS = {
+  initialize: "אתחול",
+  light_discovery: "סריקה רחבה",
+  gap_discovery: "בדיקת פערים",
+  keyword_discovery: "מיקוד אדמין",
+  deep_research: "מחקר עומק וסינון",
+  draft: "כתיבת התדריך",
+  draft_validation: "בדיקת הטיוטה",
+  validate: "בדיקה סופית",
+  persist: "שמירת התדריך",
+} as const;
+const activeStage = generationInfo.generation.activeStage;
+const activeStageLabel = activeStage === null ? null : PIPELINE_STAGE_LABELS[activeStage];
+
 const RESEARCH_FILTER_REASON_LABELS: Readonly<Record<string, string>> = {
   insufficient_evidence: "אין די ראיות",
   outside_window: "מחוץ לחלון הזמן",
@@ -96,7 +110,16 @@ const intensityIndex = Math.max(0, INTENSITY_OPTIONS.findIndex((option) => optio
         <span class="generation-running-dot"></span>
       </div>
       <h1>היצירה מתבצעת ברקע</h1>
-      <p>העמוד יתרענן אוטומטית כשההרצה תתקדם.</p>
+      <p>{activeStageLabel === null
+        ? "ה־pipeline מתחיל כעת. העמוד יתרענן אוטומטית כשההרצה תתקדם."
+        : <>שלב נוכחי: <strong>{activeStageLabel}</strong>. העמוד יתרענן אוטומטית.</>}</p>
+      {generationInfo.generation.startedAt !== null && (
+        <p
+          class="generation-elapsed"
+          data-generation-elapsed
+          data-started-at={generationInfo.generation.startedAt}
+        >זמן שחלף: מחשב…</p>
+      )}
     </section>
   ) : generationFinished ? (
     <section class:list={["friendly-state", "admin-friendly-state", "generation-state", { "friendly-state-error": !generationSucceeded }]} role="status" aria-live="polite" data-generation-finished>
@@ -425,6 +448,19 @@ const intensityIndex = Math.max(0, INTENSITY_OPTIONS.findIndex((option) => optio
         });
       }
       if (document.querySelector("[data-generation-active]")) {
+        const elapsed = document.querySelector("[data-generation-elapsed]");
+        const updateElapsed = () => {
+          if (!(elapsed instanceof HTMLElement)) return;
+          const startedAt = elapsed.dataset.startedAt;
+          if (!startedAt) return;
+          const milliseconds = Math.max(0, Date.now() - Date.parse(startedAt));
+          const totalMinutes = Math.floor(milliseconds / 60000);
+          const hours = Math.floor(totalMinutes / 60);
+          const minutes = totalMinutes % 60;
+          elapsed.textContent = `זמן שחלף: ${hours > 0 ? `${hours} שעות ו־` : ""}${minutes} דקות`;
+        };
+        updateElapsed();
+        setInterval(updateElapsed, 1000);
         setTimeout(() => window.location.reload(), 3000);
       }
       if (document.querySelector("[data-generation-finished]")) {

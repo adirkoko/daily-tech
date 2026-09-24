@@ -33,7 +33,8 @@ Telegram, Slack, webhook, or other outbound alert integration.
 Each AI request retries HTTP 429/5xx responses and malformed provider envelopes such
 as missing output text, web-search calls, or machine-readable citations. The default
 is three attempts with exponential backoff and jitter; a valid `Retry-After` header
-takes precedence.
+takes precedence up to the configured retry-delay ceiling. Provider values above the
+ceiling are capped so one response cannot suspend a generation indefinitely.
 
 Other 4xx responses and downstream validation failures are not retried. After the
 client exhausts its attempts, the run fails, creates a System ticket, and remains a
@@ -57,6 +58,10 @@ not contain complete prompts, model responses, source contents, or secrets. The
 pipeline does not maintain local token/cost accounting; provider usage remains
 available through the provider's own reporting.
 
+The pipeline also records a small `stage_started` event before each research,
+writing, validation, and persistence stage. Admin uses only the newest event from the
+active attempt to show live progress; it contains no prompt or provider response.
+
 Operational logs also cover Admin actions, login attempts, feedback handling,
 publication attempts, and scheduler claims/completions/failures. Publication events
 distinguish successful transitions, no-ops caused by an existing publication or
@@ -70,6 +75,11 @@ Admin creation/retry/regeneration also records start, completion, or failure eve
 It uses the same `scheduled_jobs` generation lease as the embedded scheduler,
 preventing two service instances or repeated clicks from generating one date
 concurrently. Manual save and delete requests are refused while that lease is active.
+Unlike the scheduler's long crash-safety lease, an Admin generation starts with a
+five-minute lease and renews it every minute. If the process exits, renewal stops and
+the date becomes reclaimable within five minutes; an expired row does not by itself
+start work, but a scheduler tick for the current target date or a new authenticated
+Admin action may acquire it atomically.
 Initial creation is allowed only for a missing past Israel date and uses insert-only
 persistence. Regeneration is replace-on-success, so a provider or validation failure
 creates an alert without overwriting the existing brief or changing its status.

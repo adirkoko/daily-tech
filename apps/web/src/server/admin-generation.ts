@@ -22,7 +22,6 @@ import { invalidateSiteSnapshot } from "../lib/content.js";
 import { toIsraelDate } from "../lib/dates.js";
 import { getServerConfig } from "./config.js";
 import { openServerDatabase } from "./database.js";
-import { loadSchedulerConfig } from "./scheduler.js";
 
 export type AdminGenerationMode = "create" | "retry" | "regenerate";
 
@@ -46,13 +45,24 @@ interface AdminGenerationDependencies {
     date: string,
     mode: AdminGenerationMode,
     environment: NodeJS.ProcessEnv,
+    leaseOwner: string,
   ) => Promise<void>;
   readonly runPublication?: typeof runPublisherCli;
   readonly validateConfiguration?: (environment: NodeJS.ProcessEnv) => void;
   readonly now?: () => Date;
   readonly createLeaseOwner?: () => string;
   readonly leaseDurationMs?: number;
+  readonly heartbeatIntervalMs?: number;
+  readonly scheduleHeartbeat?: HeartbeatScheduler;
 }
+
+type HeartbeatScheduler = (
+  callback: () => Promise<void>,
+  intervalMs: number,
+) => () => void;
+
+const ADMIN_GENERATION_LEASE_MS = 5 * 60 * 1_000;
+const ADMIN_GENERATION_HEARTBEAT_MS = 60 * 1_000;
 
 const serviceKey = Symbol.for("daily-tech.admin-generation-service");
 const serviceGlobal = globalThis as typeof globalThis & {
@@ -74,12 +84,15 @@ export class AdminGenerationService {
     date: string,
     mode: AdminGenerationMode,
     environment: NodeJS.ProcessEnv,
+    leaseOwner: string,
   ) => Promise<void>;
   readonly #runPublication: typeof runPublisherCli;
   readonly #validateConfiguration: (environment: NodeJS.ProcessEnv) => void;
   readonly #now: () => Date;
   readonly #createLeaseOwner: () => string;
   readonly #leaseDurationMs: number;
+  readonly #heartbeatIntervalMs: number;
+  readonly #scheduleHeartbeat: HeartbeatScheduler;
   readonly #running = new Set<Promise<void>>();
 
   constructor(
@@ -94,8 +107,15 @@ export class AdminGenerationService {
       dependencies.validateConfiguration ?? ((value) => { loadPipelineEnvironment(value); });
     this.#now = dependencies.now ?? (() => new Date());
     this.#createLeaseOwner = dependencies.createLeaseOwner ?? (() => `admin-generate-${randomUUID()}`);
-    this.#leaseDurationMs =
-      dependencies.leaseDurationMs ?? loadSchedulerConfig(environment).leaseDurationMs;
+    this.#leaseDurationMs = dependencies.leaseDurationMs ?? ADMIN_GENERATION_LEASE_MS;
+    this.#heartbeatIntervalMs = dependencies.heartbeatIntervalMs ?? Math.min(
+      ADMIN_GENERATION_HEARTBEAT_MS,
+      Math.max(1, Math.floor(this.#leaseDurationMs / 3)),
+    );
+    if (this.#heartbeatIntervalMs <= 0 || this.#heartbeatIntervalMs >= this.#leaseDurationMs) {
+      throw new RangeError("Admin generation heartbeat must be shorter than its lease duration.");
+    }
+    this.#scheduleHeartbeat = dependencies.scheduleHeartbeat ?? defaultHeartbeatScheduler;
   }
 
   async start(request: AdminGenerationRequest): Promise<StartAdminGenerationResult> {
@@ -157,8 +177,13 @@ export class AdminGenerationService {
   }
 
   async #execute(request: AdminGenerationRequest, leaseOwner: string): Promise<void> {
+    let stopHeartbeat: () => void = () => undefined;
     try {
-      await this.#runGeneration(request.date, request.mode, this.#environment);
+      stopHeartbeat = this.#scheduleHeartbeat(
+        async () => { await this.#renewLease(request.date, leaseOwner); },
+        this.#heartbeatIntervalMs,
+      );
+      await this.#runGeneration(request.date, request.mode, this.#environment, leaseOwner);
       if (
         request.mode === "retry" &&
         await this.#failedPublicationNeedsRecovery(request.date)
@@ -203,6 +228,27 @@ export class AdminGenerationService {
       } catch {
         /* Never leave a rejected background promise for the Node process. */
       }
+    } finally {
+      stopHeartbeat();
+    }
+  }
+
+  async #renewLease(date: string, leaseOwner: string): Promise<void> {
+    const occurredAt = this.#now().toISOString();
+    const leaseExpiresAt = new Date(
+      Date.parse(occurredAt) + this.#leaseDurationMs,
+    ).toISOString();
+    const database = await this.#openDatabase();
+    try {
+      database.operations.renewScheduledJobLease(
+        "generate",
+        date,
+        leaseOwner,
+        leaseExpiresAt,
+        occurredAt,
+      );
+    } finally {
+      database.close();
     }
   }
 
@@ -437,6 +483,7 @@ async function runProductionAdminGeneration(
   date: string,
   mode: AdminGenerationMode,
   environment: NodeJS.ProcessEnv,
+  leaseOwner: string,
 ): Promise<void> {
   const ai = loadPipelineEnvironment(environment);
   const server = getServerConfig(environment);
@@ -458,9 +505,14 @@ async function runProductionAdminGeneration(
       completionClient: new OpenAiCompatibleCompletionClient(sharedOptions),
       webResearchClient: new OpenAiResponsesWebResearchClient(sharedOptions),
       database,
-      metadataStore: mode === "create"
-        ? new CreatingDayMetadataStore(database, date)
-        : new PreservingDayMetadataStore(database, date),
+      metadataStore: new LeaseGuardedDayMetadataStore(
+        mode === "create"
+          ? new CreatingDayMetadataStore(database, date)
+          : new PreservingDayMetadataStore(database, date),
+        database,
+        date,
+        leaseOwner,
+      ),
       ...(mode === "create"
         ? {}
         : { failureReporter: new PreservingGenerationFailureReporter(database) }),
@@ -471,6 +523,53 @@ async function runProductionAdminGeneration(
     database.close();
   }
 }
+
+export class LeaseGuardedDayMetadataStore implements DayMetadataStore {
+  readonly #inner: DayMetadataStore;
+  readonly #database: DailyTechDatabase;
+  readonly #date: string;
+  readonly #leaseOwner: string;
+  readonly #now: () => Date;
+
+  constructor(
+    inner: DayMetadataStore,
+    database: DailyTechDatabase,
+    date: string,
+    leaseOwner: string,
+    now: () => Date = () => new Date(),
+  ) {
+    this.#inner = inner;
+    this.#database = database;
+    this.#date = date;
+    this.#leaseOwner = leaseOwner;
+    this.#now = now;
+  }
+
+  saveDay(value: unknown): DayMetadata {
+    const job = this.#database.operations.getScheduledJob("generate", this.#date);
+    const now = this.#now().toISOString();
+    if (
+      job?.state !== "running" ||
+      job.leaseOwner !== this.#leaseOwner ||
+      job.leaseExpiresAt === null ||
+      job.leaseExpiresAt <= now
+    ) {
+      throw new Error(`Generation lease for ${this.#date} is no longer active.`);
+    }
+    return this.#inner.saveDay(value);
+  }
+}
+
+const defaultHeartbeatScheduler: HeartbeatScheduler = (callback, intervalMs) => {
+  const timer = setInterval(() => {
+    void callback().catch(() => {
+      /* A transient heartbeat error is retried on the next tick. Persistence is
+       * independently guarded by current lease ownership. */
+    });
+  }, intervalMs);
+  timer.unref();
+  return () => clearInterval(timer);
+};
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);

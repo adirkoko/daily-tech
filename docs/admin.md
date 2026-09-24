@@ -32,8 +32,10 @@ The editor provides:
 - **Save** — validate and persist Markdown plus metadata and update `updated_at`.
 - **Retry / regenerate** — retry a failed day, or deliberately run the complete
   research-and-writing pipeline again for an existing day. The request starts in
-  the background and uses the scheduler's durable generation lease, so a scheduler
-  tick or second click cannot run the same date concurrently.
+  the background and uses the shared durable generation lease, so a scheduler tick
+  or second click cannot run the same date concurrently. Admin runs use a short
+  renewable lease: a heartbeat keeps it active while the process is alive, while a
+  crashed or restarted process releases the date for recovery within a few minutes.
 - **Create a missing historical day** — run the same complete pipeline for an empty
   past date selected from the Admin calendar. Initial creation is insert-only and
   produces a `ready` brief for review; it never overwrites a record that appeared
@@ -67,9 +69,11 @@ ticket. Save and delete are rejected while the date has an active generation lea
 including requests submitted from a stale browser tab.
 
 While generation is active, the editor, prior failure state, and research trace are
-replaced by one focused progress state. The initiating browser briefly confirms the
-terminal success or failure and then returns to the content that is actually stored;
-on failure this means the previous brief when one exists.
+replaced by one focused progress state. It shows the current pipeline stage and
+elapsed time from bounded operational events; this does not add any model calls.
+The initiating browser briefly confirms the terminal success or failure and then
+returns to the content that is actually stored; on failure this means the previous
+brief when one exists.
 
 If a failed day's scheduled publication attempt had already reached a terminal
 failure, a successful **Retry** reopens that failed publication job and immediately

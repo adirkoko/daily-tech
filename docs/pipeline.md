@@ -191,7 +191,10 @@ settings. It runs in the web service background under the durable generation lea
 regenerating a published day replaces its content while preserving its published
 lifecycle state and original publication timestamp. The old artifact and metadata
 are retained unless the entire replacement reaches successful persistence. While the
-lease is active, Admin save and delete operations for that date are refused.
+lease is active, Admin save and delete operations for that date are refused. Admin
+generation renews a short lease while its process is alive, so a container restart
+leaves at most a brief stale window instead of blocking the date for the scheduler's
+full lease duration. Current-stage events power the progress shown in the editor.
 
 To exercise the real provider without opening SQLite or publishing:
 

@@ -82,7 +82,7 @@ describe("withAiRetry", () => {
     expect(sleep).toHaveBeenCalledTimes(2);
   });
 
-  it("honors the provider's own retryAfterMs instead of computed backoff", async () => {
+  it("honors a provider retryAfterMs that stays inside the configured ceiling", async () => {
     const sleep = noopSleep();
     let calls = 0;
     const operation = vi.fn(async () => {
@@ -94,6 +94,20 @@ describe("withAiRetry", () => {
     await withAiRetry(operation, { sleep, baseDelayMs: 1_000 });
 
     expect(sleep).toHaveBeenCalledWith(4_107, undefined);
+  });
+
+  it("caps an excessive provider retryAfterMs at maxDelayMs", async () => {
+    const sleep = noopSleep();
+    let calls = 0;
+    const operation = vi.fn(async () => {
+      calls += 1;
+      if (calls < 2) throw new AiProviderError("rate limited", 429, undefined, 60_000);
+      return "ok";
+    });
+
+    await withAiRetry(operation, { sleep, maxDelayMs: 8_000 });
+
+    expect(sleep).toHaveBeenCalledWith(8_000, undefined);
   });
 
   it("stops retrying immediately once the caller's signal is already aborted", async () => {

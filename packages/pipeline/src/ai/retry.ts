@@ -45,7 +45,10 @@ export async function withAiRetry<T>(
       if (!canRetry) throw error;
       const suggested = error instanceof AiProviderError ? error.retryAfterMs : null;
       const backoff = Math.min(baseDelayMs * 2 ** (attempt - 1), maxDelayMs);
-      await sleep(suggested ?? withJitter(backoff), options.signal);
+      const delay = suggested === null
+        ? withJitter(backoff)
+        : Math.min(suggested, maxDelayMs);
+      await sleep(delay, options.signal);
     }
   }
 }

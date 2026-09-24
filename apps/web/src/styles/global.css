@@ -1345,6 +1345,8 @@ label { display: grid; gap: .4rem; font-weight: 700; }
 .editor-footer button:disabled { opacity: .5; cursor: wait; pointer-events: none; }
 
 .generation-state { display: grid; width: 100%; min-height: min(420px, 56vh); align-content: center; }
+.generation-state strong { color: var(--accent-strong); font-weight: 750; }
+.generation-elapsed { margin-top: -.35rem; font-size: .78rem; color: var(--text-soft); }
 .generation-running-dot {
   width: 12px;
   height: 12px;

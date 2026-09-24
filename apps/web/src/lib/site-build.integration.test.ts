@@ -282,11 +282,21 @@ describe("standalone site service", () => {
         occurredAt: "2026-09-06T10:00:00.000Z",
         leaseExpiresAt: "2099-09-06T16:00:00.000Z",
       });
+      generationDatabase.operations.appendLog({
+        runId: "integration-active-run",
+        briefDate: day.date,
+        eventType: "stage_started",
+        level: "info",
+        details: { stage: "deep_research" },
+        occurredAt: "2026-09-06T10:00:01.000Z",
+      });
       generationDatabase.close();
       const runningEditorHtml = await (
         await fetch(`${origin}/admin/briefs/${day.date}?generation_attempt=1`, { headers: adminHeaders })
       ).text();
       expect(runningEditorHtml).toContain("היצירה מתבצעת ברקע");
+      expect(runningEditorHtml).toContain("מחקר עומק וסינון");
+      expect(runningEditorHtml).toContain("זמן שחלף");
       expect(runningEditorHtml).not.toContain("שקיפות מחקר");
       expect(runningEditorHtml).not.toContain("Markdown");
 

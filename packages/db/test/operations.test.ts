@@ -269,6 +269,43 @@ describe("OperationsStore", () => {
     );
   });
 
+  it("renews only a live scheduled-job lease owned by the caller", () => {
+    database.operations.beginScheduledJob({
+      jobName: "generate",
+      targetDate: "2026-08-27",
+      leaseOwner: "admin-1",
+      occurredAt: "2026-08-28T01:00:00.000Z",
+      leaseExpiresAt: "2026-08-28T01:05:00.000Z",
+    });
+
+    expect(database.operations.renewScheduledJobLease(
+      "generate",
+      "2026-08-27",
+      "admin-1",
+      "2026-08-28T01:06:00.000Z",
+      "2026-08-28T01:01:00.000Z",
+    )).toBe(true);
+    expect(database.operations.getScheduledJob("generate", "2026-08-27")).toMatchObject({
+      leaseExpiresAt: "2026-08-28T01:06:00.000Z",
+      updatedAt: "2026-08-28T01:01:00.000Z",
+    });
+
+    expect(database.operations.renewScheduledJobLease(
+      "generate",
+      "2026-08-27",
+      "another-owner",
+      "2026-08-28T01:07:00.000Z",
+      "2026-08-28T01:02:00.000Z",
+    )).toBe(false);
+    expect(database.operations.renewScheduledJobLease(
+      "generate",
+      "2026-08-27",
+      "admin-1",
+      "2026-08-28T01:11:00.000Z",
+      "2026-08-28T01:06:00.000Z",
+    )).toBe(false);
+  });
+
   it("can limit an explicit restart to failed terminal jobs", () => {
     database.operations.beginScheduledJob({
       jobName: "publish",

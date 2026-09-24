@@ -90,6 +90,15 @@ describe("DailyBriefPipeline", () => {
     expect(deps.events).toContainEqual(
       expect.objectContaining({ type: "run_completed", stage: "persist" }),
     );
+    expect(deps.events.filter(({ type }) => type === "stage_started").map(({ stage }) => stage)).toEqual([
+      "light_discovery",
+      "gap_discovery",
+      "deep_research",
+      "draft",
+      "draft_validation",
+      "validate",
+      "persist",
+    ]);
     expect(deps.events).toContainEqual(expect.objectContaining({
       type: "research_stage_completed",
       stage: "light_discovery",

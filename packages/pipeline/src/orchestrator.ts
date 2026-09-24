@@ -164,6 +164,11 @@ export class DailyBriefPipeline {
     };
     const executeStage = async <T>(stage: PipelineStage, action: () => Promise<T>): Promise<T> => {
       activeStage = stage;
+      try {
+        await log("stage_started", stage);
+      } catch {
+        /* Progress diagnostics must never turn a valid edition into a failed run. */
+      }
       return action();
     };
 

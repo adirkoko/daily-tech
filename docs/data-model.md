@@ -108,7 +108,10 @@ The scheduler treats terminal rows as complete. Only an explicit authenticated A
 regeneration may restart a finished `generate` row; the attempt count is incremented
 and the same lease rules still apply. A successful Admin retry may also restart a
 failed (never a successful) `publish` row when publication time already passed and
-that scheduled attempt failed. No separate statistics rows exist—statistics are
+that scheduled attempt failed. Active Admin generation leases are renewed by a
+heartbeat and can only be extended by their current owner before expiry. This lets a
+replacement process reclaim an abandoned row safely without allowing the old owner
+to resurrect it. No separate statistics rows exist—statistics are
 recalculated from current `published` day metadata, so failed, ready, and draft rows
 do not contribute. Replacing a published brief updates the same row without
 double-counting the date; deleting it removes it from the next calculation.

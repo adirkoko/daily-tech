@@ -28,6 +28,7 @@ export type PipelineStage =
   | "persist";
 
 export type PipelineEventType =
+  | "stage_started"
   | "run_completed"
   | "run_failed"
   | "research_stage_completed";

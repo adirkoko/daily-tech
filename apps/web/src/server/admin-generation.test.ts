@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   AdminGenerationService,
   CreatingDayMetadataStore,
+  LeaseGuardedDayMetadataStore,
   PreservingDayMetadataStore,
   PreservingGenerationFailureReporter,
 } from "./admin-generation.js";
@@ -70,7 +71,12 @@ describe("AdminGenerationService", () => {
       attemptCount: 1,
     });
     await service.waitForIdle();
-    expect(runGeneration).toHaveBeenCalledWith("2026-08-27", "create", environment);
+    expect(runGeneration).toHaveBeenCalledWith(
+      "2026-08-27",
+      "create",
+      environment,
+      "admin-create-test",
+    );
 
     await expect(service.start({ date: "2026-08-27", mode: "create" })).resolves.toEqual({
       outcome: "already_exists",
@@ -142,6 +148,53 @@ describe("AdminGenerationService", () => {
       attemptCount: 1,
     });
     result.close();
+  });
+
+  it("keeps a live Admin generation lease renewed and stops its heartbeat at completion", async () => {
+    const databaseFile = await temporaryDatabaseFile();
+    const seeded = DailyTechDatabase.open({ filename: databaseFile });
+    seeded.saveDay(metadata());
+    seeded.close();
+    let release!: () => void;
+    const blocked = new Promise<void>((resolve) => { release = resolve; });
+    let heartbeat!: () => Promise<void>;
+    const stopHeartbeat = vi.fn();
+    const scheduleHeartbeat = vi.fn((callback: () => Promise<void>, intervalMs: number) => {
+      heartbeat = callback;
+      expect(intervalMs).toBe(60_000);
+      return stopHeartbeat;
+    });
+    let now = new Date("2026-08-28T02:00:00.000Z");
+    const service = new AdminGenerationService({}, {
+      openDatabase: async () => DailyTechDatabase.open({ filename: databaseFile }),
+      runGeneration: vi.fn(() => blocked),
+      validateConfiguration: () => undefined,
+      now: () => now,
+      createLeaseOwner: () => "admin-heartbeat",
+      leaseDurationMs: 5 * 60_000,
+      heartbeatIntervalMs: 60_000,
+      scheduleHeartbeat,
+    });
+
+    await expect(service.start({ date: "2026-08-27", mode: "retry" })).resolves.toMatchObject({
+      outcome: "started",
+    });
+    let database = DailyTechDatabase.open({ filename: databaseFile });
+    expect(database.operations.getScheduledJob("generate", "2026-08-27")?.leaseExpiresAt)
+      .toBe("2026-08-28T02:05:00.000Z");
+    database.close();
+
+    now = new Date("2026-08-28T02:01:00.000Z");
+    await heartbeat();
+    database = DailyTechDatabase.open({ filename: databaseFile });
+    expect(database.operations.getScheduledJob("generate", "2026-08-27")?.leaseExpiresAt)
+      .toBe("2026-08-28T02:06:00.000Z");
+    database.close();
+
+    release();
+    await service.waitForIdle();
+    expect(scheduleHeartbeat).toHaveBeenCalledOnce();
+    expect(stopHeartbeat).toHaveBeenCalledOnce();
   });
 
   it("rejects retry for a non-failed brief without creating a job", async () => {
@@ -318,6 +371,43 @@ describe("CreatingDayMetadataStore", () => {
       "does not match 2026-08-27",
     );
     expect(database.getDay("2026-08-27")).toBeNull();
+    database.close();
+  });
+});
+
+describe("LeaseGuardedDayMetadataStore", () => {
+  it("refuses persistence after another process reclaims an expired lease", async () => {
+    const databaseFile = await temporaryDatabaseFile();
+    const database = DailyTechDatabase.open({ filename: databaseFile });
+    database.operations.beginScheduledJob({
+      jobName: "generate",
+      targetDate: "2026-08-27",
+      leaseOwner: "old-process",
+      occurredAt: "2026-08-28T01:00:00.000Z",
+      leaseExpiresAt: "2026-08-28T01:05:00.000Z",
+    });
+    const inner = { saveDay: vi.fn(() => metadata({ status: "ready" })) };
+    const store = new LeaseGuardedDayMetadataStore(
+      inner,
+      database,
+      "2026-08-27",
+      "old-process",
+      () => new Date("2026-08-28T01:01:00.000Z"),
+    );
+    expect(store.saveDay(metadata({ status: "ready" }))).toMatchObject({ status: "ready" });
+
+    database.operations.beginScheduledJob({
+      jobName: "generate",
+      targetDate: "2026-08-27",
+      leaseOwner: "new-process",
+      occurredAt: "2026-08-28T01:06:00.000Z",
+      leaseExpiresAt: "2026-08-28T01:11:00.000Z",
+      restartFinished: "any",
+    });
+    expect(() => store.saveDay(metadata({ status: "ready" }))).toThrow(
+      "is no longer active",
+    );
+    expect(inner.saveDay).toHaveBeenCalledOnce();
     database.close();
   });
 });

@@ -13,11 +13,13 @@ the password in command arguments, logs, screenshots, or client-side configurati
 ## Content management
 
 The dashboard includes briefs in every lifecycle status and links each populated day
-to `/admin/briefs/<date>`. Day colour retains the public intensity scale, while a
-separate indicator shows editorial status (`draft`, `ready`, `published`, or
-`failed`). Summary counts and a short list of recent unpublished briefs provide
-direct routes into work that still needs attention. The editor can change the
-Markdown and all editable metadata.
+to `/admin/briefs/<date>`. Empty dates strictly before the current Israel date are
+also actionable: they open a dedicated state from which the operator can run the
+full pipeline for that historical day. Current and future empty dates remain inert.
+Day colour retains the public intensity scale, while a separate indicator shows
+editorial status (`draft`, `ready`, `published`, or `failed`). Summary counts and a
+short list of recent unpublished briefs provide direct routes into work that still
+needs attention. The editor can change the Markdown and all editable metadata.
 
 The editor provides:
 
@@ -32,12 +34,19 @@ The editor provides:
   research-and-writing pipeline again for an existing day. The request starts in
   the background and uses the scheduler's durable generation lease, so a scheduler
   tick or second click cannot run the same date concurrently.
+- **Create a missing historical day** — run the same complete pipeline for an empty
+  past date selected from the Admin calendar. Initial creation is insert-only and
+  produces a `ready` brief for review; it never overwrites a record that appeared
+  while research was running and does not publish the historical day automatically.
 - **Delete** — after an explicit confirmation, remove the Markdown and metadata
   record together. The day becomes unavailable in both calendars.
 
 Preview and every state-changing editor request remain protected by the Admin
 session, same-origin checks, and the session CSRF token. Repeated metadata inputs are
 bounded and normalized on the server rather than trusted as client-side arrays.
+The server independently validates that initial creation targets a real calendar
+date in the past according to `Asia/Jerusalem` and that no brief already exists;
+these rules do not rely on the calendar UI.
 
 Save runs the same deterministic artifact validation used by the pipeline. Filesystem
 changes use a temporary file and a short-lived rollback copy, preventing a database

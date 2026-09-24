@@ -107,6 +107,7 @@ const serializedData = JSON.stringify(clientData).replaceAll("<", "\\u003c");
         const style = index === 0 ? `grid-column-start: ${firstColumn}` : undefined;
         const dateLabel = formatHebrewDate(cell.date, { weekday: "long", day: "numeric", month: "long" });
         const isToday = cell.date === currentDate;
+        const canCreate = managementMode && cell.date < currentDate;
         return day ? (
           <a
             class="calendar-day has-brief"
@@ -127,6 +128,20 @@ const serializedData = JSON.stringify(clientData).replaceAll("<", "\\u003c");
             <strong>{day.summary}</strong>
             <span>{day.significant_items + day.worth_watching_items} התפתחויות · {intensityLabels[day.day_intensity]}{managementMode ? ` · ${statusLabels[day.status]}` : ""}</span>
             </span>
+          </a>
+        ) : canCreate ? (
+          <a
+            class="calendar-day is-empty-action"
+            data-calendar-date={cell.date}
+            data-level="none"
+            data-weekday={weekday}
+            href={`${hrefBase}/${cell.date}`}
+            role="gridcell"
+            style={style}
+            aria-label={`${dateLabel}. אין תדריך; פתיחה ליצירה`}
+            title="יצירת תדריך ליום זה"
+          >
+            <span class="calendar-day-number">{cell.day}</span>
           </a>
         ) : (
           <span
@@ -279,8 +294,9 @@ const serializedData = JSON.stringify(clientData).replaceAll("<", "\\u003c");
       for (let day = 1; day <= daysInMonth; day += 1) {
         const date = `${visibleMonth}-${String(day).padStart(2, "0")}`;
         const brief = briefs.get(date);
-        const cell = document.createElement(brief ? "a" : "span");
-        cell.className = `calendar-day${brief ? " has-brief" : ""}`;
+        const canCreate = data.managementMode && date < data.currentDate;
+        const cell = document.createElement(brief || canCreate ? "a" : "span");
+        cell.className = `calendar-day${brief ? " has-brief" : canCreate ? " is-empty-action" : ""}`;
         cell.dataset.calendarDate = date;
         cell.dataset.level = brief?.intensity ?? "none";
         if (brief && data.managementMode) cell.dataset.status = brief.status;
@@ -304,6 +320,10 @@ const serializedData = JSON.stringify(clientData).replaceAll("<", "\\u003c");
           cell.href = `${data.hrefBase}/${date}`;
           cell.setAttribute("aria-label", `${dateLabel}. ${intensityLabels[brief.intensity]}. ${brief.summary}`);
           appendPopover(cell, brief, dateLabel);
+        } else if (canCreate && cell instanceof HTMLAnchorElement) {
+          cell.href = `${data.hrefBase}/${date}`;
+          cell.title = "יצירת תדריך ליום זה";
+          cell.setAttribute("aria-label", `${dateLabel}. אין תדריך; פתיחה ליצירה`);
         } else {
           cell.setAttribute("aria-label", dateLabel);
         }
@@ -355,9 +375,10 @@ const serializedData = JSON.stringify(clientData).replaceAll("<", "\\u003c");
       if (!(target instanceof Element)) return;
       const anchor = target.closest("a[data-calendar-date]");
       if (!(anchor instanceof HTMLAnchorElement) || matchMedia("(hover: hover) and (pointer: fine)").matches) return;
-      event.preventDefault();
       const brief = briefs.get(anchor.dataset.calendarDate);
-      if (!brief || !(detail instanceof HTMLElement)) return;
+      if (!brief) return;
+      event.preventDefault();
+      if (!(detail instanceof HTMLElement)) return;
       grid.querySelector(".is-selected")?.classList.remove("is-selected");
       anchor.classList.add("is-selected");
       const date = detail.querySelector("[data-calendar-detail-date]");

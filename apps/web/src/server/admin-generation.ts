@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import {
+  isCalendarDate,
   validateDayMetadata,
   type DayMetadata,
 } from "@daily-tech/core";
@@ -18,16 +19,20 @@ import {
 } from "@daily-tech/pipeline";
 
 import { invalidateSiteSnapshot } from "../lib/content.js";
+import { toIsraelDate } from "../lib/dates.js";
 import { getServerConfig } from "./config.js";
 import { openServerDatabase } from "./database.js";
 import { loadSchedulerConfig } from "./scheduler.js";
 
-export type AdminGenerationMode = "retry" | "regenerate";
+export type AdminGenerationMode = "create" | "retry" | "regenerate";
 
 export type StartAdminGenerationResult =
   | { readonly outcome: "started"; readonly attemptCount: number }
   | { readonly outcome: "busy" }
   | { readonly outcome: "not_found" }
+  | { readonly outcome: "already_exists"; readonly status: DayMetadata["status"] }
+  | { readonly outcome: "invalid_date" }
+  | { readonly outcome: "not_past" }
   | { readonly outcome: "invalid_state"; readonly status: DayMetadata["status"] };
 
 interface AdminGenerationRequest {
@@ -37,7 +42,11 @@ interface AdminGenerationRequest {
 
 interface AdminGenerationDependencies {
   readonly openDatabase?: () => Promise<DailyTechDatabase>;
-  readonly runGeneration?: (date: string, environment: NodeJS.ProcessEnv) => Promise<void>;
+  readonly runGeneration?: (
+    date: string,
+    mode: AdminGenerationMode,
+    environment: NodeJS.ProcessEnv,
+  ) => Promise<void>;
   readonly runPublication?: typeof runPublisherCli;
   readonly validateConfiguration?: (environment: NodeJS.ProcessEnv) => void;
   readonly now?: () => Date;
@@ -61,7 +70,11 @@ export function adminGenerationService(): AdminGenerationService {
 export class AdminGenerationService {
   readonly #environment: NodeJS.ProcessEnv;
   readonly #openDatabase: () => Promise<DailyTechDatabase>;
-  readonly #runGeneration: (date: string, environment: NodeJS.ProcessEnv) => Promise<void>;
+  readonly #runGeneration: (
+    date: string,
+    mode: AdminGenerationMode,
+    environment: NodeJS.ProcessEnv,
+  ) => Promise<void>;
   readonly #runPublication: typeof runPublisherCli;
   readonly #validateConfiguration: (environment: NodeJS.ProcessEnv) => void;
   readonly #now: () => Date;
@@ -86,17 +99,25 @@ export class AdminGenerationService {
   }
 
   async start(request: AdminGenerationRequest): Promise<StartAdminGenerationResult> {
+    if (!isCalendarDate(request.date)) return { outcome: "invalid_date" };
+    const now = this.#now();
+    if (request.mode === "create" && request.date >= toIsraelDate(now)) {
+      return { outcome: "not_past" };
+    }
     this.#validateConfiguration(this.#environment);
     const database = await this.#openDatabase();
     const leaseOwner = this.#createLeaseOwner();
-    const occurredAt = this.#now().toISOString();
+    const occurredAt = now.toISOString();
     const leaseExpiresAt = new Date(
       Date.parse(occurredAt) + this.#leaseDurationMs,
     ).toISOString();
     try {
       const existing = database.getDay(request.date);
-      if (existing === null) return { outcome: "not_found" };
-      if (request.mode === "retry" && existing.status !== "failed") {
+      if (request.mode === "create" && existing !== null) {
+        return { outcome: "already_exists", status: existing.status };
+      }
+      if (request.mode !== "create" && existing === null) return { outcome: "not_found" };
+      if (request.mode === "retry" && existing !== null && existing.status !== "failed") {
         return { outcome: "invalid_state", status: existing.status };
       }
 
@@ -137,7 +158,7 @@ export class AdminGenerationService {
 
   async #execute(request: AdminGenerationRequest, leaseOwner: string): Promise<void> {
     try {
-      await this.#runGeneration(request.date, this.#environment);
+      await this.#runGeneration(request.date, request.mode, this.#environment);
       if (
         request.mode === "retry" &&
         await this.#failedPublicationNeedsRecovery(request.date)
@@ -149,6 +170,9 @@ export class AdminGenerationService {
       const database = await this.#openDatabase();
       try {
         const saved = database.getDay(request.date);
+        if (saved === null) {
+          throw new Error(`Generation completed without saving brief ${request.date}.`);
+        }
         database.operations.completeScheduledJob(
           "generate",
           request.date,
@@ -354,6 +378,33 @@ export class PreservingDayMetadataStore implements DayMetadataStore {
   }
 }
 
+/** Initial creation must remain insert-only. If another process creates the day
+ * while research is running, persistence fails and rolls the new Markdown back
+ * instead of replacing content that did not exist when the operator started. */
+export class CreatingDayMetadataStore implements DayMetadataStore {
+  readonly #database: DailyTechDatabase;
+  readonly #date: string;
+
+  constructor(database: DailyTechDatabase, date: string) {
+    this.#database = database;
+    this.#date = date;
+  }
+
+  saveDay(value: unknown): DayMetadata {
+    const validation = validateDayMetadata(value);
+    if (!validation.valid) {
+      throw new TypeError(`Generated metadata is invalid: ${validation.issues.map((issue) => issue.path).join(", ")}`);
+    }
+    if (validation.data.date !== this.#date) {
+      throw new TypeError(`Generated date ${validation.data.date} does not match ${this.#date}.`);
+    }
+    if (this.#database.getDay(this.#date) !== null) {
+      throw new Error(`Brief ${this.#date} was created while generation was running.`);
+    }
+    return this.#database.saveDay(validation.data);
+  }
+}
+
 /** Regeneration is replace-on-success: a failed attempt must never mutate the
  * content or lifecycle state that existed when the operator started it. */
 export class PreservingGenerationFailureReporter implements FailureReporter {
@@ -384,6 +435,7 @@ export class PreservingGenerationFailureReporter implements FailureReporter {
 
 async function runProductionAdminGeneration(
   date: string,
+  mode: AdminGenerationMode,
   environment: NodeJS.ProcessEnv,
 ): Promise<void> {
   const ai = loadPipelineEnvironment(environment);
@@ -395,13 +447,23 @@ async function runProductionAdminGeneration(
   };
   const database = await openServerDatabase();
   try {
-    if (database.getDay(date) === null) throw new Error(`Brief ${date} does not exist.`);
+    const existing = database.getDay(date);
+    if (mode === "create" && existing !== null) {
+      throw new Error(`Brief ${date} already exists.`);
+    }
+    if (mode !== "create" && existing === null) {
+      throw new Error(`Brief ${date} does not exist.`);
+    }
     const pipeline = createProductionPipeline({
       completionClient: new OpenAiCompatibleCompletionClient(sharedOptions),
       webResearchClient: new OpenAiResponsesWebResearchClient(sharedOptions),
       database,
-      metadataStore: new PreservingDayMetadataStore(database, date),
-      failureReporter: new PreservingGenerationFailureReporter(database),
+      metadataStore: mode === "create"
+        ? new CreatingDayMetadataStore(database, date)
+        : new PreservingDayMetadataStore(database, date),
+      ...(mode === "create"
+        ? {}
+        : { failureReporter: new PreservingGenerationFailureReporter(database) }),
       storageRoot: server.dailyStorageRoot,
     });
     await pipeline.run({ targetDate: date, settings: database.pipelineSettings.get() });

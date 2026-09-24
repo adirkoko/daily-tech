@@ -1,22 +1,31 @@
 ---
 export const prerender = false;
+import { isCalendarDate } from "@daily-tech/core";
 import AdminLayout from "../../../layouts/AdminLayout.astro";
 import EditorFormControls from "../../../components/EditorFormControls.astro";
+import { toIsraelDate } from "../../../lib/dates.js";
 import { loadAdminBrief } from "../../../server/admin-content.js";
 import { loadAdminBriefGenerationInfo } from "../../../server/admin-research-trace.js";
 
 const date = Astro.params.date ?? "";
+if (!isCalendarDate(date)) return Astro.redirect("/admin?error=brief-not-found", 303);
 const brief = await loadAdminBrief(date);
-if (!brief) return Astro.redirect("/admin?error=brief-not-found", 303);
-const { metadata, markdown } = brief;
-const unavailable = metadata.status === "failed" || markdown === null;
-const failedGeneration = metadata.status === "failed";
-const unavailableGenerationMode = failedGeneration ? "retry" : "regenerate";
+const missingBrief = brief === null;
+if (missingBrief && date >= toIsraelDate()) {
+  return Astro.redirect("/admin?error=empty-day-must-be-in-the-past", 303);
+}
+const metadata = brief?.metadata ?? null;
+const markdown = brief?.markdown ?? null;
+const unavailable = missingBrief || metadata?.status === "failed" || markdown === null;
+const failedGeneration = metadata?.status === "failed";
+const unavailableGenerationMode = missingBrief ? "create" : failedGeneration ? "retry" : "regenerate";
 const csrf = Astro.locals.adminSession!.csrfToken;
 const error = Astro.url.searchParams.get("error");
 const success = Astro.url.searchParams.get("success");
 const generationInfo = await loadAdminBriefGenerationInfo(date);
 const generationRunning = generationInfo.generation.running;
+const requestedGenerationMode = Astro.url.searchParams.get("generation_mode");
+const initialCreationAttempt = requestedGenerationMode === "create";
 const requestedAttemptValue = Astro.url.searchParams.get("generation_attempt");
 const requestedAttempt = requestedAttemptValue !== null && /^\d+$/u.test(requestedAttemptValue)
   ? Number(requestedAttemptValue)
@@ -27,7 +36,9 @@ const generationFinished =
   !generationRunning &&
   (generationInfo.generation.state === "succeeded" || generationInfo.generation.state === "failed");
 const generationSucceeded = generationFinished && generationInfo.generation.state === "succeeded";
-const generationFailureMessage = unavailable
+const generationFailureMessage = initialCreationAttempt || missingBrief
+  ? "הניסיון הסתיים ללא תדריך חדש. חוזרים ליום הריק, וממנו אפשר לנסות שוב."
+  : unavailable
   ? "הניסיון הסתיים ללא תדריך חדש. חוזרים למצב התוכן הנוכחי, שממנו אפשר לנסות שוב."
   : "הניסיון הסתיים ללא תוכן חדש. חוזרים לתדריך האחרון שנשמר.";
 
@@ -62,21 +73,21 @@ const INTENSITY_OPTIONS = [
   { value: "high", label: "גבוה" },
   { value: "extreme", label: "קיצוני" },
 ] as const;
-const COUNT_FIELDS = [
+const COUNT_FIELDS = metadata === null ? [] : [
   { name: "significant_items", label: "משמעותיים", value: metadata.significant_items },
   { name: "worth_watching_items", label: "שווה לעקוב", value: metadata.worth_watching_items },
   { name: "source_count", label: "מקורות", value: metadata.source_count },
 ] as const;
-const CHIP_GROUPS = [
+const CHIP_GROUPS = metadata === null ? [] : [
   { name: "companies", label: "חברות", addLabel: "הוספת חברה", items: metadata.companies, wide: false },
   { name: "topics", label: "נושאים", addLabel: "הוספת נושא", items: metadata.topics, wide: false },
   { name: "developments", label: "תקצירי התפתחויות", addLabel: "הוספת תקציר", items: metadata.developments, wide: true },
 ] as const;
 
-const statusIndex = Math.max(0, STATUS_OPTIONS.findIndex((option) => option.value === metadata.status));
-const intensityIndex = Math.max(0, INTENSITY_OPTIONS.findIndex((option) => option.value === metadata.day_intensity));
+const statusIndex = Math.max(0, STATUS_OPTIONS.findIndex((option) => option.value === metadata?.status));
+const intensityIndex = Math.max(0, INTENSITY_OPTIONS.findIndex((option) => option.value === metadata?.day_intensity));
 ---
-<AdminLayout title={`עריכת ${date}`}>
+<AdminLayout title={`${missingBrief ? "יצירת" : "עריכת"} ${date}`}>
   {!generationRunning && !generationFinished && error && <p class="form-error" role="alert">{error}</p>}
   {!generationRunning && !generationFinished && success && <p class="form-success" role="status">{success}</p>}
   {generationRunning ? (
@@ -98,17 +109,25 @@ const intensityIndex = Math.max(0, INTENSITY_OPTIONS.findIndex((option) => optio
       </div>
       <h1>{generationSucceeded ? "היצירה הושלמה בהצלחה" : "היצירה נכשלה"}</h1>
       <p>{generationSucceeded
-        ? "התדריך המעודכן מוכן. עוברים כעת לתוכן החדש."
+        ? initialCreationAttempt
+          ? "התדריך החדש מוכן. עוברים כעת לתוכן שנוצר."
+          : "התדריך המעודכן מוכן. עוברים כעת לתוכן החדש."
         : generationFailureMessage}</p>
     </section>
   ) : unavailable ? (
-    <section class="friendly-state friendly-state-error admin-friendly-state" role="status">
+    <section class:list={["friendly-state", "admin-friendly-state", { "friendly-state-error": !missingBrief }]} role="status">
       <div class="friendly-state-glyph" aria-hidden="true">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v4M12 16h.01" /><path d="M10.3 3.6 2.4 17.2A2 2 0 0 0 4.1 20h15.8a2 2 0 0 0 1.7-2.8L13.7 3.6a2 2 0 0 0-3.4 0Z" /></svg>
+        {missingBrief ? (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14" /><circle cx="12" cy="12" r="9" /></svg>
+        ) : (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v4M12 16h.01" /><path d="M10.3 3.6 2.4 17.2A2 2 0 0 0 4.1 20h15.8a2 2 0 0 0 1.7-2.8L13.7 3.6a2 2 0 0 0-3.4 0Z" /></svg>
+        )}
       </div>
-      <p class="eyebrow">{failedGeneration ? "התדריך לא הושלם" : "קובץ התדריך חסר"}</p>
-      <h1>{failedGeneration ? "אופס, ההפקה נעצרה בדרך" : "התוכן זקוק לשחזור"}</h1>
-      <p>{failedGeneration
+      <p class="eyebrow">{missingBrief ? "יום ללא תדריך" : failedGeneration ? "התדריך לא הושלם" : "קובץ התדריך חסר"}</p>
+      <h1>{missingBrief ? "עדיין לא נוצר תדריך ליום הזה" : failedGeneration ? "אופס, ההפקה נעצרה בדרך" : "התוכן זקוק לשחזור"}</h1>
+      <p>{missingBrief
+        ? `אין במערכת תוכן עבור ${date}. אפשר להפעיל עכשיו את ה־pipeline המלא וליצור תדריך היסטורי ליום הזה.`
+        : failedGeneration
         ? `לא נוצר תדריך תקין עבור ${date}, ולכן אין עדיין תוכן שאפשר לפרסם. התקלה כבר מופיעה במערכת ההתראות של האדמין.`
         : `רשומת ${date} קיימת, אבל קובץ ה־Markdown שלה אינו זמין. אפשר ליצור את התוכן מחדש דרך ה־pipeline המלא.`}</p>
       <div class="friendly-state-actions">
@@ -116,10 +135,10 @@ const intensityIndex = Math.max(0, INTENSITY_OPTIONS.findIndex((option) => optio
           <input type="hidden" name="csrf_token" value={csrf} />
           <input type="hidden" name="mode" value={unavailableGenerationMode} />
           <button class="button" type="submit" disabled={generationRunning}>
-            {generationRunning ? "מריץ מחדש…" : failedGeneration ? "ניסיון יצירה מחדש" : "שחזור באמצעות יצירה מחדש"}
+            {generationRunning ? "יוצר…" : missingBrief ? "יצירת תדריך" : failedGeneration ? "ניסיון יצירה מחדש" : "שחזור באמצעות יצירה מחדש"}
           </button>
         </form>
-        <a class="button" href="/admin/alerts">לצפייה בהתראות</a>
+        {!missingBrief && <a class="button" href="/admin/alerts">לצפייה בהתראות</a>}
         <a class="button secondary" href="/admin">חזרה לניהול התדריכים</a>
       </div>
     </section>
@@ -168,7 +187,7 @@ const intensityIndex = Math.max(0, INTENSITY_OPTIONS.findIndex((option) => optio
       <div class="editor-meta" data-editor-meta>
         <div class="meta-card meta-card-wide">
           <h2 class="meta-card-title">תקציר</h2>
-          <textarea name="summary" rows="3" maxlength="2000" required>{metadata.summary}</textarea>
+          <textarea name="summary" rows="3" maxlength="2000" required>{metadata?.summary ?? ""}</textarea>
         </div>
 
         <div class="meta-card meta-card-wide">
@@ -188,8 +207,8 @@ const intensityIndex = Math.max(0, INTENSITY_OPTIONS.findIndex((option) => optio
           <div class="segmented" data-segmented aria-label="סטטוס" style={`--count:${STATUS_OPTIONS.length};--index:${statusIndex}`}>
             <span class="segmented-thumb" aria-hidden="true"></span>
             {STATUS_OPTIONS.map((option) => (
-              <label class={metadata.status === option.value ? "is-active" : undefined}>
-                <input type="radio" name="status" value={option.value} checked={metadata.status === option.value} required />
+              <label class={metadata?.status === option.value ? "is-active" : undefined}>
+                <input type="radio" name="status" value={option.value} checked={metadata?.status === option.value} required />
                 <span>{option.label}</span>
               </label>
             ))}
@@ -201,8 +220,8 @@ const intensityIndex = Math.max(0, INTENSITY_OPTIONS.findIndex((option) => optio
           <div class="segmented" data-segmented aria-label="עצימות" style={`--count:${INTENSITY_OPTIONS.length};--index:${intensityIndex}`}>
             <span class="segmented-thumb" aria-hidden="true"></span>
             {INTENSITY_OPTIONS.map((option) => (
-              <label class={metadata.day_intensity === option.value ? "is-active" : undefined}>
-                <input type="radio" name="day_intensity" value={option.value} checked={metadata.day_intensity === option.value} required />
+              <label class={metadata?.day_intensity === option.value ? "is-active" : undefined}>
+                <input type="radio" name="day_intensity" value={option.value} checked={metadata?.day_intensity === option.value} required />
                 <span>{option.label}</span>
               </label>
             ))}
@@ -411,11 +430,13 @@ const intensityIndex = Math.max(0, INTENSITY_OPTIONS.findIndex((option) => optio
       if (document.querySelector("[data-generation-finished]")) {
         const cleanUrl = new URL(window.location.href);
         cleanUrl.searchParams.delete("generation_attempt");
+        cleanUrl.searchParams.delete("generation_mode");
         setTimeout(() => window.location.replace(cleanUrl.pathname + cleanUrl.search + cleanUrl.hash), 1800);
       } else if (!document.querySelector("[data-generation-active]")) {
         const cleanUrl = new URL(window.location.href);
         if (cleanUrl.searchParams.has("generation_attempt")) {
           cleanUrl.searchParams.delete("generation_attempt");
+          cleanUrl.searchParams.delete("generation_mode");
           window.history.replaceState({}, "", cleanUrl.pathname + cleanUrl.search + cleanUrl.hash);
         }
       }

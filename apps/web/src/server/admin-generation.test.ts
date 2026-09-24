@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   AdminGenerationService,
+  CreatingDayMetadataStore,
   PreservingDayMetadataStore,
   PreservingGenerationFailureReporter,
 } from "./admin-generation.js";
@@ -45,6 +46,68 @@ function metadata(overrides: Partial<DayMetadata> = {}): DayMetadata {
 }
 
 describe("AdminGenerationService", () => {
+  it("creates a missing past brief and rejects a second initial creation", async () => {
+    const databaseFile = await temporaryDatabaseFile();
+    DailyTechDatabase.open({ filename: databaseFile }).close();
+    const environment = {};
+    const runGeneration = vi.fn(async (date: string, mode: string) => {
+      const database = DailyTechDatabase.open({ filename: databaseFile });
+      database.saveDay(metadata({ date, status: "ready" }));
+      database.close();
+      expect(mode).toBe("create");
+    });
+    const service = new AdminGenerationService(environment, {
+      openDatabase: async () => DailyTechDatabase.open({ filename: databaseFile }),
+      runGeneration,
+      validateConfiguration: () => undefined,
+      now: () => new Date("2026-08-28T02:00:00.000Z"),
+      createLeaseOwner: () => "admin-create-test",
+      leaseDurationMs: 60_000,
+    });
+
+    await expect(service.start({ date: "2026-08-27", mode: "create" })).resolves.toMatchObject({
+      outcome: "started",
+      attemptCount: 1,
+    });
+    await service.waitForIdle();
+    expect(runGeneration).toHaveBeenCalledWith("2026-08-27", "create", environment);
+
+    await expect(service.start({ date: "2026-08-27", mode: "create" })).resolves.toEqual({
+      outcome: "already_exists",
+      status: "ready",
+    });
+    const result = DailyTechDatabase.open({ filename: databaseFile });
+    expect(result.getDay("2026-08-27")?.status).toBe("ready");
+    expect(result.operations.getScheduledJob("generate", "2026-08-27")).toMatchObject({
+      state: "succeeded",
+      attemptCount: 1,
+    });
+    result.close();
+  });
+
+  it("rejects initial creation for the current Israel day or a future day", async () => {
+    const databaseFile = await temporaryDatabaseFile();
+    DailyTechDatabase.open({ filename: databaseFile }).close();
+    const validateConfiguration = vi.fn();
+    const runGeneration = vi.fn(async () => undefined);
+    const service = new AdminGenerationService({}, {
+      openDatabase: async () => DailyTechDatabase.open({ filename: databaseFile }),
+      runGeneration,
+      validateConfiguration,
+      now: () => new Date("2026-08-28T09:00:00.000Z"),
+      leaseDurationMs: 60_000,
+    });
+
+    await expect(service.start({ date: "2026-08-28", mode: "create" })).resolves.toEqual({
+      outcome: "not_past",
+    });
+    await expect(service.start({ date: "2026-08-29", mode: "create" })).resolves.toEqual({
+      outcome: "not_past",
+    });
+    expect(validateConfiguration).not.toHaveBeenCalled();
+    expect(runGeneration).not.toHaveBeenCalled();
+  });
+
   it("allows retry only for failed briefs and prevents concurrent generation", async () => {
     const databaseFile = await temporaryDatabaseFile();
     const seeded = DailyTechDatabase.open({ filename: databaseFile });
@@ -228,6 +291,33 @@ describe("PreservingDayMetadataStore", () => {
       published_at: "2026-08-28T04:00:00.000Z",
       updated_at: "2026-09-01T10:00:00.000Z",
     });
+    database.close();
+  });
+});
+
+describe("CreatingDayMetadataStore", () => {
+  it("inserts only the requested missing day and never replaces an existing brief", async () => {
+    const databaseFile = await temporaryDatabaseFile();
+    const database = DailyTechDatabase.open({ filename: databaseFile });
+    const store = new CreatingDayMetadataStore(database, "2026-08-27");
+    const created = store.saveDay(metadata({ status: "ready" }));
+    expect(created.status).toBe("ready");
+
+    expect(() => store.saveDay(metadata({ summary: "אסור לדרוס" }))).toThrow(
+      "was created while generation was running",
+    );
+    expect(database.getDay("2026-08-27")?.summary).toBe("תקציר קודם");
+    database.close();
+  });
+
+  it("rejects metadata for a different date", async () => {
+    const databaseFile = await temporaryDatabaseFile();
+    const database = DailyTechDatabase.open({ filename: databaseFile });
+    const store = new CreatingDayMetadataStore(database, "2026-08-27");
+    expect(() => store.saveDay(metadata({ date: "2026-08-26" }))).toThrow(
+      "does not match 2026-08-27",
+    );
+    expect(database.getDay("2026-08-27")).toBeNull();
     database.close();
   });
 });

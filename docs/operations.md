@@ -66,12 +66,13 @@ Logs are stored in `operational_logs` as structured JSON details with indexed ru
 date, severity, and timestamp fields. Feedback and System tickets live in
 `feedback_tickets`; fixed-window counters live in `rate_limit_counters`.
 
-Admin retry/regeneration also records start, completion, or failure events. It uses
-the same `scheduled_jobs` generation lease as the embedded scheduler, preventing two
-service instances or repeated clicks from generating one date concurrently. Manual
-save and delete requests are refused while that lease is active. Regeneration is
-replace-on-success, so a provider or validation failure creates an alert without
-overwriting the existing brief or changing its status.
+Admin creation/retry/regeneration also records start, completion, or failure events.
+It uses the same `scheduled_jobs` generation lease as the embedded scheduler,
+preventing two service instances or repeated clicks from generating one date
+concurrently. Manual save and delete requests are refused while that lease is active.
+Initial creation is allowed only for a missing past Israel date and uses insert-only
+persistence. Regeneration is replace-on-success, so a provider or validation failure
+creates an alert without overwriting the existing brief or changing its status.
 
 When **Retry** repairs a day after its scheduled publication job has already failed,
 Admin explicitly reopens only that failed `publish` job and invokes the same local

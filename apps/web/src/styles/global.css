@@ -756,6 +756,20 @@ main { min-height: calc(100vh - 170px); }
 }
 .calendar-day.has-brief { border-color: var(--calendar-data-outline); color: #242955; cursor: pointer; }
 :root[data-theme="dark"] .calendar-day.has-brief { color: #f5f6ff; }
+.is-admin-calendar .calendar-day.is-empty-action {
+  color: var(--muted);
+  cursor: pointer;
+  text-decoration: none;
+}
+.is-admin-calendar .calendar-day.is-empty-action:hover,
+.is-admin-calendar .calendar-day.is-empty-action:focus-visible {
+  z-index: 4;
+  transform: translateY(-2px);
+  background: color-mix(in srgb, var(--accent-soft) 56%, transparent);
+  color: var(--accent-strong);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 34%, transparent);
+  outline: none;
+}
 .calendar-day[data-level="minimal"] { background: var(--calendar-minimal); }
 .calendar-day[data-level="low"] { background: var(--calendar-low); }
 .calendar-day[data-level="medium"] { background: var(--calendar-medium); }

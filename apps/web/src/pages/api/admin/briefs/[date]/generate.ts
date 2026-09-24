@@ -15,7 +15,7 @@ export const POST: APIRoute = async (context) => {
   try {
     if (!isCalendarDate(date)) throw new TypeError("תאריך התדריך אינו תקין.");
     const mode = field(form, "mode", 20);
-    if (mode !== "retry" && mode !== "regenerate") {
+    if (mode !== "create" && mode !== "retry" && mode !== "regenerate") {
       throw new TypeError("פעולת היצירה אינה תקינה.");
     }
     const result = await adminGenerationService().start({
@@ -28,11 +28,21 @@ export const POST: APIRoute = async (context) => {
     if (result.outcome === "not_found") {
       return redirectWith("/admin", "error", "התדריך לא נמצא.");
     }
+    if (result.outcome === "already_exists") {
+      return redirectWith(target, "error", "כבר קיים תדריך ליום הזה. אפשר ליצור אותו מחדש מתוך מסך העריכה.");
+    }
+    if (result.outcome === "invalid_date") {
+      return redirectWith("/admin", "error", "תאריך התדריך אינו תקין.");
+    }
+    if (result.outcome === "not_past") {
+      return redirectWith("/admin", "error", "אפשר ליצור ידנית רק תדריך של יום שכבר הסתיים.");
+    }
     if (result.outcome === "invalid_state") {
       return redirectWith(target, "error", "ניסיון חוזר זמין רק לתדריך שנכשל.");
     }
     const location = new URL(target, "http://internal");
     location.searchParams.set("generation_attempt", String(result.attemptCount));
+    location.searchParams.set("generation_mode", mode);
     return new Response(null, {
       status: 303,
       headers: { Location: `${location.pathname}${location.search}` },

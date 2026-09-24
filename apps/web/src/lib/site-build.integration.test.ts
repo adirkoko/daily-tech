@@ -255,6 +255,24 @@ describe("standalone site service", () => {
         await fetch(`${origin}/admin/briefs/${day.date}`, { headers: adminHeaders })
       ).text();
       expect(publishedEditorHtml).toContain('name="mode" value="regenerate"');
+      const emptyPastDate = "2026-08-23";
+      const emptyPastEditor = await fetch(
+        `${origin}/admin/briefs/${emptyPastDate}`,
+        { headers: adminHeaders },
+      );
+      const emptyPastEditorHtml = await emptyPastEditor.text();
+      expect(emptyPastEditor.status).toBe(200);
+      expect(emptyPastEditorHtml).toContain("עדיין לא נוצר תדריך ליום הזה");
+      expect(emptyPastEditorHtml).toContain(`/api/admin/briefs/${emptyPastDate}/generate`);
+      expect(emptyPastEditorHtml).toContain('name="mode" value="create"');
+      const futureEmptyEditor = await fetch(`${origin}/admin/briefs/9999-12-31`, {
+        headers: adminHeaders,
+        redirect: "manual",
+      });
+      expect(futureEmptyEditor.status).toBe(303);
+      expect(futureEmptyEditor.headers.get("location")).toBe(
+        "/admin?error=empty-day-must-be-in-the-past",
+      );
 
       const generationDatabase = DailyTechDatabase.open({ filename: databasePath });
       generationDatabase.operations.beginScheduledJob({

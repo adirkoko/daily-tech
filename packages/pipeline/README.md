@@ -39,6 +39,22 @@ Optional:
 - `AI_BASE_URL` — defaults to `https://api.openai.com/v1`.
 - `TECH_BRIEFS_ROOT` — defaults to `tech_briefs` and is used by production generation.
 
+AI request controls (shared by CLI, dry runs, scheduled runs, and Admin generation):
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `AI_RESEARCH_TIMEOUT_MS` | `240000` | Research timeout per attempt, in milliseconds. |
+| `AI_COMPLETION_TIMEOUT_MS` | `120000` | Writing timeout per attempt, in milliseconds. |
+| `AI_MAX_ATTEMPTS` | `3` | Total attempts, including the first. Set to `1` to disable retries. |
+| `AI_RETRY_BASE_DELAY_MS` | `1000` | Initial exponential backoff delay, before jitter. |
+| `AI_RETRY_MAX_DELAY_MS` | `8000` | Backoff cap before jitter; also caps provider Retry-After. |
+
+All five accept integers from 1 to 2147483647; the maximum delay must be at
+least the base delay. Invalid values fail configuration loading. Omitted values
+use the defaults above. Restart the service after changing its environment.
+Retries remain limited to HTTP 429/5xx and malformed successful responses;
+timeouts are not automatically retried.
+
 The configured provider must support chat completions for writing and a
 Responses-compatible live web-search endpoint with strict structured output and
 machine-readable URL citations.

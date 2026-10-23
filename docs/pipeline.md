@@ -134,6 +134,13 @@ pass, and an empty candidate/story set skips Deep Research or Draft as appropria
 A run therefore makes between one and five logical model requests. Transient
 provider retries may produce additional HTTP attempts for any one request.
 
+Research and writing attempts default to 240-second and 120-second timeouts,
+respectively. Timeouts and retry policy are deployment environment settings shared
+by every generation entry point, including dry runs. They do not limit the total
+pipeline duration. See
+[`deployment.md`](deployment.md#ai-request-configuration) for variables and defaults
+and [`operations.md`](operations.md#provider-reliability) for retry behavior.
+
 ## Pipeline settings
 
 Production generation loads `PipelineSettings` from SQLite at the start of the run:

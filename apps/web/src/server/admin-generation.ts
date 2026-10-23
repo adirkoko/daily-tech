@@ -491,6 +491,7 @@ async function runProductionAdminGeneration(
     apiKey: ai.aiApiKey,
     model: ai.aiModel,
     baseUrl: ai.aiBaseUrl,
+    retry: ai.aiRetry,
   };
   const database = await openServerDatabase();
   try {
@@ -502,8 +503,8 @@ async function runProductionAdminGeneration(
       throw new Error(`Brief ${date} does not exist.`);
     }
     const pipeline = createProductionPipeline({
-      completionClient: new OpenAiCompatibleCompletionClient(sharedOptions),
-      webResearchClient: new OpenAiResponsesWebResearchClient(sharedOptions),
+      completionClient: new OpenAiCompatibleCompletionClient({ ...sharedOptions, timeoutMs: ai.aiCompletionTimeoutMs }),
+      webResearchClient: new OpenAiResponsesWebResearchClient({ ...sharedOptions, timeoutMs: ai.aiResearchTimeoutMs }),
       database,
       metadataStore: new LeaseGuardedDayMetadataStore(
         mode === "create"

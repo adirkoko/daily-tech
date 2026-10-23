@@ -50,7 +50,10 @@ npm start
 Copy `.env.example` to `.env` and set a unique `ADMIN_PASSWORD` of at least 14
 characters plus a unique `ADMIN_SESSION_SECRET` of at least 32 characters. AI
 credentials are required only when generation will run, either manually or through
-the embedded scheduler. Start the single application service with:
+the embedded scheduler. Optional AI timeouts and retry settings are listed in
+`.env.example` and documented in
+[`docs/deployment.md`](docs/deployment.md#ai-request-configuration).
+Start the single application service with:
 
 ```sh
 npm run build

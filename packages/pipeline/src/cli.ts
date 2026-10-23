@@ -62,11 +62,17 @@ export async function runPipelineCli(
     apiKey: config.aiApiKey,
     model: config.aiModel,
     baseUrl: config.aiBaseUrl,
+    retry: config.aiRetry,
   };
   const researchProvider = new ModelNewsResearchProvider({
-    client: new OpenAiResponsesWebResearchClient(sharedOptions),
+    client: new OpenAiResponsesWebResearchClient({ ...sharedOptions, timeoutMs: config.aiResearchTimeoutMs }),
   });
-  const writer = new ModelBriefWriter({ client: new OpenAiCompatibleCompletionClient(sharedOptions) });
+  const writer = new ModelBriefWriter({
+    client: new OpenAiCompatibleCompletionClient({
+      ...sharedOptions,
+      timeoutMs: config.aiCompletionTimeoutMs,
+    }),
+  });
 
   if (options.dryRun) {
     await runDryRun(researchProvider, writer, config, options);

@@ -112,6 +112,11 @@ provider responses.
 The settings are stored as one validated SQLite row. Generation reads the row at the
 start of each run, while the scheduler reads the two times on every tick so schedule
 changes do not require a restart. Saving records an `admin_settings_saved` event.
+AI request timeouts and retry policy are configured through environment variables,
+not this page. They also apply to Admin generation; see
+[`deployment.md`](deployment.md#ai-request-configuration) for configuration and
+restart instructions.
+
 Secrets, provider configuration, storage paths, cache settings, and safety limits
 remain deployment or implementation concerns rather than Admin settings. See
 [`pipeline.md`](pipeline.md) and [`data-model.md`](data-model.md#pipeline-settings).

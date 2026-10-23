@@ -67,6 +67,33 @@ to `false`, is not required by the application runtime, and must remain false or
 unset in production. Even when it is explicitly set to `true`, the demo-data
 commands still refuse to run without `--confirm-reset`.
 
+## AI request configuration
+
+Generation requires `AI_API_KEY` and `AI_MODEL`; `AI_BASE_URL` defaults to
+`https://api.openai.com/v1`. These optional runtime settings control provider calls:
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `AI_RESEARCH_TIMEOUT_MS` | `240000` | Research timeout per attempt (4 minutes). |
+| `AI_COMPLETION_TIMEOUT_MS` | `120000` | Writing timeout per attempt (2 minutes). |
+| `AI_MAX_ATTEMPTS` | `3` | Total attempts including the first; `1` disables retries. |
+| `AI_RETRY_BASE_DELAY_MS` | `1000` | Initial exponential backoff delay, before jitter. |
+| `AI_RETRY_MAX_DELAY_MS` | `8000` | Backoff cap before jitter; also caps provider Retry-After. |
+
+Timeouts and delays are milliseconds. All five values must be integers from `1`
+to `2147483647`; the maximum delay must be at least the base delay. Omitted values
+use the defaults above; invalid values fail generation configuration loading.
+
+Set them in the service environment or `.env`. They apply to CLI generation, dry
+runs, the embedded scheduler, and Admin generation. Restart the Node service after
+changing its environment. With Compose, recreate the container with
+`docker compose up -d` so it receives the updated `.env`; restarting an existing
+container does not reload its environment. These settings do not require an image
+rebuild and are separate from the editorial settings stored through Admin.
+
+Timeouts limit individual attempts, not the entire pipeline. See
+[`operations.md`](operations.md#provider-reliability) for which failures are retried.
+
 ## Reverse proxy and origin validation
 
 Astro's origin check remains enabled. The build derives one exact

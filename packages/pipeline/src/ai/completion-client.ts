@@ -1,3 +1,4 @@
+import { DEFAULT_COMPLETION_TIMEOUT_MS } from "./defaults.js";
 import {
   AiProviderError,
   InvalidAiResponseError,
@@ -36,7 +37,7 @@ export class OpenAiCompatibleCompletionClient implements AiCompletionClient {
     if (parsedUrl.protocol !== "https:" && parsedUrl.protocol !== "http:") {
       throw new TypeError("baseUrl must use HTTP or HTTPS.");
     }
-    const timeoutMs = options.timeoutMs ?? 60_000;
+    const timeoutMs = options.timeoutMs ?? DEFAULT_COMPLETION_TIMEOUT_MS;
     if (!Number.isInteger(timeoutMs) || timeoutMs < 1) {
       throw new RangeError("timeoutMs must be a positive integer.");
     }

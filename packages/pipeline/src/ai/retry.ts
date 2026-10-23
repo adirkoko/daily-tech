@@ -1,4 +1,5 @@
 import { AiProviderError, InvalidAiResponseError } from "./contracts.js";
+import { DEFAULT_MAX_ATTEMPTS, DEFAULT_BASE_DELAY_MS, DEFAULT_MAX_DELAY_MS } from "./defaults.js";
 
 export interface AiRetryOptions {
   /** Total attempts, including the first — not additional retries. */
@@ -9,10 +10,6 @@ export interface AiRetryOptions {
   /** Injectable for tests; defaults to a real timer. */
   readonly sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;
 }
-
-const DEFAULT_MAX_ATTEMPTS = 3;
-const DEFAULT_BASE_DELAY_MS = 1_000;
-const DEFAULT_MAX_DELAY_MS = 8_000;
 
 /**
  * Retries a single AI-provider call across the transient failures actually

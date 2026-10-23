@@ -36,7 +36,17 @@ is three attempts with exponential backoff and jitter; a valid `Retry-After` hea
 takes precedence up to the configured retry-delay ceiling. Provider values above the
 ceiling are capped so one response cannot suspend a generation indefinitely.
 
-Other 4xx responses and downstream validation failures are not retried. After the
+Request controls are set through the environment: `AI_RESEARCH_TIMEOUT_MS`
+(default `240000`) and `AI_COMPLETION_TIMEOUT_MS` (default `120000`) limit each
+attempt, not the whole generation run. `AI_MAX_ATTEMPTS` defaults to `3`, including
+the first attempt; `1` disables retries. `AI_RETRY_BASE_DELAY_MS` defaults to `1000`
+and `AI_RETRY_MAX_DELAY_MS` to `8000`. Backoff is capped before jitter, while
+provider Retry-After values are capped directly. All timeout and delay values are
+milliseconds. See [`deployment.md`](deployment.md#ai-request-configuration) for
+validation and restart instructions.
+
+Timeouts, network errors, other 4xx responses, and downstream validation failures
+are not automatically retried. After the
 client exhausts its attempts, the run fails, creates a System ticket, and remains a
 terminal scheduler job. An operator can retry that date from its Admin brief page;
 the explicit action safely reopens the finished generation job without changing the

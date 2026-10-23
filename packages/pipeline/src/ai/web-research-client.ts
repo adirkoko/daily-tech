@@ -1,3 +1,4 @@
+import { DEFAULT_RESEARCH_TIMEOUT_MS } from "./defaults.js";
 import {
   AiProviderError,
   InvalidAiResponseError,
@@ -40,7 +41,7 @@ export class OpenAiResponsesWebResearchClient implements AiWebResearchClient {
     if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
       throw new TypeError("baseUrl must use HTTP or HTTPS.");
     }
-    this.#timeoutMs = options.timeoutMs ?? 120_000;
+    this.#timeoutMs = options.timeoutMs ?? DEFAULT_RESEARCH_TIMEOUT_MS;
     this.#maxToolCalls = options.maxToolCalls ?? 20;
     if (!Number.isInteger(this.#timeoutMs) || this.#timeoutMs < 1) {
       throw new RangeError("timeoutMs must be a positive integer.");

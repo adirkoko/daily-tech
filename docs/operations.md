@@ -21,9 +21,16 @@ are `general`, `correction`, `suggestion`, and `system`; statuses are `open` and
 ## System alerts
 
 Material generation, publication, scheduler, or provider failures create a `system`
-ticket. `/admin/alerts` combines those tickets with recent error-level operational
-logs in the same inbox interface. Operators can separate tickets from logs, filter
-ticket status, inspect structured details, and resolve open System tickets.
+ticket. `/admin/alerts` shows only these tickets, with open tickets selected by
+default. It presents a readable summary and actions separately from collapsed
+technical details. Known reporter formats link to the affected brief and filtered
+logs without changing existing stored tickets.
+
+`/admin/logs` is a separate, authenticated technical history, including information,
+warnings, and errors. It supports server-side run/date/severity filters and
+50-event pages. Pipeline and scheduler/Admin wrapper errors remain separate log
+records for diagnosis, but do not appear as duplicate alerts. Resolving an alert
+changes only its ticket status and does not remove logs or retry the operation.
 
 Admin is the only incident-notification channel. The application has no email,
 Telegram, Slack, webhook, or other outbound alert integration.

@@ -17,7 +17,7 @@ const pathname = Astro.url.pathname;
     <meta name="robots" content="noindex,nofollow" />
     <meta name="theme-color" content="#f4f5f7" data-theme-color />
     <link rel="icon" type="image/svg+xml" sizes="any" href="/favicon.svg?v=6" />
-    <title>Daily Tech Admin</title>
+    <title>{Astro.props.title ? `${Astro.props.title} | Daily Tech Admin` : "Daily Tech Admin"}</title>
     <script is:inline>
       (() => {
         const saved = localStorage.getItem("daily-tech-theme");
@@ -38,6 +38,7 @@ const pathname = Astro.url.pathname;
             <a href="/admin" aria-current={pathname === "/admin" || pathname.startsWith("/admin/briefs/") ? "page" : undefined}>תדריכים</a>
             <a href="/admin/feedback" aria-current={pathname === "/admin/feedback" ? "page" : undefined}>פידבק</a>
             <a href="/admin/alerts" aria-current={pathname === "/admin/alerts" ? "page" : undefined}>התראות</a>
+            <a href="/admin/logs" aria-current={pathname === "/admin/logs" ? "page" : undefined}>לוגים</a>
             <a href="/admin/settings" aria-current={pathname === "/admin/settings" ? "page" : undefined}>הגדרות</a>
             <form action="/api/admin/logout" method="post" data-logout-form>
               <input type="hidden" name="csrf_token" value={csrf} />

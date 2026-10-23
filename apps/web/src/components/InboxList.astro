@@ -12,6 +12,9 @@ export interface InboxItem {
   tags: InboxTag[];
   meta?: { label: string; value: string }[];
   body?: string | null;
+  summary?: string;
+  actions?: { label: string; href: string }[];
+  technical?: boolean;
   /** When set, a "mark resolved" button is shown once the row is expanded. */
   resolveAction?: string | null;
   /** Filter dimensions, e.g. { status: "open", category: "general" }. */
@@ -21,6 +24,7 @@ export interface InboxFilterGroup {
   key: string;
   label: string;
   options: { value: string; label: string }[];
+  defaultValue?: string;
 }
 
 interface Props {
@@ -28,12 +32,14 @@ interface Props {
   filterGroups?: InboxFilterGroup[];
   csrf: string;
   emptyText?: string;
-  variant?: "feedback" | "alerts";
+  variant?: "feedback" | "alerts" | "logs";
   searchPlaceholder?: string;
+  pageSize?: number;
 }
 
 const {
   items,
+  pageSize = 15,
   filterGroups = [],
   csrf,
   emptyText = "אין פריטים שתואמים לסינון.",
@@ -41,7 +47,7 @@ const {
   searchPlaceholder = "חיפוש בכותרת…",
 } = Astro.props;
 ---
-<section class={`inbox inbox-${variant}`} data-inbox>
+<section class={`inbox inbox-${variant}`} data-inbox data-page-size={pageSize}>
   <div class="inbox-controls">
     <div class="inbox-toolbar-main">
       <label class="inbox-search">
@@ -55,10 +61,10 @@ const {
       {filterGroups.map((group) => (
         <div class="inbox-filter-set">
           <span class="inbox-filter-label">{group.label}</span>
-          <div class="inbox-filter" data-filter-group={group.key} role="group" aria-label={group.label}>
-            <button type="button" class="inbox-chip is-active" data-filter-value="">הכול</button>
+          <div class="inbox-filter" data-filter-group={group.key} data-filter-default={group.defaultValue ?? ""} role="group" aria-label={group.label}>
+            <button type="button" class:list={["inbox-chip", { "is-active": !group.defaultValue }]} aria-pressed={!group.defaultValue} data-filter-value="">הכול</button>
             {group.options.map((option) => (
-              <button type="button" class="inbox-chip" data-filter-value={option.value}>{option.label}</button>
+              <button type="button" class:list={["inbox-chip", { "is-active": group.defaultValue === option.value }]} aria-pressed={group.defaultValue === option.value} data-filter-value={option.value}>{option.label}</button>
             ))}
           </div>
         </div>
@@ -67,8 +73,8 @@ const {
       <div class="inbox-filter-set inbox-sort-set">
         <span class="inbox-filter-label">סדר</span>
         <div class="inbox-sort" role="group" aria-label="מיון">
-          <button type="button" class="inbox-chip is-active" data-sort="desc">חדשים</button>
-          <button type="button" class="inbox-chip" data-sort="asc">ישנים</button>
+          <button type="button" class="inbox-chip is-active" aria-pressed="true" data-sort="desc">חדשים</button>
+          <button type="button" class="inbox-chip" aria-pressed="false" data-sort="asc">ישנים</button>
         </div>
       </div>
     </div>
@@ -80,7 +86,7 @@ const {
         class="inbox-row"
         data-inbox-row
         data-timestamp={item.timestamp}
-        data-search={[item.title, item.body, ...(item.meta ?? []).map((entry) => entry.value)].filter(Boolean).join(" ").toLocaleLowerCase("he")}
+        data-search={[item.title, item.summary, item.body, ...(item.meta ?? []).map((entry) => entry.value)].filter(Boolean).join(" ").toLocaleLowerCase("he")}
         {...Object.fromEntries(
           Object.entries(item.filters ?? {}).map(([key, value]) => [`data-filter-${key}`, value]),
         )}
@@ -93,7 +99,7 @@ const {
           data-inbox-toggle
         >
           <span class="inbox-row-signal" aria-hidden="true">
-            {variant === "alerts" && item.filters?.type === "log" ? (
+            {variant === "logs" ? (
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="m7 9 2 2-2 2M12 14h5" /></svg>
             ) : variant === "alerts" && item.filters?.status === "resolved" ? (
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9" /><path d="m8 12 2.7 2.7L16.5 9" /></svg>
@@ -105,6 +111,7 @@ const {
           </span>
           <span class="inbox-row-main">
             <span class="inbox-row-title">{item.title}</span>
+            {item.summary && <span class="inbox-row-summary">{item.summary}</span>}
             <span class="inbox-row-tags">
               {item.tags.map((tag) => (
                 <span class={`inbox-tag tone-${tag.tone ?? "neutral"}`}>{tag.label}</span>
@@ -123,7 +130,10 @@ const {
               ))}
             </div>
           )}
-          {item.body && <pre class="inbox-body-text">{item.body}</pre>}
+          {item.actions && <div class="inbox-item-actions">{item.actions.map((action) => <a class="button secondary" href={action.href}>{action.label}</a>)}</div>}
+          {item.body && (item.technical ? (
+            <details class="inbox-technical"><summary>פרטים טכניים</summary><pre class="inbox-body-text" dir="auto">{item.body}</pre></details>
+          ) : <pre class="inbox-body-text" dir="auto">{item.body}</pre>)}
           {item.resolveAction && (
             <form class="inbox-resolve" action={item.resolveAction} method="post">
               <input type="hidden" name="csrf_token" value={csrf} />
@@ -168,7 +178,7 @@ const {
     const pagerPrev = inbox.querySelector("[data-pager-prev]");
     const pagerNext = inbox.querySelector("[data-pager-next]");
     const pagerLabel = inbox.querySelector("[data-pager-label]");
-    const PAGE_SIZE = 15;
+    const PAGE_SIZE = Number(inbox.dataset.pageSize) || 15;
     const total = rows.length;
     const selected = {};
     let sortDir = "desc";
@@ -181,7 +191,7 @@ const {
         const want = selected[key];
         if (!want) continue;
         const have = row.getAttribute("data-filter-" + key);
-        if (have !== null && have !== want) return false;
+        if (have !== want) return false;
       }
       return true;
     };
@@ -235,12 +245,13 @@ const {
 
     inbox.querySelectorAll("[data-filter-group]").forEach((group) => {
       const key = group.dataset.filterGroup;
-      selected[key] = "";
+      selected[key] = group.dataset.filterDefault || "";
       group.querySelectorAll("[data-filter-value]").forEach((button) => {
         button.addEventListener("click", () => {
           selected[key] = button.dataset.filterValue;
           group.querySelectorAll("[data-filter-value]").forEach((other) => {
             other.classList.toggle("is-active", other === button);
+            other.setAttribute("aria-pressed", String(other === button));
           });
           resetToFirstPage();
         });
@@ -252,6 +263,7 @@ const {
         sortDir = button.dataset.sort;
         inbox.querySelectorAll("[data-sort]").forEach((other) => {
           other.classList.toggle("is-active", other === button);
+          other.setAttribute("aria-pressed", String(other === button));
         });
         resetToFirstPage();
       });

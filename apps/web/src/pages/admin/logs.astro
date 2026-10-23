@@ -1,0 +1,85 @@
+---
+export const prerender = false;
+import { isCalendarDate } from "@daily-tech/core";
+import { LOG_LEVELS, type LogLevel } from "@daily-tech/db";
+import AdminLayout from "../../layouts/AdminLayout.astro";
+import InboxList, { type InboxItem } from "../../components/InboxList.astro";
+import { openServerDatabase } from "../../server/database.js";
+
+const params = Astro.url.searchParams;
+const runId = params.get("runId")?.trim() || undefined;
+const date = params.get("date") || undefined;
+const levelValue = params.get("level") || undefined;
+const pageValue = params.get("page") ?? "1";
+const page = Number(pageValue);
+const valid = (!date || isCalendarDate(date))
+  && (!levelValue || LOG_LEVELS.includes(levelValue as LogLevel))
+  && (!runId || runId.length <= 200)
+  && /^\d+$/u.test(pageValue) && Number.isSafeInteger(page) && page >= 1 && page <= 1000000;
+if (!valid) Astro.response.status = 400;
+const pageSize = 50;
+const db = valid ? await openServerDatabase() : null;
+let logs;
+try {
+  logs = db?.operations.listLogs({
+    ...(runId ? { runId } : {}), ...(date ? { briefDate: date } : {}),
+    ...(levelValue ? { level: levelValue as LogLevel } : {}),
+    limit: pageSize + 1, offset: (page - 1) * pageSize,
+  }) ?? [];
+} finally { db?.close(); }
+const hasNext = logs.length > pageSize;
+const labels: Record<string, string> = { error: "שגיאה", warning: "אזהרה", info: "מידע" };
+const items: InboxItem[] = logs.slice(0, pageSize).map((log) => ({
+  id: `log-${log.id}`, title: log.eventType, timestamp: log.occurredAt,
+  ...(log.message ? { summary: log.message } : {}),
+  tags: [{ label: labels[log.level] ?? log.level, tone: log.level === "error" ? "danger" : log.level === "warning" ? "warn" : "neutral" }],
+  meta: [
+    ...(log.briefDate ? [{ label: "תאריך התקציר", value: log.briefDate }] : []),
+    ...(log.runId ? [{ label: "מזהה ריצה", value: log.runId }] : []),
+  ],
+  body: JSON.stringify(log.details, null, 2),
+  actions: [
+    ...(log.briefDate ? [{ label: "פתיחת התקציר", href: `/admin/briefs/${log.briefDate}` }] : []),
+    ...(log.runId ? [{ label: "כל אירועי הריצה", href: `/admin/logs?${new URLSearchParams({ runId: log.runId })}` }] : []),
+  ],
+}));
+const pageHref = (number: number) => {
+  const query = new URLSearchParams();
+  if (runId) query.set("runId", runId);
+  if (date) query.set("date", date);
+  if (levelValue) query.set("level", levelValue);
+  query.set("page", String(number));
+  return `/admin/logs?${query}`;
+};
+---
+<AdminLayout title="לוגים">
+  <section class="inbox-page inbox-page-logs">
+    <header class="inbox-hero">
+      <div class="inbox-hero-copy"><div>
+        <p class="inbox-eyebrow">אבחון והיסטוריה</p>
+        <h1>לוגים של המערכת</h1>
+        <p>רצף האירועים הטכני: שלבי ריצה, הצלחות, אזהרות ושגיאות.</p>
+      </div></div>
+      <a class="button secondary" href="/admin/alerts">התראות לטיפול</a>
+    </header>
+    <form class="admin-log-filters" method="get" action="/admin/logs">
+      <label>חומרה<select name="level">
+        <option value="">כל הרמות</option>
+        {LOG_LEVELS.map((level) => <option value={level} selected={levelValue === level}>{labels[level]}</option>)}
+      </select></label>
+      <label>תאריך התקציר<input type="date" name="date" value={date} /></label>
+      <label class="admin-log-run">מזהה ריצה<input type="text" name="runId" value={runId} maxlength="200" dir="ltr" placeholder="כל הריצות" /></label>
+      <button class="button" type="submit">סינון</button>
+      <a href="/admin/logs">איפוס</a>
+    </form>
+    {!valid ? <p role="alert">ערכי הסינון אינם תקינים. יש לבחור תאריך, חומרה ומספר עמוד תקינים.</p> : <>
+      <p class="admin-notice">המסננים חלים על כל ההיסטוריה. החיפוש והמיון ברשימה חלים על עד 50 אירועי העמוד הנוכחי. לוג מתעד אירוע ואינו התראה נוספת.</p>
+      <InboxList pageSize={pageSize} items={items} csrf={Astro.locals.adminSession!.csrfToken} variant="logs" searchPlaceholder="חיפוש באירועי העמוד…" emptyText="לא נמצאו אירועים. אפשר לשנות את המסננים או לחזור לעמוד הקודם." />
+      <nav class="admin-log-pagination" aria-label="עמודי לוגים">
+        {page > 1 && <a class="button secondary" href={pageHref(page - 1)}>הקודם</a>}
+        <span>עמוד {page}</span>
+        {hasNext && <a class="button secondary" href={pageHref(page + 1)}>הבא</a>}
+      </nav>
+    </>}
+  </section>
+</AdminLayout>

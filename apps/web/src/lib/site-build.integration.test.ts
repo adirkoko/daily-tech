@@ -1,3 +1,5 @@
+import sanitizeHtml from "sanitize-html";
+
 import { spawn } from "node:child_process";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
@@ -8,6 +10,24 @@ import { fileURLToPath } from "node:url";
 import { expectedBriefRelativePath, type DayMetadata } from "@daily-tech/core";
 import { DailyTechDatabase } from "@daily-tech/db";
 import { afterEach, describe, expect, it } from "vitest";
+
+// Parse HTML instead of matching raw strings: angle brackets inside a quoted
+// data-search attribute are inert text and are not injected elements.
+function expectSafeDiagnosticHtml(html: string): void {
+  const injectedElements: string[] = [];
+  sanitizeHtml(html, {
+    transformTags: {
+      "*": (tagName, attributes) => {
+        if ((tagName === "img" && attributes.src === "x") || attributes.id === "injected-alert") {
+          injectedElements.push(tagName);
+        }
+        return { tagName, attribs: attributes };
+      },
+    },
+  });
+  expect(injectedElements).toEqual([]);
+  expect(html).toContain("&lt;img");
+}
 
 const webRoot = fileURLToPath(new URL("../../", import.meta.url));
 const temporaryRoots: string[] = [];
@@ -113,6 +133,32 @@ describe("standalone site service", () => {
       category: "system",
       body: "The integration fixture recorded a failure.",
       createdAt: "2026-08-27T05:00:00.000Z",
+    });
+    database.operations.createTicket({
+      title: "Daily brief failed for 2026-08-25", category: "system",
+      body: "Run: incident-run\nStage: light_discovery\nError: AI web-research request was aborted or timed out.",
+      createdAt: "2026-08-27T05:00:00.000Z",
+    });
+    for (let index = 0; index < 52; index += 1) {
+      database.operations.appendLog({
+        runId: "incident-run", briefDate: "2026-08-25", eventType: `diagnostic_event_${index}`,
+        level: index === 0 ? "error" : "info", message: `Diagnostic message ${index}`,
+        details: { stage: "light_discovery" }, occurredAt: "2026-08-27T05:00:00.000Z",
+      });
+    }
+    database.operations.appendLog({
+      runId: "other-run", briefDate: "2026-08-24", eventType: "unrelated_warning",
+      level: "warning", occurredAt: "2026-08-27T05:00:00.000Z",
+    });
+    const maliciousText = '<img src=x onerror="alert(1)"><script id="injected-alert">alert(1)</script>';
+    database.operations.createTicket({
+      title: "Escaping fixture", category: "system", body: maliciousText,
+      createdAt: "2026-08-27T04:00:00.000Z",
+    });
+    database.operations.appendLog({
+      runId: "escaping-run", briefDate: "2026-08-25", eventType: "escaping_fixture",
+      level: "error", message: maliciousText, details: { original: maliciousText },
+      occurredAt: "2026-08-27T04:00:00.000Z",
     });
     database.close();
 
@@ -376,6 +422,83 @@ describe("standalone site service", () => {
       expect(feedbackHtml).toContain("Integration feedback");
       const alertsHtml = await (await fetch(`${origin}/admin/alerts`, { headers: adminHeaders })).text();
       expect(alertsHtml).toContain("Fixture system failure");
+      expect(alertsHtml).not.toContain("diagnostic_event_");
+      expect(alertsHtml).toContain('/admin/logs?runId=incident-run');
+      expect(alertsHtml).toContain('data-filter-default="open"');
+      expectSafeDiagnosticHtml(alertsHtml);
+      for (const path of ["/admin/alerts", "/admin/logs", "/%61dmin/logs", "/admin%2Flogs"]) {
+        const anonymous = await fetch(`${origin}${path}`, { redirect: "manual" });
+        const anonymousHtml = await anonymous.text();
+        expect(anonymousHtml).not.toContain("diagnostic_event_");
+        expect(anonymousHtml).not.toContain("Fixture system failure");
+      }
+      const injectedFilter = await fetch(`${origin}/admin/logs?${new URLSearchParams({ runId: "' OR 1=1 --" })}`, { headers: adminHeaders });
+      expect(injectedFilter.status).toBe(200);
+      expect(await injectedFilter.text()).not.toContain("diagnostic_event_");
+      const escapingResponse = await fetch(`${origin}/admin/logs?runId=escaping-run`, { headers: adminHeaders });
+      expect(escapingResponse.headers.get("cache-control")).toBe("no-store");
+      expect(escapingResponse.headers.get("x-content-type-options")).toBe("nosniff");
+      expect(escapingResponse.headers.get("content-security-policy")).toContain("frame-ancestors 'none'");
+      const escapingHtml = await escapingResponse.text();
+      expectSafeDiagnosticHtml(escapingHtml);
+      const privateLogs = await fetch(`${origin}/admin/logs`, { redirect: "manual" });
+      expect(privateLogs.status).toBe(303);
+      const logsHtml = await (await fetch(`${origin}/admin/logs?runId=incident-run`, { headers: adminHeaders })).text();
+      expect(logsHtml).toContain("diagnostic_event_51");
+      expect(logsHtml).not.toContain("unrelated_warning");
+      expect(logsHtml).not.toContain("Fixture system failure");
+      expect(logsHtml).not.toContain('class="inbox-resolve"');
+      const secondLogPage = await (await fetch(`${origin}/admin/logs?runId=incident-run&page=2`, { headers: adminHeaders })).text();
+      expect(secondLogPage).toContain("diagnostic_event_0");
+      expect(secondLogPage).not.toContain("diagnostic_event_51");
+      const errorLogsHtml = await (await fetch(`${origin}/admin/logs?runId=incident-run&level=error&date=2026-08-25`, { headers: adminHeaders })).text();
+      expect(errorLogsHtml).toContain("diagnostic_event_0");
+      expect(errorLogsHtml).not.toContain("diagnostic_event_1");
+      const noLogsHtml = await (await fetch(`${origin}/admin/logs?runId=incident-run&date=2026-08-24`, { headers: adminHeaders })).text();
+      expect(noLogsHtml).not.toContain("diagnostic_event_");
+      for (const query of ["date=2026-02-30", "level=invalid", "page=0", "page=NaN", "page=1.5", "page=1000001", `runId=${"x".repeat(201)}`]) {
+        expect((await fetch(`${origin}/admin/logs?${query}`, { headers: adminHeaders })).status).toBe(400);
+      }
+      const alertCsrf = /name="csrf_token" value="([^"]+)"/u.exec(alertsHtml)?.[1];
+      const alertId = /action="\/api\/admin\/feedback\/(\d+)"/u.exec(alertsHtml)?.[1];
+      expect(alertId).toBeTruthy();
+      for (const headers of [
+        { ...adminHeaders, ...forwardedHeaders, Origin: publicOrigin },
+        { ...adminHeaders, ...forwardedHeaders, Origin: "https://attacker.example" },
+      ]) {
+        const rejectedResolution = await fetch(`${origin}/api/admin/feedback/${alertId}`, {
+          method: "POST", redirect: "manual", headers,
+          body: new URLSearchParams({ csrf_token: headers.Origin === publicOrigin ? "invalid" : alertCsrf ?? "" }),
+        });
+        expect(rejectedResolution.status).toBe(403);
+      }
+      const invalidTicket = await fetch(`${origin}/api/admin/feedback/9007199254740992`, {
+        method: "POST", redirect: "manual",
+        headers: { ...adminHeaders, ...forwardedHeaders, Origin: publicOrigin },
+        body: new URLSearchParams({ csrf_token: alertCsrf ?? "" }),
+      });
+      expect(invalidTicket.status).toBe(400);
+      const resolvedAlert = await fetch(`${origin}/api/admin/feedback/${alertId}`, {
+        method: "POST", redirect: "manual",
+        headers: { ...adminHeaders, ...forwardedHeaders, Origin: publicOrigin, Referer: `${publicOrigin}/admin/alerts` },
+        body: new URLSearchParams({ csrf_token: alertCsrf ?? "" }),
+      });
+      expect(resolvedAlert.status).toBe(303);
+      const duplicateResolution = await fetch(`${origin}/api/admin/feedback/${alertId}`, {
+        method: "POST", redirect: "manual",
+        headers: { ...adminHeaders, ...forwardedHeaders, Origin: publicOrigin },
+        body: new URLSearchParams({ csrf_token: alertCsrf ?? "" }),
+      });
+      expect(duplicateResolution.status).toBe(303);
+      const checkDb = DailyTechDatabase.open({ filename: databasePath });
+      try {
+        expect(checkDb.operations.listTickets({ category: "system" }).find((ticket) => ticket.id === Number(alertId))?.status).toBe("resolved");
+        expect(checkDb.operations.listLogs({ runId: "incident-run", limit: 100 })).toHaveLength(52);
+        expect(checkDb.operations.listLogs({ limit: 100 }).filter((log) =>
+          log.eventType === "admin_feedback_resolved" && log.details.ticketId === Number(alertId),
+        )).toHaveLength(1);
+      } finally { checkDb.close(); }
+
 
       const settingsHtml = await (await fetch(`${origin}/admin/settings`, { headers: adminHeaders })).text();
       const settingsCsrf = /name="csrf_token" value="([^"]+)"/u.exec(settingsHtml)?.[1];

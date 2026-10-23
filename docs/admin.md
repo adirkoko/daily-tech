@@ -121,15 +121,29 @@ Secrets, provider configuration, storage paths, cache settings, and safety limit
 remain deployment or implementation concerns rather than Admin settings. See
 [`pipeline.md`](pipeline.md) and [`data-model.md`](data-model.md#pipeline-settings).
 
-## Feedback and alert inboxes
+## Feedback, alerts, and logs
 
-`/admin/feedback` and `/admin/alerts` share a compact inbox interface. Client-side
-search covers titles, bodies, and displayed metadata; the lists also support
-domain-specific filters, chronological sorting, pagination, expandable details, and
-resolving open tickets. The feedback inbox filters by status and category. The alert
-center combines System tickets with recent error-level operational logs and can
-filter by item type and ticket status. Timestamps are shown in Israel time while
-remaining stored as UTC.
+The Admin navigation separates three views:
+
+- `/admin/feedback` contains reader feedback with category/status filters.
+- `/admin/alerts` contains only System tickets, defaulting to open tickets.
+  Each alert shows a readable summary, status, and available brief/stage context.
+  The original diagnostic body is collapsed under technical details. Known
+  generation/publication failures link to the brief and the exact run's logs;
+  older tickets without a run ID fall back to the brief date when available.
+  Marking a ticket resolved preserves its history and never reruns a job. Repeating
+  the action does not create another resolution log. Unusable legacy run IDs
+  (over 200 characters) fall back to date-filtered logs when a brief date is known.
+- `/admin/logs` contains technical events at all severity levels. Server-side
+  filters select run ID, brief date, and severity across the full history, with
+  50 events per page. Search and chronological sorting apply to the current page.
+  Events have no resolution action and remain available after an alert is resolved.
+
+Alerts and feedback support search, chronological sorting, expandable details,
+and pagination. The alert view loads up to the latest 500 tickets and labels its
+counts as belonging to that list. Multiple log records can describe one failure;
+they never become extra rows in the alert inbox. Existing ticket data and log
+history are preserved. Timestamps are shown in Israel time and stored in UTC.
 
 ## Security controls
 

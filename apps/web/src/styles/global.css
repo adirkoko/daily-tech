@@ -2660,3 +2660,27 @@ label { display: grid; gap: .4rem; font-weight: 700; }
   html { scroll-behavior: auto; }
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* Admin incident summaries and a separate technical event history. */
+.inbox-row-summary { color: var(--muted); font-size: .85rem; line-height: 1.65; overflow-wrap: anywhere; unicode-bidi: plaintext; }
+.inbox-alerts .inbox-row-title { white-space: normal; line-height: 1.5; font-size: 1rem; }
+.inbox-alerts .inbox-row-head { padding-block: 1.1rem; align-items: start; }
+.inbox-alerts .inbox-row-summary, .inbox-logs .inbox-row-summary { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.inbox-alerts .inbox-row.is-open .inbox-row-summary, .inbox-logs .inbox-row.is-open .inbox-row-summary { display: block; }
+.inbox-item-actions { display: flex; flex-wrap: wrap; gap: .6rem; }
+.inbox-item-actions .button { font-size: .8rem; min-height: 40px; }
+.inbox-technical summary { cursor: pointer; color: var(--muted); padding-block: .5rem; font-size: .85rem; }
+.inbox-technical pre, .inbox-logs pre { direction: ltr; text-align: left; font-family: ui-monospace, monospace; unicode-bidi: plaintext; }
+.inbox-logs .inbox-row-title { direction: ltr; text-align: start; font-family: ui-monospace, monospace; }
+.admin-notice { color: var(--muted); font-size: .85rem; line-height: 1.7; }
+.admin-log-filters { display: flex; align-items: end; flex-wrap: wrap; gap: .8rem; padding: 1rem; border: 1px solid var(--line); border-radius: 12px; background: var(--paper-raised); }
+.admin-log-filters label { display: grid; gap: .4rem; font-size: .85rem; }
+.admin-log-filters input, .admin-log-filters select { max-width: 100%; min-height: 42px; padding: .5rem; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); color: var(--ink); font: inherit; }
+.admin-log-filters > .button { min-height: 42px; align-self: end; }
+.admin-log-run { flex: 1; min-width: 180px; }
+.admin-log-pagination { display: flex; justify-content: center; align-items: center; gap: 1rem; margin-block: 1rem; }
+@media (max-width: 600px) {
+  .admin-log-filters { align-items: stretch; }
+  .admin-log-filters label { flex: 1 0 100%; width: 100%; min-width: 0; }
+  .inbox-item-actions .button { flex: 1 1 auto; text-align: center; }
+}
